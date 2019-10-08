@@ -1,0 +1,131 @@
+---
+title: "10X analysis"
+output: html_notebook
+---
+
+# Intro
+
+## Data
+
+Mail from Cédric.
+
+> Les Long Reads :
+>
+> `/work/mzahm/Project_Pangafish/RawData/*.fastq.gz`
+>
+> Les reads Hi-C :
+>
+> `/work/mzahm/Project_Pangafish/RawData/HiC/*.fastq.gz`
+>
+> Les reads 10X :
+>
+> `/work/mzahm/Project_Pangafish/RawData/Run_PANGA1G.13800/Analyse_DemultiplexData.53847/*.fastq.gz`
+>
+> Le génome assemblé LR :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/genome.fa`
+>
+> Le bam Longranger :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/ALIGN/outs/possorted_bam.bam`
+>
+> Le fichier de comptage des tags 10X par bin de 10k :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/possorted-tagcmp.tsv.gz`
+>
+> Le fichier “contact map” simulé :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/genome.mnd.txt`
+>
+> Le fichier .hic généré à partir des données Hi-C :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/genome.final.10X.hic`
+>
+> Le fichier .hic généré à partir des données 10X :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/genome.final.Hi-C.hic`
+>
+> Le fichier .assembly du génome assemblé avec LR+Hi-C pour le chargement dans Juicebox :
+>
+> `/work/project/sigenae/Christophe/Panga_longranger/map_to_scaffolds/genome.final.assembly`
+>
+>
+> La procédure utilisée pour générer un fichier .hic à partir de données 10X :
+>
+> http://genoweb.toulouse.inra.fr/~sigenae/10X_and_Juicebox.html
+
+
+## Libraries
+
+```{r}
+library("devtools")
+library("magrittr")
+library("tidyverse")
+devtools::load_all(".")
+```
+
+
+## Loading data
+
+```{r}
+# raw10X <- read_delim("possorted-tagcmp-short.tsv",
+#                      delim = " ",
+#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+#                      col_types = "fifii")
+raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+# raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
+#                      delim = " ",
+#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+#                      col_types = "fifii")
+# raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
+#                      delim = " ",
+#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+#                      col_types = "fifii")
+raw10X
+
+object <- tenxcheckerExp(raw10X)
+object <- cleanData(object)
+        ```
+```{r}
+p <- plotCountDistribution(object, FALSE)
+p
+```
+```{r}
+p + xlim(-5, 100)
+```
+
+```{r}
+plotCountDistribution(object, TRUE)
+```
+
+```{r}
+p <- plotMD(object, log = FALSE)
+p
+```
+
+```{r}
+p + xlim(0, 20)
+```
+
+
+```{r}
+plotMD(object, log = TRUE)
+```
+```{r, fig.height=10}
+plot.10X(object)
+```
+```{r}
+p <- plotRowCounts(object)
+p
+```
+
+```{r}
+plotRowCountDensity(object)
+```
+```{r}
+checkBreaks(object)
+```
+
