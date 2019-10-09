@@ -1,10 +1,14 @@
-splitByRef <- function(data) {
+splitByRef <- function(object) {
+    data <- object@interactionMatrix
     data %<>%
         filter(ref1 == ref2) %>%
         select(-ref2) %>%
         split(.$ref1) %>%
         map(~ select(.x, -ref1))
-    mapply(tenxcheckerRefExp, matrix = data, chromosome = names(data))
+    map2(data,
+         object@chromosomes,
+         tenxcheckerRefExp,
+         parameters = object@parameters)
 }
 
 makeSymmetric <- function(data) {

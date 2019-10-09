@@ -72,14 +72,14 @@ devtools::load_all(".")
 #                      delim = " ",
 #                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
 #                      col_types = "fifii")
-raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
-                     delim = " ",
-                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
-                     col_types = "fifii")
-# raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
+# raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
 #                      delim = " ",
 #                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
 #                      col_types = "fifii")
+raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
 # raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
 #                      delim = " ",
 #                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
@@ -88,7 +88,7 @@ raw10X
 
 object <- tenxcheckerExp(raw10X)
 object <- cleanData(object)
-        ```
+```
 ```{r}
 p <- plotCountDistribution(object, FALSE)
 p
@@ -107,7 +107,7 @@ p
 ```
 
 ```{r}
-p + xlim(0, 20)
+p + xlim(0, 20) + ylim(0, 250)
 ```
 
 
@@ -126,6 +126,23 @@ p
 plotRowCountDensity(object)
 ```
 ```{r}
-checkBreaks(object)
+#checkBreaks(object)
+objects <- splitByRef(object)
+object_104 <- objects[[1]]
+object_104 <- normalizeKR(object_104)
+plot.10XRef(object_104)
+```
+```{r}
+object_104 <- normalizeMD(object_104)
+plot.10XRef(object_104, logColor = FALSE)
+```
+
+```{r}
+output <- checkBreak(object_104)
+output$plot
+```
+
+```{r}
+output$bin
 ```
 

@@ -22,11 +22,11 @@ plotCountDistribution <- function(object, log) {
 }
 
 plotMD <- function(object, log) {
-    p <-  object@interactionMatrix %>%
+    p <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         mutate(distance = abs(bin1 - bin2)) %>%
         ggplot(aes(x = distance, y = count)) + 
-            geom_point()
+            geom_bin2d(binwidth = c(1, 10))
     if (log) {
         p <- p + scale_x_log10() + scale_y_log10()
     }

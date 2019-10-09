@@ -80,7 +80,8 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
     return(result)
 }
 
-normalizeKR <- function (data) {
+normalizeKR <- function(object) {
+    data <- object@interactionMatrix
     mat <- makeFullMatrix(data)
     n   <- nrow(mat)
     nullRows <- which((colSums(mat) == 0) | (rowSums(mat) == 0))
@@ -93,15 +94,17 @@ normalizeKR <- function (data) {
     matKR[, nullRows] <- 0
     vecKR <- as.vector(t(matKR))
     vecKR[is.na(vecKR)] <- 0
-    return(makeTibbleFromList(vecKR, n))
+    object@interactionMatrix <- makeTibbleFromList(vecKR, n)
+    return(object)
 }
 
-normalizeMD <- function (data) {
+normalizeMD <- function(object) {
+    data <- object@interactionMatrix
     data %<>%
         makeFullTibble() %>%
         mutate(distance = abs(bin1 - bin2))
     sampled <- data %>%
-        sample_n(size = min(object@sampleSize, nrow(data))) %>%
+        sample_n(size = min(object@parameters@sampleSize, nrow(data))) %>%
         rename(sampledDistance = distance) %>%
         select(c(sampledDistance, count)) %>%
         arrange(sampledDistance)
@@ -145,14 +148,15 @@ normalizeMD <- function (data) {
         select(-c(distance, loess)) %>%
         filter(bin1 <= bin2) %>%
         filter(count != 0)
-    return(data)
+    object@interactionMatrix <- data
+    return(object)
 }
 
 normalize <- function(object) {
     message(paste0("  Normalizing ", object@chromosome, "."))
-    object@interactionMatrix <- normalizeKR(object@interactionMatrix)
+    object <- normalizeKR(object)
     #plot.10XRef(object)
-    object@interactionMatrix <- normalizeMD(object@interactionMatrix)
+    object <- normalizeMD(object)
     #plot.10XRef(object)
     return(object)
 }
@@ -174,14 +178,14 @@ computeMeanRectangles <- function(data) {
         rowid_to_column(var = "bin")
 }
 
-checkBreak <- function(object, meanCountThreshold, nCellsThreshold) {
+checkBreak <- function(object) {
     message(paste0("  Checking ", object@chromosome, "."))
     data       <- object@interactionMatrix
     dataRandom <- randomizeData(data)
     rectangles <- computeMeanRectangles(data) %>%
         add_column(randMeanCount = computeMeanRectangles(dataRandom)$meanCount) %>%
         mutate(fcMeanCount = meanCount - randMeanCount)
-    rectangles %>%
+    plot <- rectangles %>%
         gather(key = "type", value = "value", fcMeanCount, nCells) %>%
         ggplot(aes(x = bin, y = value)) +
             geom_line() +
@@ -191,23 +195,20 @@ checkBreak <- function(object, meanCountThreshold, nCellsThreshold) {
         slice(1) %>%
         select(bin, fcMeanCount, nCells) %>%
         as.list()
-    if (breakPoint$fcMeanCount <= meanCountThreshold &
-        breakPoint$nCells >= nCellsThreshold) {
-        return(list(ref = object@chromosome, bin = breakPoint$bin))
+    if (breakPoint$fcMeanCount <= object@parameters@breakThreshold &
+        breakPoint$nCells >= object@parameters@breakNCells) {
+        return(list(plot = plot, ref = object@chromosome, bin = breakPoint$bin))
     }
-    return(list(ref = object@chromosome, bin = -1))
+    return(list(plot = plot, ref = object@chromosome, bin = -1))
 }
 
-normalizeAndBreak <- function(data, threshold = threshold, nCells = nCells) {
-    data <- normalize(data)
-    data <- checkBreak(data, threshold, nCells)
+normalizeAndBreak <- function(object) {
+    data <- normalize(object)
+    data <- checkBreak(object)
 }
 
-checkBreaks <- function (object) {
+checkBreaks <- function(object) {
     message("Splitting matrix.")
-    data <- splitByRef(object@interactionMatrix)
-    output <- lapply(data,
-                     normalizeAndBreak,
-                     threshold = object@breakThreshold,
-                     nCells    = object@breakNCells)
+    objects <- splitByRef(object)
+    lapply(objects, normalizeAndBreak)
 }

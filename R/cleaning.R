@@ -5,7 +5,7 @@ removeSmallScaffolds <- function (object) {
         group_by(ref1) %>%
         summarise(refSizes = max(bin1)) %>%
         ungroup() %>%
-        filter(refSizes >= object@minNBins) %>%
+        filter(refSizes >= object@parameters@minNBins) %>%
         select(ref1) %>%
         pull()
     object@chromosomes <- as.vector(unique(sort(bigRefs)))
@@ -22,7 +22,8 @@ removeLowCountRows <- function (object) {
         group_by(ref1, bin1) %>%
         summarise(countSum = sum(count)) %>%
         ungroup()
-    object@lowCounts <- tmp %>% filter(countSum < object@minRowCount)
+    object@lowCounts <- tmp %>%
+        filter(countSum < object@parameters@minRowCount)
     message(paste0("Removing ", nrow(object@lowCounts), " rows."))
     object@interactionMatrix <- object@interactionMatrix %>%
         anti_join(object@lowCounts, by = c("ref1" = "ref1", "bin1" = "bin1"))

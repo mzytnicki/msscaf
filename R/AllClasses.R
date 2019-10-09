@@ -1,4 +1,37 @@
 ###############################################################################
+### tenxcheckerParameters S4 class definition
+###############################################################################
+#' Infrastructure for tenxchecker experiment and differential interaction
+#'
+#' \code{tenxcheckerParameters} is an S4 class providing the infrastructure (slots)
+#' to store the input data, methods parameters, intermediate calculations
+#' and results of a differential interaction pipeline
+#'
+#' @details \code{tenxcheckerParameters} does this and that...
+#' TODO
+#'
+#' @name tenxcheckerExp
+#' @rdname tenxcheckerExp
+#' @docType class
+#' @aliases tenxcheckerParameters tenxcheckerParameters-class
+#'
+#' @slot inputMatrix  The input matrix
+#' @slot parameters   An named \code{list}. The parameters for the
+#'                    segmentation methods. See \code{\link{parameters}}.
+#'
+#' @export
+setClass("tenxcheckerParameters", slots = c(minNBins       = "ANY",
+                                            minRowCount    = "ANY",
+                                            binSize        = "ANY",
+                                            sampleSize     = "ANY",
+                                            loessSpan      = "ANY",
+                                            breakThreshold = "ANY", 
+                                            breakNCells    = "ANY") 
+)
+
+
+
+###############################################################################
 ### tenxchecker S4 class definition
 ###############################################################################
 #' Infrastructure for tenxchecker experiment and differential interaction
@@ -22,14 +55,8 @@
 #' @export
 setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
                                      chromosomes        = "ANY",
-                                     minNBins           = "ANY",
-                                     minRowCount        = "ANY",
-                                     binSize            = "ANY",
-                                     sampleSize         = "ANY",
-                                     loessSpan          = "ANY",
-                                     breakThreshold     = "ANY", 
-                                     breakNCells        = "ANY", 
-                                     lowCounts          = "ANY")
+                                     lowCounts          = "ANY",
+                                     parameters         = "ANY")
 )
 
 
@@ -82,12 +109,14 @@ tenxcheckerExp <- function(matrix  = NULL,
     object@interactionMatrix <- matrix %>%
         mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         mutate(ref2 = factor(ref2, levels = object@chromosomes))
-    object@sampleSize <- 10000
-    object@loessSpan <- 0.5
-    object@minNBins  <- 10
-    object@minRowCount <- 100
-    object@breakThreshold <- -0.5
-    object@breakNCells <- 1000
+    
+    object@parameters <- new("tenxcheckerParameters")
+    object@parameters@sampleSize <- 10000
+    object@parameters@loessSpan <- 0.5
+    object@parameters@minNBins  <- 10
+    object@parameters@minRowCount <- 100
+    object@parameters@breakThreshold <- -0.5
+    object@parameters@breakNCells <- 1000
     
     return(invisible(object))
 }
@@ -115,7 +144,8 @@ tenxcheckerExp <- function(matrix  = NULL,
 #'
 #' @export
 setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
-                                        chromosome         = "ANY")
+                                        chromosome         = "ANY",
+                                        parameters         = "ANY")
 )
 
 
@@ -138,7 +168,8 @@ setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
 #'
 #' @export
 tenxcheckerRefExp <- function(matrix     = NULL,
-                              chromosome = NULL) {
+                              chromosome = NULL,
+                              parameters = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -160,6 +191,7 @@ tenxcheckerRefExp <- function(matrix     = NULL,
     
     object@chromosome        <- chromosome
     object@interactionMatrix <- matrix
+    object@parameters        <- parameters
     
     return(invisible(object))
 }

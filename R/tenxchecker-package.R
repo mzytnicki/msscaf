@@ -42,6 +42,7 @@
 #' @author Matthias Zytnicki
 #'
 #' @import methods
+#' @import magrittr
 #' @import tidyverse
 #' @import ggplot2
 #' @import GenomicRanges
