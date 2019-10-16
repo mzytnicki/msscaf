@@ -61,46 +61,83 @@ Mail from Cédric.
 library("devtools")
 library("magrittr")
 library("tidyverse")
+library("BiocParallel")
 devtools::load_all(".")
 ```
 
 
 ## Loading data
 
+The complete dataset
 ```{r}
-# raw10X <- read_delim("possorted-tagcmp-short.tsv",
-#                      delim = " ",
-#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
-#                      col_types = "fifii")
 # raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
 #                      delim = " ",
 #                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
 #                      col_types = "fifii")
+# better save it...
+#saveRDS(object, "/Scratch/mazytnicki/bigData.rds")
+object <- readRDS("/Scratch/mazytnicki/bigData.rds")
+```
+
+A small dataset
+```{r}
+raw10X <- read_delim("possorted-tagcmp-short.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+```
+
+A small dataset with a break
+```{r}
 raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
                      delim = " ",
                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
                      col_types = "fifii")
-# raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
-#                      delim = " ",
-#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
-#                      col_types = "fifii")
-raw10X
-
-object <- tenxcheckerExp(raw10X)
-object <- cleanData(object)
 ```
+
+A small dataset with a reversal
 ```{r}
-p <- plotCountDistribution(object, FALSE)
+raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+```
+
+Store into an object
+```{r}
+raw10X
+object <- tenxcheckerExp(raw10X)
+plot.10X(object)
+```
+
+## First steps
+
+Clean data
+```{r}
+object <- cleanData(object)
+plot.10X(object)
+```
+
+Figures...
+```{r}
+p <- plotScaffoldSizeDistribution(object, log = FALSE)
 p
 ```
+
+```{r}
+p <- plotCountDistribution(object, log = FALSE)
+p
+```
+
 ```{r}
 p + xlim(-5, 100)
 ```
 
 ```{r}
-plotCountDistribution(object, TRUE)
+plotCountDistribution(object, log = TRUE)
 ```
 
+Plot intensity vs distance
 ```{r}
 p <- plotMD(object, log = FALSE)
 p
@@ -114,9 +151,6 @@ p + xlim(0, 20) + ylim(0, 250)
 ```{r}
 plotMD(object, log = TRUE)
 ```
-```{r, fig.height=10}
-plot.10X(object)
-```
 ```{r}
 p <- plotRowCounts(object)
 p
@@ -125,24 +159,14 @@ p
 ```{r}
 plotRowCountDensity(object)
 ```
+
+## Analysis
+
 ```{r}
-#checkBreaks(object)
-objects <- splitByRef(object)
-object_104 <- objects[[1]]
-object_104 <- normalizeKR(object_104)
-plot.10XRef(object_104)
-```
-```{r}
-object_104 <- normalizeMD(object_104)
-plot.10XRef(object_104, logColor = FALSE)
+breaks <- checkBreak(object)
 ```
 
 ```{r}
-output <- checkBreak(object_104)
-output$plot
-```
-
-```{r}
-output$bin
+joins <- checkJoins(object)
 ```
 

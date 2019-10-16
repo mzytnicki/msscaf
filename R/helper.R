@@ -1,14 +1,49 @@
 splitByRef <- function(object) {
-    data <- object@interactionMatrix
-    data %<>%
+    data <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         select(-ref2) %>%
         split(.$ref1) %>%
         map(~ select(.x, -ref1))
-    map2(data,
+    pmap(data,
          object@chromosomes,
+         object@sizes,
          tenxcheckerRefExp,
          parameters = object@parameters)
+}
+
+create2Ref <- function(data, object = object) {
+    ref1  <- as.character(data$ref1[[1]])
+    ref2  <- as.character(data$ref2[[1]])
+    size1 <- object@sizes[[ref1]]
+    size2 <- object@sizes[[ref2]]
+    return(tenxchecker2RefExp(data %>% select(-c(ref1, ref2)),
+                              ref1,
+                              ref2,
+                              size1,
+                              size2,
+                              object@parameters))
+}
+
+splitBy2Ref <- function(object) {
+    data <- object@interactionMatrix %>%
+        filter(ref1 != ref2) %>%
+        unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
+        group_by(ref1_ref2) %>%
+        group_split() %>%
+        map(~ select(.x, -ref1_ref2))
+    lapply(data, create2Ref, object = object)
+}
+
+computeRefSizes <- function(object) {
+    bind_rows(object@interactionMatrix %>%
+                  select(c(ref1, bin1)) %>%
+                  rename(ref = ref1, bin = bin1),
+              object@interactionMatrix %>%
+                  select(c(ref2, bin2)) %>%
+                  rename(ref = ref2, bin = bin2)) %>%
+        group_by(ref) %>%
+        summarise(size = max(bin)) %>%
+        deframe()
 }
 
 makeSymmetric <- function(data) {
@@ -17,7 +52,11 @@ makeSymmetric <- function(data) {
             bind_rows(data %>%
                           rename(tmp = ref1) %>%
                           rename(ref1 = ref2) %>%
-                          rename(ref2 = tmp))
+                          rename(ref2 = tmp) %>%
+                          rename(tmp = bin1) %>%
+                          rename(bin1 = bin2) %>%
+                          rename(bin2 = tmp))
+        return(data)
     }
     data %<>%
         bind_rows(data %>%

@@ -1,11 +1,12 @@
 plotScaffoldSizeDistribution <- function(object, log) {
     p <- object@interactionMatrix %>%
+        filter(ref1 == ref2) %>%
         makeSymmetric() %>%
         group_by(ref1) %>%
         summarise(size = max(bin1)) %>%
         ungroup() %>%
-        ggplot(aes(x = ref1, y = size)) + 
-            geom_col()
+        ggplot(aes(x = size)) + 
+            geom_histogram()
     if (log) {
         p <- p + scale_y_log10()
     }
@@ -23,12 +24,12 @@ plotCountDistribution <- function(object, log) {
 
 plotMD <- function(object, log) {
     p <- object@interactionMatrix %>%
-        filter(ref1 == ref2) %>%
+        select(ref1 == ref2) %>%
         mutate(distance = abs(bin1 - bin2)) %>%
         ggplot(aes(x = distance, y = count)) + 
             geom_bin2d(binwidth = c(1, 10))
     if (log) {
-        p <- p + scale_x_log10() + scale_y_log10()
+        p <- p + scale_y_log10()
     }
     return(p)
 }
@@ -78,27 +79,7 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10X <- function(object, logColor = TRUE) {
-    p <- object@interactionMatrix %>%
-        makeSymmetric() %>%
-        ggplot(aes(x = bin1, y = bin2)) + 
-            geom_raster(aes(fill = count)) + 
-            facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
-            scale_x_continuous(expand = c(0, 0)) +
-            scale_y_reverse(expand = c(0, 0)) +
-            theme_bw() +
-            theme(panel.spacing = unit(0, "lines"))
-    if (logColor) {
-        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
-    }
-    else {
-        p <- p + scale_fill_gradient(low = "blue", high = "red")
-    }
-    return(p)
-}
-
-  
-plot.10XRef <- function(object, logColor = TRUE, split = FALSE) {
+plot.10XRef <- function(object, logColor = TRUE, bin = NULL) {
     p <- object@interactionMatrix %>%
         makeSymmetric() %>%
         ggplot(aes(x = bin1, y = bin2)) + 
@@ -113,7 +94,57 @@ plot.10XRef <- function(object, logColor = TRUE, split = FALSE) {
     else {
         p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
+    if (!is.null(bin)) {
+        p <- p +
+            geom_hline(yintercept = bin, linetype = "dotted") +
+            geom_vline(xintercept = bin, linetype = "dotted")
+    }
     return(p)
 }
 
-  
+plot.10X2Ref <- function(object, logColor = TRUE, bin = NULL) {
+    p <- object@interactionMatrix %>%
+        ggplot(aes(x = bin1, y = bin2)) + 
+            geom_raster(aes(fill = count)) + 
+            scale_x_continuous(expand = c(0, 0)) +
+            scale_y_reverse(expand = c(0, 0)) +
+            xlab(object@chromosome1) +
+            ylab(object@chromosome2) +
+            theme_bw() +
+            theme(panel.spacing = unit(0, "lines"))
+    if (logColor) {
+        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+    }
+    else {
+        p <- p + scale_fill_gradient(low = "blue", high = "red")
+    }
+    return(p)
+}
+
+
+plot.10X <- function(object, logColor = TRUE, ref = NULL) {
+    if (!is.null(ref)) {
+        p <- object@interactionMatrix %>%
+            filter(ref1 == ref) %>%
+            filter(ref2 == ref) %>%
+            tenxcheckerRefExp(ref, object@parameters) %>%
+            plot.10XRef()
+        return(p)
+    }
+    p <- object@interactionMatrix %>%
+        makeSymmetric() %>%
+        ggplot(aes(x = bin1, y = bin2)) + 
+        geom_raster(aes(fill = count)) + 
+        facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_reverse(expand = c(0, 0)) +
+        theme_bw() +
+        theme(panel.spacing = unit(0, "lines"))
+    if (logColor) {
+        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+    }
+    else {
+        p <- p + scale_fill_gradient(low = "blue", high = "red")
+    }
+    return(p)
+}
