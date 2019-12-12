@@ -21,6 +21,7 @@
 #'
 #' @export
 setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
+                                            minCount        = "ANY",
                                             minRowCount     = "ANY",
                                             binSize         = "ANY",
                                             sampleSize      = "ANY",
@@ -28,7 +29,9 @@ setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
                                             breakThreshold  = "ANY", 
                                             breakNCells     = "ANY", 
                                             maxLinkRange    = "ANY", 
-                                            nRandomizations = "ANY") 
+                                            nRandomizations = "ANY", 
+                                            pvalueThreshold = "ANY", 
+                                            nBinZoom        = "ANY") 
 )
 
 
@@ -117,11 +120,14 @@ tenxcheckerExp <- function(matrix  = NULL,
     object@parameters@sampleSize      <- 10000
     object@parameters@loessSpan       <- 0.5
     object@parameters@minNBins        <- 20
+    object@parameters@minCount        <- 3
     object@parameters@minRowCount     <- 100
-    object@parameters@breakThreshold  <- -2
+    object@parameters@breakThreshold  <- -1
     object@parameters@breakNCells     <- 100
     object@parameters@maxLinkRange    <- 10
     object@parameters@nRandomizations <- 10
+    object@parameters@pvalueThreshold <- 1e-4
+    object@parameters@nBinZoom        <- 100
     
     object@sizes <- computeRefSizes(object)
     

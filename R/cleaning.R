@@ -17,21 +17,32 @@ removeSmallScaffolds <- function(object) {
         mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         mutate(ref2 = droplevels(ref2)) %>%
         mutate(ref2 = factor(ref2, levels = object@chromosomes))
+    object@sizes <- object@sizes[object@chromosomes]
     return(object)
 }
 
 removeLowCountRows <- function(object) {
-    message("Removing low counts.")
-    tmp <- object@interactionMatrix %>%
+    message("Removing low counts rows.")
+    object@lowCounts <- object@interactionMatrix %>%
         makeSymmetric() %>%
         group_by(ref1, bin1) %>%
         summarise(countSum = sum(count)) %>%
-        ungroup()
-    object@lowCounts <- tmp %>%
+        ungroup() %>%
         filter(countSum < object@parameters@minRowCount)
     message(paste0("Removing ", nrow(object@lowCounts), " rows."))
     object@interactionMatrix <- object@interactionMatrix %>%
         anti_join(object@lowCounts, by = c("ref1" = "ref1", "bin1" = "bin1"))
+    return(object)
+}
+
+removeLowCount <- function(object) {
+    message("Removing low counts.")
+    nLowCounts <- object@interactionMatrix %>%
+        filter(count < object@parameters@minCount) %>%
+        nrow()
+    object@interactionMatrix %<>%
+        filter(count >= object@parameters@minCount)
+    message(paste0("Removing ", nLowCounts, " cells."))
     return(object)
 }
 
@@ -42,9 +53,9 @@ removeFarFromDiagonal <- function(object) {
     return(object)
 }
 
-
 cleanData <- function(object) {
-    object <- removeSmallScaffolds(object)
     object <- removeLowCountRows(object)
+    object <- removeSmallScaffolds(object)
+    object <- removeLowCount(object)
     return(object)
 }

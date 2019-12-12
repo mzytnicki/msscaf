@@ -4,11 +4,17 @@ splitByRef <- function(object) {
         select(-ref2) %>%
         split(.$ref1) %>%
         map(~ select(.x, -ref1))
-    pmap(data,
-         object@chromosomes,
-         object@sizes,
+    pmap(list(data, object@chromosomes, object@sizes),
          tenxcheckerRefExp,
          parameters = object@parameters)
+}
+
+extractRef <- function(object, ref) {
+    data <- object@interactionMatrix %>%
+        filter(ref1 == ref2) %>%
+        filter(ref1 == ref) %>%
+        select(-c(ref1, ref2))
+    return(tenxcheckerRefExp(data, ref, object@sizes[[ref]], object@parameters))
 }
 
 create2Ref <- function(data, object = object) {
@@ -25,12 +31,23 @@ create2Ref <- function(data, object = object) {
 }
 
 splitBy2Ref <- function(object) {
-    data <- object@interactionMatrix %>%
+    pairs <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
         group_by(ref1_ref2) %>%
+        summarise(nCounts = n(), maxCounts = max(count)) %>%
+        filter(maxCounts >= object@parameters@maxLinkRange) %>%
+        filter(nCounts >= object@parameters@breakNCells) %>%
+        pull(ref1_ref2)
+    message(paste0("Keeping ", length(pairs), " pairs of references."))
+    data <- object@interactionMatrix %>%
+        filter(ref1 != ref2) %>%
+        unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
+        filter(ref1_ref2 %in% pairs) %>%
+        group_by(ref1_ref2) %>%
         group_split() %>%
         map(~ select(.x, -ref1_ref2))
+    names(data) <- pairs
     lapply(data, create2Ref, object = object)
 }
 

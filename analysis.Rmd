@@ -58,6 +58,7 @@ Mail from Cédric.
 ## Libraries
 
 ```{r}
+library("MASS", pos = "package:base")
 library("devtools")
 library("magrittr")
 library("tidyverse")
@@ -74,8 +75,8 @@ The complete dataset
 #                      delim = " ",
 #                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
 #                      col_types = "fifii")
-# better save it...
-#saveRDS(object, "/Scratch/mazytnicki/bigData.rds")
+# #better save it...
+# saveRDS(object, "/Scratch/mazytnicki/bigData.rds")
 object <- readRDS("/Scratch/mazytnicki/bigData.rds")
 ```
 
@@ -90,6 +91,20 @@ raw10X <- read_delim("possorted-tagcmp-short.tsv",
 A small dataset with a break
 ```{r}
 raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+```
+
+```{r}
+raw10X <- read_delim("possorted-tagcmp-short-break2.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+```
+
+```{r}
+raw10X <- read_delim("possorted-tagcmp-short-break3.tsv",
                      delim = " ",
                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
                      col_types = "fifii")
@@ -114,7 +129,11 @@ plot.10X(object)
 
 Clean data
 ```{r}
+object <- estimateDistributions(object)
 object <- cleanData(object)
+```
+
+```{r}
 plot.10X(object)
 ```
 
@@ -144,8 +163,8 @@ p
 ```
 
 ```{r}
-p + xlim(0, 20) + ylim(0, 250)
-```
+p + xlim(0, 50) + ylim(0, 250)
+    ```
 
 
 ```{r}
@@ -160,13 +179,56 @@ p
 plotRowCountDensity(object)
 ```
 
+```{r}
+p <- plotDiagonalStrength(object)
+```
+
+
 ## Analysis
 
 ```{r}
-breaks <- checkBreak(object)
+breaks <- checkBreaks(object)
 ```
 
 ```{r}
 joins <- checkJoins(object)
+j <- joins %>%
+    mutate(pvalue = map_dbl(test, "p.value")) %>%
+    separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
+    mutate(vert = factor(vert)) %>%
+    mutate(hor = factor(hor))
+j <- j %>% select(ref1, ref2, vert, hor, pvalue)
+j1 <- j %>%
+    filter(hor == "L") %>%
+    rename(ref = ref1, otherRef = ref2) %>%
+    mutate(place = "before") %>%
+    select(-c(vert, hor))
+j2 <- j %>%
+    filter(hor == "R") %>%
+    rename(ref = ref1, otherRef = ref2) %>%
+    mutate(place = "after") %>%
+    select(-c(vert, hor))
+j3 <- j %>%
+    filter(vert == "B") %>%
+    rename(ref = ref2, otherRef = ref1) %>%
+    mutate(place = "after") %>%
+    select(-c(vert, hor))
+j4 <- j %>%
+    filter(vert == "U") %>%
+    rename(ref = ref2, otherRef = ref1) %>%
+    mutate(place = "before") %>%
+    select(-c(vert, hor))
+js <- bind_rows(j1, j2, j3, j4) %>% mutate(place = factor(place))
+jst <- js %>%
+    group_by(ref, place) %>%
+    filter(pvalue == min(pvalue)) %>%
+    ungroup()
+jsts <- bind_rows(jst %>% filter(place == "before") %>%
+                      rename(firstRef = ref, secondRef = otherRef),
+                  jst %>% filter(place == "after") %>% 
+                      rename(firstRef = otherRef, secondRef = ref)) %>%
+    select(-place) %>%
+    group_by(firstRef) %>% filter(pvalue == min(pvalue)) %>% ungroup() %>%
+    group_by(secondRef) %>% filter(pvalue == min(pvalue)) %>% ungroup()
 ```
 
