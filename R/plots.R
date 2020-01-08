@@ -67,6 +67,29 @@ plotDiagonalStrength <- function(object) {
     return(p)
 }
 
+plotInsertions1 <- function(table, ref) {
+    table %>% ggplot(aes(x = bin, y = distance, fill = difference)) + 
+        geom_tile() +
+        scale_fill_gradient2() +
+        coord_fixed() +
+        ggtitle(ref)
+}
+
+plotInsertions2 <- function(object, bin, distance) {
+    df <- tibble(xmin = bin - distance,
+                 xmax = bin + distance,
+                 ymin = bin - distance,
+                 ymax = bin + distance)
+    plot.10XRef(object, logColor = TRUE) +
+        #annotate("rect",
+        geom_rect(data = df,
+                  aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+                  color = "black",
+                  inherit.aes = FALSE,
+                  alpha = 0.01)
+}
+
+
 plotRowCounts <- function(object) {
     p <- object@interactionMatrix %>%
         makeSymmetric() %>%
@@ -112,17 +135,21 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bin = NA) {
+plot.10XRef <- function(object, logColor = TRUE, bins = NA) {
+    minCount <- object@interactionMatrix %>% pull(count) %>% min()
+    if ((minCount < 0) & (logColor)) {
+        stop("Trying to plot a map with negative count in log scale.")
+    }
     tmp <- object@interactionMatrix %>%
         makeSymmetric()
-    if (!is.na(bin)) {
-        xmin <- max(0, bin - object@parameters@nBinZoom)
-        xmax <- min(object@size, bin + object@parameters@nBinZoom)
-        tmp %<>% filter(bin1 >= xmin,
-                        bin1 <= xmax,
-                        bin2 >= xmin,
-                        bin2 <= xmax)
-    }
+    # if (!is.na(bin)) {
+    #     xmin <- max(0, bin - object@parameters@nBinZoom)
+    #     xmax <- min(object@size, bin + object@parameters@nBinZoom)
+    #     tmp %<>% filter(bin1 >= xmin,
+    #                     bin1 <= xmax,
+    #                     bin2 >= xmin,
+    #                     bin2 <= xmax)
+    # }
     p <- tmp %>% 
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) +
@@ -137,10 +164,12 @@ plot.10XRef <- function(object, logColor = TRUE, bin = NA) {
         p <- p + scale_fill_gradient2()
         #p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
-    if (!is.na(bin)) {
-        p <- p +
-            geom_hline(yintercept = bin, linetype = "dotted") +
-            geom_vline(xintercept = bin, linetype = "dotted")
+    if (!is.na(bins)) {
+        for (bin in bins) {
+            p <- p +
+                geom_hline(yintercept = bin, linetype = "dotted") +
+                geom_vline(xintercept = bin, linetype = "dotted")
+        }
     }
     return(p)
 }

@@ -80,7 +80,7 @@ The complete dataset
 object <- readRDS("/Scratch/mazytnicki/bigData.rds")
 ```
 
-A small dataset
+A small dataset, Scaff 001
 ```{r}
 raw10X <- read_delim("possorted-tagcmp-short.tsv",
                      delim = " ",
@@ -88,14 +88,7 @@ raw10X <- read_delim("possorted-tagcmp-short.tsv",
                      col_types = "fifii")
 ```
 
-A small dataset with a break
-```{r}
-raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
-                     delim = " ",
-                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
-                     col_types = "fifii")
-```
-
+Scaff 21
 ```{r}
 raw10X <- read_delim("possorted-tagcmp-short-break2.tsv",
                      delim = " ",
@@ -103,6 +96,7 @@ raw10X <- read_delim("possorted-tagcmp-short-break2.tsv",
                      col_types = "fifii")
 ```
 
+Scaff 74
 ```{r}
 raw10X <- read_delim("possorted-tagcmp-short-break3.tsv",
                      delim = " ",
@@ -110,7 +104,15 @@ raw10X <- read_delim("possorted-tagcmp-short-break3.tsv",
                      col_types = "fifii")
 ```
 
-A small dataset with a reversal
+Scaff 3
+```{r}
+raw10X <- read_delim("possorted-tagcmp-short-break4.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+```
+
+A small dataset with scaffolding to do
 ```{r}
 raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
                      delim = " ",
@@ -131,6 +133,7 @@ Clean data
 ```{r}
 object <- estimateDistributions(object)
 object <- cleanData(object)
+gc()
 ```
 
 ```{r}
@@ -181,54 +184,93 @@ plotRowCountDensity(object)
 
 ```{r}
 p <- plotDiagonalStrength(object)
+p
 ```
 
 
 ## Analysis
 
+### Breaking chromosomes
+
 ```{r}
+raw10X <- read_delim("possorted-tagcmp-short-break.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+object <- tenxcheckerExp(raw10X)
+plot.10X(object)
+object <- estimateDistributions(object)
+object <- cleanData(object)
+plot.10X(object)
 breaks <- checkBreaks(object)
+filteredBreaks <- filterBreaks(object, breaks$data)
+object <- splitChromosomes(object, filteredBreaks$breaks)
+plot.10X(object)
 ```
+
+### Scaffolding chromosomes
 
 ```{r}
+raw10X <- read_delim("possorted-tagcmp-short-orientation.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+object <- tenxcheckerExp(raw10X)
+plot.10X(object)
+object <- estimateDistributions(object)
+object <- cleanData(object)
+plot.10X(object)
 joins <- checkJoins(object)
-j <- joins %>%
-    mutate(pvalue = map_dbl(test, "p.value")) %>%
-    separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
-    mutate(vert = factor(vert)) %>%
-    mutate(hor = factor(hor))
-j <- j %>% select(ref1, ref2, vert, hor, pvalue)
-j1 <- j %>%
-    filter(hor == "L") %>%
-    rename(ref = ref1, otherRef = ref2) %>%
-    mutate(place = "before") %>%
-    select(-c(vert, hor))
-j2 <- j %>%
-    filter(hor == "R") %>%
-    rename(ref = ref1, otherRef = ref2) %>%
-    mutate(place = "after") %>%
-    select(-c(vert, hor))
-j3 <- j %>%
-    filter(vert == "B") %>%
-    rename(ref = ref2, otherRef = ref1) %>%
-    mutate(place = "after") %>%
-    select(-c(vert, hor))
-j4 <- j %>%
-    filter(vert == "U") %>%
-    rename(ref = ref2, otherRef = ref1) %>%
-    mutate(place = "before") %>%
-    select(-c(vert, hor))
-js <- bind_rows(j1, j2, j3, j4) %>% mutate(place = factor(place))
-jst <- js %>%
-    group_by(ref, place) %>%
-    filter(pvalue == min(pvalue)) %>%
-    ungroup()
-jsts <- bind_rows(jst %>% filter(place == "before") %>%
-                      rename(firstRef = ref, secondRef = otherRef),
-                  jst %>% filter(place == "after") %>% 
-                      rename(firstRef = otherRef, secondRef = ref)) %>%
-    select(-place) %>%
-    group_by(firstRef) %>% filter(pvalue == min(pvalue)) %>% ungroup() %>%
-    group_by(secondRef) %>% filter(pvalue == min(pvalue)) %>% ungroup()
+joins <- filterJoins(object, joins)
+object <- scaffold(object, joins)
+plot.10X(object)
 ```
 
+### Finding short insertions
+
+```{r}
+insertions <- checkInsertions(object)
+insertions$data %>% 
+    filter(triangle > 0.5) %>%
+    filter(rest < -0.5)
+```
+   ref             bin distance triangle  rest difference
+   <fct>         <int>    <int>    <dbl> <dbl>      <dbl>
+ 1 PAHY_Scaf_069    80        2    0.825 -4.50       5.33
+ 2 PAHY_Scaf_069    84        2    0.898 -4.43       5.33
+ 3 PAHY_Scaf_069    79        3    0.610 -4.47       5.08
+ 4 PAHY_Scaf_069    85        3    0.693 -4.48       5.17
+ 5 PAHY_Scaf_069    78        4    0.507 -4.48       4.99
+ 6 PAHY_Scaf_069    86        4    0.553 -4.44       4.99
+ 7 PAHY_Scaf_088     5        2    1.01  -1.20       2.21
+ 8 PAHY_Scaf_088     6        3    0.633 -1.60       2.24
+ 9 PAHY_Scaf_101     5        2    0.765 -4.50       5.26
+10 PAHY_Scaf_101     6        3    0.596 -4.52       5.11
+11 PAHY_Scaf_154    41        2    0.634 -4.57       5.20
+12 PAHY_Scaf_154    40        3    0.527 -2.50       3.03
+13 PAHY_Scaf_174     7        4    0.536 -5.15       5.68
+
+```{r}
+raw10X <- read_delim("possorted-tagcmp-088.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+object <- tenxcheckerExp(raw10X)
+object <- estimateDistributions(object)
+object <- cleanData(object)
+plot.10X(object)
+plotInsertions2(extractRef(object, "PAHY_Scaf_088"), 5, 2)
+```
+
+
+```{r}
+raw10X <- read_delim("possorted-tagcmp-069.tsv",
+                     delim = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+object <- tenxcheckerExp(raw10X)
+object <- estimateDistributions(object)
+object <- cleanData(object)
+plot.10X(object)
+plotInsertions2(extractRef(object, "PAHY_Scaf_069"), 78, 4)
+```

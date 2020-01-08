@@ -108,8 +108,12 @@ checkJoins <- function(object) {
         gather(key = "key", value = "test", tUL, tUR, tBL, tBR) %>%
         filter(!unlist(map(test, is_null))) %>%
         mutate(pvalue = map_dbl(test, "p.value")) %>%
-        filter(pvalue <= object@parameters@pvalueThreshold) %>%
         separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
         mutate(vert = factor(vert)) %>%
         mutate(hor = factor(hor))
+}
+
+filterJoins <- function(object, joins) {
+    joins %>%
+        filter(pvalue <= object@parameters@pvalueThreshold)
 }

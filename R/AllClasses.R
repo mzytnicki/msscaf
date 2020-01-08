@@ -62,11 +62,13 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
                                      chromosomes        = "ANY",
                                      sizes              = "ANY",
                                      lowCounts          = "ANY",
+                                     newChromosomes     = "ANY",
+                                     mergedChromosomes  = "ANY",
                                      parameters         = "ANY")
 )
 
 
-##- tenxcheckerExp S4 class constructor -------------------------------------------#
+##- tenxcheckerExp S4 class constructor --------------------------------------#
 ##----------------------------------------------------------------------------#
 #' @rdname tenxcheckerExp
 #' @docType class
@@ -115,6 +117,8 @@ tenxcheckerExp <- function(matrix  = NULL,
     object@interactionMatrix <- matrix %>%
         mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         mutate(ref2 = factor(ref2, levels = object@chromosomes))
+    object@newChromosomes    <- c()
+    object@mergedChromosomes <- c()
     
     object@parameters <- new("tenxcheckerParameters")
     object@parameters@sampleSize      <- 10000
