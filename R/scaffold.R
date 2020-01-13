@@ -23,6 +23,7 @@ selectJoins <- function(joins) {
                    (ref2  != bestLine$ref2) |
                    (after != bestLine$after))
     }
+    merges %<>% arrange(pvalue)
     return(merges)
 }
 
@@ -33,11 +34,11 @@ orderJoins <- function(object, joins) {
         mutate(reference = ifelse(size1 >= size2, ref1, ref2)) %>%
         mutate(other = ifelse(size1 >= size2, ref2, ref1)) %>%
         mutate(after = ((!collinear) == after)) %>%
-        select(reference, other, after, collinear)
+        select(reference, other, after, collinear) %>%
+        filter(reference != other)
 }
 
 stitchChromosomePair <- function(object, reference, other, after, collinear) {
-    message(paste0("  Stitching ", reference, " with ", other))
     referenceSize <- object@sizes[[reference]]
     otherSize     <- object@sizes[[other]]
     if (!collinear) {
@@ -89,10 +90,13 @@ scaffold <- function(object, joins) {
         other        <- firstRow$other
         after        <- firstRow$after
         collinear    <- firstRow$collinear
+        message(paste0("  Stitching ", reference, " with ", other, ", ", nrow(orderedJoins), " remaining."))
         object       <- stitchChromosomePair(object, reference, other, after, collinear)
-        orderedJoins <- repairJoins(orderedJoins, reference, other, after, collinear) %>%
-            rename(ref1 = reference, ref2 = other)
-        orderedJoins <- orderJoins(object, orderedJoins)
+        if (nrow(orderedJoins) != 0) {
+            orderedJoins <- repairJoins(orderedJoins, reference, other, after, collinear) %>%
+                rename(ref1 = reference, ref2 = other)
+            orderedJoins <- orderJoins(object, orderedJoins)
+        }
     }
     return(object)
 }

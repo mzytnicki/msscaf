@@ -30,7 +30,8 @@ splitChromosome <- function(interactionMatrix, sizes, splitPoint, oldChromosome,
 splitChromosomes <- function(object, splitPoints) {
     interactionMatrix <- object@interactionMatrix
     sizes             <- object@sizes
-    splitPoints       <- splitPoints %>% mutate(newChromosome = paste0("new_chr_", seq.int(nrow(splitPoints))))
+    newChromosomes    <- paste0("new_chr_", seq.int(nrow(splitPoints)))
+    splitPoints       <- splitPoints %>% mutate(newChromosome = newChromosomes)
     nSplits           <- nrow(splitPoints)
     for (nSplit in seq.int(to = nSplits)) {
         message(paste0("  Splitting point ", nSplit, "/", nSplits, ": ", splitPoints$ref[[nSplit]]))
@@ -43,9 +44,10 @@ splitChromosomes <- function(object, splitPoints) {
         interactionMatrix <- out$interactionMatrix
         sizes             <- out$sizes
     }
-    object@sizes             <- sizes
-    object@interactionMatrix <- interactionMatrix
-    object@newChromosomes    <- unique(splitPoints$newChromosome)
-    object@chromosomes       <- c(object@chromosomes, object@newChromosomes)
+    object@sizes                 <- sizes
+    object@interactionMatrix     <- interactionMatrix
+    object@chromosomes           <- c(object@chromosomes, newChromosomes)
+    object@newChromosomes        <- splitPoints$ref
+    names(object@newChromosomes) <- newChromosomes
     return(object)
 }
