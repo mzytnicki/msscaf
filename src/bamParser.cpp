@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "htslib/sam.h"
+#include "sam.h"
 
 using namespace Rcpp;
 
@@ -16,9 +16,9 @@ typedef std::unordered_map<std::string, std::vector<position_t>> umiMap_t;
 // [[Rcpp::export]]
 DataFrame parseBamFileCpp(String fileName, int binSize) {
     Rcout << "Reading " << fileName.get_cstring() << "\n";
-    samFile   *inputFile  = hts_open(fileName.get_cstring(), "r"); // open bam file
-    bam_hdr_t *header     = sam_hdr_read(inputFile);               // read header
-    bam1_t    *alignment  = bam_init1();                           // initialize an alignment
+    samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
+    bam_hdr_t *header     = sam_hdr_read(inputFile);
+    bam1_t    *alignment  = bam_init1();
     int        nRefs      = header->n_targets;
     Rcout << "Found " << nRefs << " references\n";
     CharacterVector refs(header->n_targets);
@@ -35,14 +35,12 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
         }
     }
     while (sam_read1(inputFile, header, alignment) > 0) {
-        int32_t pos    = alignment->core.pos + 1;                    // leftmost position of alignment in zero based coordinate (+1)
+        int32_t pos    = alignment->core.pos + 1;
         int32_t posBin = pos / binSize;
-        int chrId    = alignment->core.tid;                        // contig id (chromosome)
-        //char *chr    = header->target_name[alignment->core.tid];   // contig name (chromosome)
-        uint8_t *umi = bam_aux_get(alignment, "BX");               // first character is the type: 'iIsScCdfAZH'
+        int chrId    = alignment->core.tid;
+        uint8_t *umi = bam_aux_get(alignment, "BX");
         if (umi != NULL) {
             std::string umiString((char *) ++umi);
-            //Rcout << "Read @" << chrId << ":" << posBin << " with " << umiString << "\n";
             umiMap[umiString].push_back({chrId, posBin});
         }
     }
@@ -68,7 +66,6 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
                     std::swap(pos1, pos2);
                 }
                 ++matrices[ref1][ref2](pos1, pos2);
-                // Rcout << "\t\tmatrix[" << ref1 << ", " << ref2 << "](" << pos1 << ", " << pos2 << ") = " << matrices[ref1][ref2](pos1, pos2) << "\n";
             }
         }
     }
@@ -78,7 +75,6 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
         for (int idRef2 = 0; idRef2 <= idRef1; ++idRef2) {
             for (unsigned int posId1 = 0; posId1 < header->target_len[idRef1] / binSize; ++posId1) {
                 for (unsigned int posId2 = 0; posId2 < header->target_len[idRef2] / binSize; ++posId2) {
-                    //Rcout << "\tCurrent position: (" << idRef1 << ", " << idRef2 << ") @ (" << posId1 << ", " << posId2 << ")\n";
                     if (matrices[idRef1][idRef2](posId1, posId2) != 0) {
                         ref1Vector.push_back(idRef1+1);
                         ref2Vector.push_back(idRef2+1);
