@@ -274,3 +274,17 @@ object <- cleanData(object)
 plot.10X(object)
 plotInsertions2(extractRef(object, "PAHY_Scaf_069"), 78, 4)
 ```
+
+```{r}
+raw10X <- parseBamFile("phased_possorted_bam.bam", 50000)
+object <- tenxcheckerExp(raw10X)
+plot.10X(object)
+object <- estimateDistributions(object)
+object <- cleanData(object)
+plot.10X(object)
+joins <- checkJoins(object)
+joins <- filterJoins(object, joins)
+object <- scaffold(object, joins)
+plot.10X(object)
+```
+

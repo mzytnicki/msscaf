@@ -5,19 +5,21 @@
 
 using namespace Rcpp;
 
-// rcpp_hello_world
-List rcpp_hello_world();
-RcppExport SEXP _tenxchecker_rcpp_hello_world() {
+// parseBamFileCpp
+DataFrame parseBamFileCpp(String fileName, int binSize);
+RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(rcpp_hello_world());
+    Rcpp::traits::input_parameter< String >::type fileName(fileNameSEXP);
+    Rcpp::traits::input_parameter< int >::type binSize(binSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(parseBamFileCpp(fileName, binSize));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_tenxchecker_rcpp_hello_world", (DL_FUNC) &_tenxchecker_rcpp_hello_world, 0},
+    {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
     {NULL, NULL, 0}
 };
 

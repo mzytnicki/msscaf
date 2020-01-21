@@ -10,9 +10,17 @@ License: GPL (>= 2)
 Depends: R (>= 3.1.0)
 Imports:
     Rcpp (>= 1.0.2),
+    Rhtslib,
+    zlibbioc,
     magrittr,
     tidyverse,
     ggplot2,
     BiocParallel
-LinkingTo: Rcpp
+LinkingTo:
+    Rcpp,
+    Rhtslib,
+    zlibbioc
+SystemRequirements:
+    C++11,
+    GNU make
 LazyData: true
