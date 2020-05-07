@@ -1,10 +1,11 @@
-plotTriangles <- function(triangles, bins = NA) {
+plotTriangles <- function(triangles, bins = NULL) {
     p <- triangles %>%
         gather(key = "type", value = "value", fcMeanCount, nCells) %>%
         ggplot(aes(x = bin, y = value)) +
             geom_line() +
             facet_grid(rows = vars(type), scales = "free_y")
-    if (!is.na(bins)) {
+    #if ((length(bins) >= 1) & (!is.null(bins)) & (!is.na(bins))) {
+    if (!is.null(bins)) {
         for (bin in bins) {
           p <- p + geom_vline(xintercept = bin,
                               colour = "red",
@@ -110,11 +111,14 @@ filterBreak <- function(reference, object = object, breaks = breaks) {
     repeat {
         breakPointBin <- breaksRef %>%
             filter(fcMeanCount <= object@parameters@breakThreshold) %>%
+            filter(bin         >= object@parameters@maxLinkRange) %>%
+            filter(bin         <= objectRef@size - object@parameters@maxLinkRange) %>%
             filter(nCells      >= object@parameters@breakNCells) %>%
             arrange(fcMeanCount, desc(nCells)) %>%
             slice(1) %>%
             pull(bin)
         if (length(breakPointBin) == 0) {
+            message(bins)
             return(list(ref   = as.character(reference),
                         bins  = bins,
                         plot1 = plotTriangles(originalBreakRef, bins),
@@ -130,11 +134,16 @@ filterBreak <- function(reference, object = object, breaks = breaks) {
 filterBreaks <- function(object, breaks) {
     selectedRefs <- breaks %>%
         filter(fcMeanCount <= object@parameters@breakThreshold) %>%
-        filter(nCells      >= object@parameters@breakNCells) %>%
+        # TODO: find a better filter here?
+        #filter(nCells      >= object@parameters@breakNCells) %>%
         select(ref) %>%
         distinct() %>%
         pull()
-    objects <- splitByRef(object)[selectedRefs]
+    if (length(selectedRefs) == 0) {
+        message("No break found.")
+        return(list(breaks = c(), plots = c()))
+    }
+    #selectedBreaks <- lapply(selectedRefs, filterBreak, object = object, breaks = breaks)
     selectedBreaks <- bplapply(selectedRefs, filterBreak, object = object, breaks = breaks)
     selectedBreaks <- as_tibble(transpose(selectedBreaks))
     selectedPlots <- selectedBreaks %>%

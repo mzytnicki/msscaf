@@ -1,24 +1,42 @@
 estimateMoleculeSize <- function(object) {
     sampleSize = 10000
+    backgroundTopFrac = 0.75
     d <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         mutate(distance = abs(bin1 - bin2)) %>%
         select(distance, count) %>%
         sample_n(min(sampleSize, nrow(.))) %>%
         mutate(loess = predict(loess(count ~ distance, data = ., span = 0.1)))
+    background <- object@interactionMatrix %>%
+        filter(ref1 != ref2) %>%
+        select(count) %>%
+        sample_n(min(sampleSize, nrow(.))) %>%
+        top_frac(backgroundTopFrac, count) %>%
+        arrange(count) %>%
+        tail(n = 1) %>%
+        pull(count)
+    backgroundPlot <- object@interactionMatrix %>%
+        filter(ref1 != ref2) %>%
+        select(count) %>%
+        ggplot(aes(x = count)) +
+        geom_freqpoly() +
+        geom_vline(xintercept = background, linetype = "dashed") +
+        scale_y_log10()
     distance <- d %>%
         select(distance, loess) %>%
         distinct() %>%
         arrange(distance) %>%
-        filter(loess >= object@parameters@minCount) %>%
+        filter(loess > background) %>%
         tail(n = 1) %>%
         pull(distance)
     p <- ggplot(d, aes(distance, count)) +
         geom_point(color = "grey50") +
-        geom_line(aes(x = distance, y = loess)) + xlim(0, 50) +
-        geom_vline(xintercept = distance, linetype = "dashed")
+        geom_line(aes(x = distance, y = loess)) + 
+        geom_hline(yintercept = background, linetype = "dashed") +
+        geom_vline(xintercept = distance, linetype = "dashed") +
+        scale_y_log10()
     message(paste0("Estimated molecule size: ", distance, "."))
-    return(list(size = distance, plot = p))
+    return(list(size = distance, plot = p, backgroundPlot = backgroundPlot))
 }
 
 estimateBackgroundCounts <- function(object) {
@@ -30,13 +48,15 @@ estimateBackgroundCounts <- function(object) {
     d %<>% sample_n(sampleSize)
     t <- transform(table(d), cum_freq = cumsum(Freq)) %>%
         mutate(relative = cum_freq / sampleSize) %>%
-        filter(relative >= 0.9) %>%
+        filter(relative >= 0.1) %>%
         head(1) %>%
         pull(d)
     t <- as.integer(levels(t))[t] + 1
     p <- ggplot(d, aes(count)) +
-        geom_histogram(binwidth=1) + xlim(0, 10) +
-        geom_vline(xintercept = t, linetype = "dashed")
+        # geom_freqpoly() +
+        geom_freqpoly(binwidth=1) +
+        geom_vline(xintercept = t, linetype = "dashed") +
+        xlim(0, 10)
     message(paste0("Estimated background count: ", t, "."))
     return(list(count = t, plot = p))
 }
@@ -59,23 +79,37 @@ estimateMinRowCount <- function(object) {
     #                   color = "red") +
     #     geom_vline(xintercept = t, linetype = "dashed")
     # p
-    f <- fitdistr(tmp$countSum, densfun="logistic")
-    t <- f$estimate["location"] + f$estimate["scale"] * qlogis(0.01)
-    p <- ggplot(tmp, aes(countSum)) +
-        geom_density() + xlim(0, xWidth) +
-        stat_function(n = xWidth+1,
-                      fun = dlogis,
-                      args = list(location = f$estimate["location"], scale = f$estimate["scale"]),
-                      xlim = c(0, xWidth),
-                      color = "red") +
-        geom_vline(xintercept = t, linetype = "dashed")
-    message(paste0("Estimated min. row count: ", t, "."))
-    return(list(count = t, plot = p))
+    t <- object@parameters@minCount
+    p <- NULL
+    tryCatch({
+            f <- fitdistr(tmp$countSum, densfun="logistic")
+            t <- max(object@parameters@minCount,
+                     f$estimate["location"] + f$estimate["scale"] * qlogis(0.01))
+            p <- ggplot(tmp, aes(countSum)) +
+                geom_density() + xlim(0, xWidth) +
+                stat_function(n = xWidth+1,
+                              fun = dlogis,
+                              args = list(location = f$estimate["location"], scale = f$estimate["scale"]),
+                              xlim = c(0, xWidth),
+                              color = "red") +
+                geom_vline(xintercept = t, linetype = "dashed")
+            message(paste0("Estimated min. row count: ", t, "."))
+           return(list(count = t, plot = p))
+        },
+        error = function(e) {
+            p <- ggplot(tmp, aes(countSum)) +
+                geom_density() + xlim(0, xWidth) +
+                geom_vline(xintercept = t, linetype = "dashed")
+            message(paste0("Cannot estimate min. row count, keeping default ", t, "."))
+           return(list(count = t, plot = p))
+        }
+    )
 }
 
 estimateDistributions <- function(object) {
     l <- estimateMoleculeSize(object)
     object@parameters@maxLinkRange <- l$size
+    object@parameters@breakNCells <- 0.75 * ((object@parameters@maxLinkRange * (object@parameters@maxLinkRange + 1)) / 2)
     l <- estimateBackgroundCounts(object)
     object@parameters@minCount <- l$count
     l <- estimateMinRowCount(object)

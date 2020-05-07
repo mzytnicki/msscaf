@@ -5,3 +5,11 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call(`_tenxchecker_parseBamFileCpp`, fileName, binSize)
 }
 
+parseHicCpp <- function(fname, resolution) {
+    .Call(`_tenxchecker_parseHicCpp`, fname, resolution)
+}
+
+parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
+    .Call(`_tenxchecker_parsePafCpp`, fname, resolution, minAlnLen, minCount, minNCells)
+}
+

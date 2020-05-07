@@ -71,12 +71,12 @@ devtools::load_all(".")
 
 The complete dataset
 ```{r}
-# raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
-#                      delim = " ",
-#                      col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
-#                      col_types = "fifii")
-# #better save it...
-# saveRDS(object, "/Scratch/mazytnicki/bigData.rds")
+raw10X <- read_delim("/scratch/mazytnicki/possorted-tagcmp.tsv.gz",
+                     delim     = " ",
+                     col_names = c("ref1", "bin1", "ref2", "bin2", "count"),
+                     col_types = "fifii")
+# better save it...
+saveRDS(object, "/Scratch/mazytnicki/bigData.rds")
 object <- readRDS("/Scratch/mazytnicki/bigData.rds")
 ```
 
@@ -276,15 +276,82 @@ plotInsertions2(extractRef(object, "PAHY_Scaf_069"), 78, 4)
 ```
 
 ```{r}
-raw10X <- parseBamFile("phased_possorted_bam.bam", 50000)
+raw10X <- parseBamFile("phased_possorted_bam.bam", 40000)
 object <- tenxcheckerExp(raw10X)
+plot.10X(object)
+```
+
+```{r}
+#raw10X <- parseBamFile("/home/mazytnicki/Genotoul/Panga_longranger/map_to_scaffolds/ALIGN/outs/possorted_bam.bam", 1000000)
+#raw10X <- parseBamFile("/home/mazytnicki/Genotoul/seqoccin/workspace/10X_Matthias/20kb/ALIGN/outs/TestFilter.bam", 100000)
+raw10X <- parseBamFile("PAHY_Scaf_001.bam", 1000)
+raw10X <- parseBamFile("PAHY_Scaf_104.bam", 1000)
+object <- tenxcheckerExp(raw10X, 10000)
 plot.10X(object)
 object <- estimateDistributions(object)
 object <- cleanData(object)
 plot.10X(object)
+breaks <- checkBreaks(object)
+filteredBreaks <- filterBreaks(object, breaks$data)
+object <- splitChromosomes(object, filteredBreaks$breaks)
+plot.10X(object)
+
 joins <- checkJoins(object)
 joins <- filterJoins(object, joins)
 object <- scaffold(object, joins)
 plot.10X(object)
 ```
+
+```{r}
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("BiocParallel")
+devtools::load_all(".")
+hicFileName <- "/home/mazytnicki/Genotoul/seqoccin/assemblies/assemblers/mixed/bos_taurus/Trio2/test/hic/inter_30.hic"
+#hicFileName <- "/home/mazytnicki/Genotoul/seqoccin/assemblies/assemblers/mixed/bos_taurus/Trio2/test/hic/3ddna.rawchrom.hic"
+#hicData <- parseHicFile(hicFileName, 50000)
+hicData <- parseHicFile(hicFileName, 100000)
+saveRDS(hicData, "/media/Stock/tenxchecker/hic.rds")
+hicData <- readRDS("/media/Stock/tenxchecker/hic.rds")
+hicObject <- tenxcheckerExp(hicData, 100000)
+hicObject <- estimateDistributions(hicObject)
+hicObject <- cleanData(hicObject)
+hicObjects <- splitByRef(hicObject)
+plot.10X(hicObjects)
+hicBreaks <- checkBreaks(hicObject)
+filteredHicBreaks <- filterBreaks(hicObject, hicBreaks$data)
+hicObject <- splitChromosomes(hicObject, filteredHicBreaks$breaks)
+joins <- checkJoins(hicObject)
+joins <- filterJoins(hicObject, joins)
+hicObject <- scaffold(hicObject, joins)
+plot.10X(object)
+```
+
+```{r}
+library("MASS", pos = "package:base")
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("BiocParallel")
+devtools::load_all(".")
+ontFileName <- "/home/mazytnicki/Genotoul/seqoccin/assemblies/assemblers/mixed/bos_taurus/Trio2/test/nanopore/aln12345.paf"
+ontData <- parsePafFile(ontFileName, 2500000, 100, 10, 10)
+saveRDS(ontData, "/media/Stock/tenxchecker/ont.rds")
+ontData
+```
+
+```{r}
+library("MASS", pos = "package:base")
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("BiocParallel")
+devtools::load_all(".")
+referenceFileName <- "/home/mazytnicki/Genotoul/seqoccin/assemblies/assemblers/mixed/bos_taurus/Trio2/test/reference/alnContigsReference.paf"
+referenceData <- parsePafFile(referenceFileName, 100000, 1000, 1, 1)
+saveRDS(referenceData, "/media/Stock/tenxchecker/reference.rds")
+referenceData
+```
+
 

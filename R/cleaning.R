@@ -1,5 +1,5 @@
 removeSmallScaffolds <- function(object) {
-    message("Removing small scaffolds.")
+    message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% select(ref1) %>% distinct() %>% nrow() , ")."))
     bigRefs <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         makeSymmetric() %>%

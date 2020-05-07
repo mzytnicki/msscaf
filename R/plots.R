@@ -136,6 +136,9 @@ plotRowCountDensity <- function(object) {
 }
 
 plot.10XRef <- function(object, logColor = TRUE, bins = NA) {
+    if (length(bins) == 0) {
+        bins <- NA
+    }
     minCount <- object@interactionMatrix %>% pull(count) %>% min()
     if ((minCount < 0) & (logColor)) {
         stop("Trying to plot a map with negative count in log scale.")
