@@ -27,10 +27,10 @@ computeTest <- function(object, xmin, xmax, ymin, ymax, name) {
 }
 
 checkJoin <- function(object) {
-    message(paste0("  Matrix ",
-                   object@chromosome1,
-                   "/",
-                   object@chromosome2))
+    # message(paste0("  Matrix ",
+    #                object@chromosome1,
+    #                "/",
+    #                object@chromosome2))
     if (object@size1 <= 2 * object@parameters@maxLinkRange) {
         firstLim1 <- object@size1 / 2
         lastLim1  <- object@size1 / 2
