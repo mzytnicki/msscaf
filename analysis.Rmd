@@ -329,6 +329,52 @@ plot.10X(object)
 ```
 
 ```{r}
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("BiocParallel")
+devtools::load_all(".")
+bamFileName <- "/Scratch/mazytnicki/bovin-37163.bam"
+#bamFileName <- "/media/Stock/bovin-37163.bam"
+#bamFileName <- "/media/Stock/bovin-37163-S1.bam"
+#bamFileName <- "/media/Stock/test.bam"
+#bamFileName       <- "/Scratch/mazytnicki/test.bam"
+bamData           <- parseBamFile(bamFileName, 10000)
+bamObject         <- tenxcheckerExp(bamData, 10000)
+bamObject         <- estimateDistributions(bamObject)
+bamObject         <- cleanData(bamObject)
+bamBreaks         <- checkBreaks(bamObject)
+filteredBamBreaks <- filterBreaks(bamObject, bamBreaks$data)
+bamObject <- splitChromosomes(bamObject, filteredbamBreaks$breaks)
+joins <- checkJoins(bamObject)
+joins <- filterJoins(bamObject, joins)
+bamObject <- scaffold(bamObject, joins)
+plot.10X(object)
+```
+
+```{r}
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("BiocParallel")
+devtools::load_all(".")
+hicFileName <- "/media/Stock/genome.final.10X.hic"
+hicData <- parseHicFile(hicFileName, 10000)
+hicObject <- tenxcheckerExp(hicData, 10000)
+hicObject <- estimateDistributions(hicObject)
+hicObject <- cleanData(hicObject)
+hicObjects <- splitByRef(hicObject)
+plot.10X(hicObjects)
+hicBreaks <- checkBreaks(hicObject)
+filteredHicBreaks <- filterBreaks(hicObject, hicBreaks$data)
+hicObject <- splitChromosomes(hicObject, filteredHicBreaks$breaks)
+joins <- checkJoins(hicObject)
+joins <- filterJoins(hicObject, joins)
+hicObject <- scaffold(hicObject, joins)
+plot.10X(object)
+```
+
+```{r}
 library("MASS", pos = "package:base")
 library("devtools")
 library("magrittr")
@@ -353,5 +399,4 @@ referenceData <- parsePafFile(referenceFileName, 100000, 1000, 1, 1)
 saveRDS(referenceData, "/media/Stock/tenxchecker/reference.rds")
 referenceData
 ```
-
 

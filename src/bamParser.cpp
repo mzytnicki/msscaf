@@ -2,17 +2,60 @@
 #include <vector>
 #include <unordered_map>
 #include <RcppArmadillo.h>
+#include <progress.hpp>
+#include <progress_bar.hpp>
 #include "sam.h"
 
 // [[Rcpp::plugins(cpp11)]]
-
 // [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::depends(RcppProgress)]]
 
 using namespace Rcpp;
 
 struct position_t {
     int     chrId;
     int32_t pos;
+};
+
+class SparseMatrix {
+public:
+    size_t n_rows;
+    size_t n_cols;
+private:
+    std::unordered_map<size_t, unsigned int> matrix;
+    std::unordered_map<size_t, unsigned int>::const_iterator matrixIterator;
+    size_t translateCoordinates (size_t r, size_t c) {
+        return n_rows * r + c;
+    }
+public:
+    SparseMatrix (size_t nr = 0, size_t nc = 0) {
+        n_rows = nr;
+        n_cols = nc;
+    }
+    void addElement (size_t r, size_t c) {
+        ++matrix[translateCoordinates(r, c)];
+    }
+    size_t getNElements () {
+        return matrix.size();
+    }
+    void startIterator () {
+        matrixIterator = matrix.begin();
+    }
+    bool iteratorOver () {
+        return (matrixIterator == matrix.end());
+    }
+    void incIterator () {
+        ++matrixIterator;
+    }
+    size_t getRow () {
+        return matrixIterator->first / n_rows;
+    }
+    size_t getCol () {
+        return matrixIterator->first % n_rows;
+    }
+    unsigned int getValue () {
+        return matrixIterator->second;
+    }
 };
 
 typedef std::unordered_map<std::string, std::vector<position_t>> umiMap_t;
@@ -35,12 +78,15 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
         refs[i] = header->target_name[i];
     }
     std::vector<std::vector<arma::sp_mat>> matrices(nRefs);
+    //std::vector<std::vector<SparseMatrix>> matrices(nRefs);
     umiMap_t   umiMap;
     for (int idRef1 = 0; idRef1 < nRefs; ++idRef1) {
+        //matrices[idRef1] = std::vector<SparseMatrix>(idRef1+1);
         matrices[idRef1] = std::vector<arma::sp_mat>(idRef1+1);
         for (int idRef2 = 0; idRef2 <= idRef1; ++idRef2) {
             //Rcout << "\tMatrix [" << idRef1 << ", " << idRef2 << "] has size (" << (header->target_len[idRef1] / binSize) << ", " << (header->target_len[idRef2] / binSize) << ")\n";
             // Adding one more row and col, because division is truncated, and position "n * binSize" should go to bin "n + 1"
+            //matrices[idRef1][idRef2] = SparseMatrix((header->target_len[idRef1] / binSize) + 1, (header->target_len[idRef2] / binSize) + 1);
             matrices[idRef1][idRef2] = arma::sp_mat((header->target_len[idRef1] / binSize) + 1, (header->target_len[idRef2] / binSize) + 1);
         }
     }
@@ -50,19 +96,20 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
         int32_t posBin = pos / binSize;
         int chrId    = alignment->core.tid;
         uint8_t *umi = bam_aux_get(alignment, "BX");
-        if (umi != NULL) {
+        if ((chrId != -1) && (umi != NULL)) {
             std::string umiString((char *) ++umi);
             umiMap[umiString].push_back({chrId, posBin});
         }
-        if (cpt % 1000000 == 0) {
+        if (cpt % 10000000 == 0) {
             Rcout << "Reading read #" << cpt << "\n";
         }
     }
     bam_destroy1(alignment);
     sam_close(inputFile);
-    Rcout << "Read parsing done.\n";
+    Rcout << "Read parsing done.  Filling matrices.\n";
     unsigned int ref1, ref2;
     unsigned int pos1, pos2;
+    Progress progress1(umiMap.size(), true);
     for (auto &mapElement: umiMap) {
         auto &positions = mapElement.second;
         size_t nPositions = positions.size();
@@ -79,23 +126,49 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
                 else if ((ref1 == ref2) && (pos1 < pos2)) {
                     std::swap(pos1, pos2);
                 }
+                if (ref1 >= matrices.size()) {
+                    Rcerr << "Error: first id reference exceeds size (" << ref1 << " vs " << matrices.size() << ").\n";
+                }
+                if (ref2 >= matrices[ref1].size()) {
+                    Rcerr << "Error: second id reference exceeds size (" << ref2 << " vs " << matrices[ref1].size() << ").\n";
+                }
+                if (pos1 >= matrices[ref1][ref2].n_rows) {
+                    Rcerr << "Error: row id exceeds size (" << pos1 << " vs " << matrices[ref1][ref2].n_rows << ").\n";
+                }
+                if (pos2 >= matrices[ref1][ref2].n_cols) {
+                    Rcerr << "Error: col id exceeds size (" << pos2 << " vs " << matrices[ref1][ref2].n_cols << ").\n";
+                }
+                //matrices[ref1][ref2].addElement(pos1, pos2);
                 ++matrices[ref1][ref2](pos1, pos2);
             }
         }
+        progress1.increment();
     }
-    Rcout << "Matrix filling done.\n";
+    umiMap.clear();
+    Rcout << "Matrix filling done, transforming data to sparse matrices.\n";
+    Progress progress2(nRefs * (nRefs + 1) / 2, true);
     std::vector<int> ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector;
     for (int idRef1 = 0; idRef1 < nRefs; ++idRef1) {
         for (int idRef2 = 0; idRef2 <= idRef1; ++idRef2) {
             // Rcout << "\tScanning matrix (" << idRef1 << ", " << idRef2 << ")\n";
             arma::sp_mat &matrix = matrices[idRef1][idRef2];
+            //SparseMatrix &matrix = matrices[idRef1][idRef2];
+            //int nElements = matrix.getNElements();
             int nElements = matrix.n_nonzero;
             std::vector<int> thisPos1Vector, thisPos2Vector, thisCountVector;
             thisPos1Vector.reserve(nElements);
             thisPos2Vector.reserve(nElements);
             thisCountVector.reserve(nElements);
+            /*
+            for (matrix.startIterator(); ! matrix.iteratorOver(); matrix.incIterator()) {
+                // Rcout << "\t\t[" << matrixIt.row() << ", " << matrixIt.col() << "]: " << (*matrixIt) << "\n";
+                thisPos1Vector.push_back(matrix.getRow());
+                thisPos2Vector.push_back(matrix.getCol());
+                thisCountVector.push_back(matrix.getValue());
+            }
+            */
             for (arma::sp_mat::const_iterator matrixIt = matrix.begin(); matrixIt != matrix.end(); ++matrixIt) {
-                //Rcout << "\t\t[" << matrixIt.row() << ", " << matrixIt.col() << "]: " << (*matrixIt) << "\n";
+                // Rcout << "\t\t[" << matrixIt.row() << ", " << matrixIt.col() << "]: " << (*matrixIt) << "\n";
                 thisPos1Vector.push_back(matrixIt.row());
                 thisPos2Vector.push_back(matrixIt.col());
                 thisCountVector.push_back(*matrixIt);
@@ -107,8 +180,12 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
             pos1Vector.insert(pos1Vector.end(), thisPos1Vector.begin(), thisPos1Vector.end());
             pos2Vector.insert(pos2Vector.end(), thisPos2Vector.begin(), thisPos2Vector.end());
             countVector.insert(countVector.end(), thisCountVector.begin(), thisCountVector.end());
+            progress2.increment();
         }
     }
+    matrices.clear();
+    Rcout << "Sparse matrix filling done.\n";
+    Rcout << "Matrix filling done.\n";
     IntegerVector ref1VectorR(ref1Vector.begin(), ref1Vector.end());
     IntegerVector ref2VectorR(ref2Vector.begin(), ref2Vector.end());
     IntegerVector pos1VectorR(pos1Vector.begin(), pos1Vector.end());

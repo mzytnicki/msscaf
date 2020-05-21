@@ -101,12 +101,12 @@ checkBreaks <- function(object) {
                 plot3 = map(breaks, "plot3")))
 }
 
-filterBreak <- function(reference, object = object, breaks = breaks) {
+filterBreak <- function(parameters) {
     bins <- c()
     plot1 <- c()
-    objectRef <- extractRef(object, reference)
-    breaksRef <- breaks %>%
-        filter(ref == reference)
+    reference <- parameters$ref
+    objectRef <- parameters$object
+    breaksRef <- parameters$breaks
     originalBreakRef <- breaksRef
     repeat {
         breakPointBin <- breaksRef %>%
@@ -118,7 +118,6 @@ filterBreak <- function(reference, object = object, breaks = breaks) {
             slice(1) %>%
             pull(bin)
         if (length(breakPointBin) == 0) {
-            message(bins)
             return(list(ref   = as.character(reference),
                         bins  = bins,
                         plot1 = plotTriangles(originalBreakRef, bins),
@@ -132,20 +131,32 @@ filterBreak <- function(reference, object = object, breaks = breaks) {
 }
 
 filterBreaks <- function(object, breaks) {
-    selectedRefs <- breaks %>%
-        filter(fcMeanCount <= object@parameters@breakThreshold) %>%
+    selectedBreaks <- breaks %>%
+        filter(fcMeanCount <= object@parameters@breakThreshold)
         # TODO: find a better filter here?
         #filter(nCells      >= object@parameters@breakNCells) %>%
+    selectedRefs <- selectedBreaks %>%
         select(ref) %>%
         distinct() %>%
-        pull()
+        pull() %>%
+        as.character()
     if (length(selectedRefs) == 0) {
         message("No break found.")
         return(list(breaks = c(), plots = c()))
     }
+    splitObject <- splitByRef(object)[selectedRefs]
+    splitBreaks <- selectedBreaks %>%
+        group_by(ref) %>%
+        group_split()
+    functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
     #selectedBreaks <- lapply(selectedRefs, filterBreak, object = object, breaks = breaks)
-    selectedBreaks <- bplapply(selectedRefs, filterBreak, object = object, breaks = breaks)
+    # parallel seems to need too much RAM
+    selectedBreaks <- bplapply(functionParameters, filterBreak)
     selectedBreaks <- as_tibble(transpose(selectedBreaks))
+    if (is.null(unlist(selectedBreaks$bins))) {
+        message("No break passed the filter.")
+        return(list(breaks = c(), plots = c()))
+    }
     selectedPlots <- selectedBreaks %>%
         select(ref, plot1, plot2) %>%
         mutate(ref = flatten_chr(ref))
