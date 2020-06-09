@@ -31,7 +31,7 @@ setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
                                             maxLinkRange    = "ANY", 
                                             nRandomizations = "ANY", 
                                             pvalueThreshold = "ANY", 
-                                            nBinZoom        = "ANY") 
+                                            nBinZoom        = "ANY")
 )
 
 
@@ -86,8 +86,8 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
 #' srnaExp
 #'
 #' @export
-tenxcheckerExp <- function(matrix  = NULL,
-                           binSize = NULL) {
+tenxcheckerExp <- function(matrix   = NULL,
+                           binSize  = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -132,7 +132,7 @@ tenxcheckerExp <- function(matrix  = NULL,
     object@parameters@nRandomizations <- 10
     object@parameters@pvalueThreshold <- 1e-4
     object@parameters@nBinZoom        <- 100
-    
+
     object@sizes <- computeRefSizes(object)
     
     return(invisible(object))

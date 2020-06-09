@@ -333,12 +333,13 @@ library("devtools")
 library("magrittr")
 library("tidyverse")
 library("BiocParallel")
+register(MulticoreParam(workers = 10), default = TRUE)
 devtools::load_all(".")
 bamFileName <- "/Scratch/mazytnicki/bovin-37163.bam"
 #bamFileName <- "/media/Stock/bovin-37163.bam"
 #bamFileName <- "/media/Stock/bovin-37163-S1.bam"
 #bamFileName <- "/media/Stock/test.bam"
-#bamFileName       <- "/Scratch/mazytnicki/test.bam"
+bamFileName       <- "/Scratch/mazytnicki/test.bam"
 bamData           <- parseBamFile(bamFileName, 10000)
 bamObject         <- tenxcheckerExp(bamData, 10000)
 bamObject         <- estimateDistributions(bamObject)

@@ -59,6 +59,11 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
             rho_km1 <- drop(t(rk) %*% Z)
         }
         x <- x * y
+        if (log10(min(x)) < -300) {
+          message("Warning, algorithm diverges")
+          result <- t(t(x[,1] * A) * x[,1])
+          return(result)
+        }
         v <- x * (A %*% x)
         rk <- 1 - v
         rho_km1 <- drop(t(rk) %*% rk)

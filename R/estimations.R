@@ -1,5 +1,5 @@
 estimateMoleculeSize <- function(object) {
-    sampleSize = 10000
+    sampleSize = 100000
     backgroundTopFrac = 0.75
     d <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
@@ -13,7 +13,7 @@ estimateMoleculeSize <- function(object) {
         sample_n(min(sampleSize, nrow(.))) %>%
         top_frac(backgroundTopFrac, count) %>%
         arrange(count) %>%
-        tail(n = 1) %>%
+        head(n = 1) %>%
         pull(count)
     backgroundPlot <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%

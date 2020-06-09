@@ -43,6 +43,7 @@ checkBreak <- function(object) {
     message("    Checking breaks.")
     data <- object@interactionMatrix
     trianglesList <- bplapply(seq.int(object@parameters@nRandomizations),
+    #trianglesList <- lapply(seq.int(object@parameters@nRandomizations),
                           computeMeanTrianglesRandom,
                           data = data)
     triangles <- bind_rows(trianglesList) %>%
