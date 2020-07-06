@@ -2,14 +2,14 @@
 #include <vector>
 #include <unordered_map>
 #include <valarray>
-#include <RcppArmadillo.h>
 #include <progress.hpp>
 #include <progress_bar.hpp>
+#include <thread>
+#include <atomic>
+#include <mutex>
 #include "sam.h"
 
 // [[Rcpp::plugins(cpp11)]]
-// [[Rcpp::depends(RcppArmadillo)]]
-// [[Rcpp::depends(RcppProgress)]]
 
 using namespace Rcpp;
 
@@ -17,6 +17,46 @@ struct position_t {
     int     chrId;
     int32_t pos;
 };
+
+typedef std::unordered_map<std::string, std::vector<position_t>> umiMap_t;
+typedef std::vector < std::vector < std::pair < int, int > > > stackedPositions_t;
+
+std::mutex mtx;
+
+void sortPositions (stackedPositions_t &stackedPositions, std::atomic_size_t &globalIndex, int threadId) {
+    Rcout << "Starting thread #" << threadId << std::endl;
+    size_t index;
+    while ((index = globalIndex++) < stackedPositions.size()) {
+        mtx.lock();
+        Rcout << "thread " << threadId << ", index: " << index << std::endl;
+        mtx.unlock();
+        // Rcout << "Matrix " << index << "/" << stackedPositions.size() << " (" << stackedPositions[index].size() << " elements), thread #" << threadId << std::endl;
+        //std::sort(stackedPositions[index].begin(), stackedPositions[index].end());
+    }
+    Rcout << "Over with this thread." << std::endl;
+}
+
+// struct StackedPositions : public RcppParallel::Worker {
+//     // destination matrix
+//     stackedPositions_t &stackedPositions;
+//     std::vector < std::pair < size_t, size_t > > chrIndices;
+//     
+//     StackedPositions(stackedPositions_t &sp, size_t nc): stackedPositions(sp), chrIndices(nc * (nc + 1) / 2) {
+//         size_t p = 0;
+//         for (size_t i = 0; i < nc; ++i) {
+//             for (size_t j = 0; j <= i; ++j) {
+//                 chrIndices[p++] = {i, j};
+//             }
+//         }
+//     }
+//     
+//     // take the square root of the range of elements requested
+//     void operator()(std::size_t begin, std::size_t end) {
+//         for (size_t i = begin; i < end; ++i) {
+//             std::sort(stackedPositions[chrIndices[i].first][chrIndices[i].second].begin(), stackedPositions[chrIndices[i].first][chrIndices[i].second].end());
+//         }
+//     }
+// };
 
 class SparseMatrix {
 public:
@@ -134,10 +174,9 @@ unsigned int getChr (unsigned int position, std::vector <unsigned int> &offsets)
     return midId;
 }
 
-typedef std::unordered_map<std::string, std::vector<position_t>> umiMap_t;
 
 // [[Rcpp::export]]
-DataFrame parseBamFileCpp(String fileName, int binSize) {
+DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     Rcout << "Reading " << fileName.get_cstring() << "\n";
     samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
     if (inputFile == NULL) {
@@ -149,24 +188,24 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
     bam1_t    *alignment  = bam_init1();
     int        nRefs      = header->n_targets;
     Rcout << "Found " << nRefs << " references\n";
-    std::vector <unsigned int> sizes(header->n_targets);
-    std::vector <unsigned int> offsets(header->n_targets+1);
+    std::vector <int> sizes(header->n_targets);
+    // std::vector <unsigned int> offsets(header->n_targets+1);
     CharacterVector refs(header->n_targets);
     for (int i = 0; i < header->n_targets; ++i) {
         refs[i] = header->target_name[i];
-        sizes[i] = header->target_len[i];
+        sizes[i] = header->target_len[i] / binSize + 1;
     }
-    offsets[0];
-    for (int i = 0; i < header->n_targets; ++i) {
-        offsets[i+1] = offsets[i] + (sizes[i] / binSize) + 1;
-    }
-    unsigned int nBins = offsets[header->n_targets];
-    std::vector<unsigned int> bins2Chr(nBins);
-    for (int i = 0; i < header->n_targets; ++i) {
-        for (int j = offsets[i]; j < offsets[i+1]; ++j) {
-            bins2Chr[j] = i;
-        }
-    }
+    // offsets[0];
+    // for (int i = 0; i < header->n_targets; ++i) {
+    //     offsets[i+1] = offsets[i] + (sizes[i] / binSize) + 1;
+    // }
+    // unsigned int nBins = offsets[header->n_targets];
+    // std::vector<unsigned int> bins2Chr(nBins);
+    // for (int i = 0; i < header->n_targets; ++i) {
+    //     for (int j = offsets[i]; j < offsets[i+1]; ++j) {
+    //         bins2Chr[j] = i;
+    //     }
+    // }
     //std::vector<std::vector<arma::sp_mat>> matrices(nRefs);
     //std::vector<std::vector<SparseMatrix>> matrices(nRefs);
     //SparseMatrix matrix(nBins, nBins);
@@ -184,7 +223,7 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
         }
     }
     */
-    Rcout << "Created matrices.\n";
+    Rcout << "Reading BAM file.\n";
     for (unsigned int cpt = 0; sam_read1(inputFile, header, alignment) > 0; ++cpt) {
         int32_t pos    = alignment->core.pos + 1;
         int32_t posBin = pos / binSize;
@@ -195,21 +234,35 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
             umiMap[umiString].push_back({chrId, posBin});
         }
         if (cpt % 10000000 == 0) {
-            Rcout << "Reading read #" << cpt << "\n";
+            Rcout << "\tReading read #" << cpt << "\n";
         }
     }
     bam_destroy1(alignment);
     sam_close(inputFile);
-    Rcout << "Read parsing done.  Filling matrices (" << nBins << " bins).\n";
-    unsigned int ref1, ref2;
-    unsigned int pos1, pos2;
-    SimpleMatrix matrix(nBins);
+    Rcout << "Read parsing done.  Placing to buckets.\n";
+    //Rcout << "Read parsing done.  Filling matrices (" << nBins << " bins).\n";
+    int ref1, ref2;
+    int pos1, pos2;
+    //SimpleMatrix matrix(nBins);
+    stackedPositions_t stackedPositions(nRefs * (nRefs + 1) / 2);
+    std::vector < std::pair < size_t, size_t > > chrIndices (nRefs * (nRefs + 1) / 2);
+    std::vector < std::vector < size_t > > indicesChr (nRefs);
+    size_t p = 0;
+    for (int i = 0; i < nRefs; ++i) {
+        indicesChr[i] = std::vector < size_t > (i+1);
+        for (int j = 0; j <= i; ++j) {
+            chrIndices[p] = {i, j};
+            indicesChr[i][j] = p;
+            ++p;
+        }
+    }
     Progress progress1(umiMap.size(), true);
-    for (auto &mapElement: umiMap) {
+    while (! umiMap.empty()) {
+        auto &mapElement = *umiMap.begin();
         auto &positions = mapElement.second;
-        size_t nPositions = positions.size();
-        for (unsigned int posId1 = 0; posId1 < nPositions; ++posId1) {
-            for (unsigned int posId2 = 0; posId2 < posId1; ++posId2) {
+        int nPositions = positions.size();
+        for (int posId1 = 0; posId1 < nPositions; ++posId1) {
+            for (int posId2 = 0; posId2 < posId1; ++posId2) {
                 ref1 = positions[posId1].chrId;
                 ref2 = positions[posId2].chrId;
                 pos1 = positions[posId1].pos;
@@ -222,57 +275,130 @@ DataFrame parseBamFileCpp(String fileName, int binSize) {
                     std::swap(pos1, pos2);
                 }
                 if (ref1 >= nRefs) {
-                    Rcerr << "Error: first id reference exceeds size (" << ref1 << " vs " << nRefs << ").\n";
+                    Rcerr << "Error: first id reference exceeds size (" << ref1 << " vs " << nRefs << ")." << std::endl;
                 }
-                if (ref2 >= nRefs) {
-                    Rcerr << "Error: second id reference exceeds size (" << ref2 << " vs " << nRefs << ").\n";
+                if (ref2 > ref1) {
+                    Rcerr << "Error: second id reference exceeds first ref (" << ref2 << " vs " << ref1 << " vs" << nRefs << ")." << std::endl;
                 }
                 if (pos1 >= sizes[ref1]) {
-                    Rcerr << "Error: row id exceeds size (" << pos1 << " vs " << sizes[ref1] << ").\n";
+                    Rcerr << "Error: row id exceeds size (" << pos1 << " vs " << sizes[ref1] << ")." << std::endl;
                 }
                 if (pos2 >= sizes[ref2]) {
-                    Rcerr << "Error: col id exceeds size (" << pos2 << " vs " << sizes[ref2] << ").\n";
+                    Rcerr << "Error: col id exceeds size (" << pos2 << " vs " << sizes[ref2] << ")." << std::endl;
                 }
-                matrix.addElement(offsets[ref1] + pos1, offsets[ref2] + pos2);
-                //++matrix(offsets[ref1] + pos1, offsets[ref2] + pos2);
+                stackedPositions[indicesChr[ref1][ref2]].emplace_back(pos1, pos2);
             }
         }
+        umiMap.erase(umiMap.begin());
         progress1.increment();
     }
-    umiMap.clear();
-    Rcout << "Matrix filling done, transforming data to sparse matrices.\n";
+    Rcout << "Bucketting done.  Sorting them with " << nThreads << " threads.\n";
+    // std::atomic_size_t i (0);
+    // std::vector < std::thread > threads;
+    // for (int threadId = 0; threadId < nThreads - 1; ++threadId) {
+    //     threads.push_back(std::thread(sortPositions, std::ref(stackedPositions), std::ref(i), threadId));
+    // }
+    // sortPositions(stackedPositions, i, nThreads - 1);
+    // for (auto &thread: threads) {
+    //     thread.join();
+    // }
+    // for (size_t i = 0; i < chrIndices.size(); ++i) {
+    //     std::sort(stackedPositions[chrIndices[i].first][chrIndices[i].second].begin(), stackedPositions[chrIndices[i].first][chrIndices[i].second].end());
+    // }
+    // StackedPositions stackedPositionsWorker(stackedPositions, nRefs);
+    // parallelFor(0, nRefs * (nRefs + 1) / 2, stackedPositionsWorker);
+    // //Progress progress2(nRefs * (nRefs+1) / 2, true);
+    // for (int ref1Id = 0; ref1Id < nRefs; ++ref1Id) {
+    //     for (int ref2Id = 0; ref2Id <= ref1Id; ++ref2Id) {
+    //         Rcout << "\tSorting " << ref1Id << " vs " << ref2Id << ": " << stackedPositions[ref1Id][ref2Id].size() << " elements." << std::endl;
+    //         std::sort(stackedPositions[ref1Id][ref2Id].begin(), stackedPositions[ref1Id][ref2Id].end());
+    //         //std::sort(unsortedCounts[ref1Id][ref2Id].begin(), unsortedCounts[ref1Id][ref2Id].end(), [] (const std::pair < int, int > & a, const std::pair <int, int > & b) { return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second))); }));
+    //         //progress2.increment();
+    //     }
+    // }
+    // Rcout << "Sorting done.  Getting counts.\n";
+    // Progress progress3(nRefs * (nRefs+1) / 2, true);
+    // std::vector<int> ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector;
+    // for (size_t ref = 0; ref < stackedPositions.size(); ++ref) {
+    //     int ref1Id, ref2Id;
+    //     std::tie(ref1Id, ref2Id) = chrIndices[ref];
+    //     std::vector < int > theseRef1;
+    //     std::vector < int > theseRef2;
+    //     std::vector < int > thesePos1;
+    //     std::vector < int > thesePos2;
+    //     std::vector < int > theseCounts;
+    //     std::pair < int, int > prev = { 0, 0 };
+    //     int prevCount = 0;
+    //     for (auto &p: stackedPositions[ref]) {
+    //         if (p == prev) {
+    //             ++prevCount;
+    //         }
+    //         else if (prevCount != 0) {
+    //             thesePos1.push_back(prev.first);
+    //             thesePos2.push_back(prev.second);
+    //             theseCounts.push_back(prevCount);
+    //             prevCount = 1;
+    //             prev      = p;
+    //         }
+    //     }
+    //     if (prevCount != 0) {
+    //         thesePos1.push_back(prev.first);
+    //         thesePos2.push_back(prev.second);
+    //         theseCounts.push_back(prevCount);
+    //     }
+    //     theseRef1 = std::vector < int > (thesePos1.size(), ref1Id + 1); // Factors in R start with 1
+    //     theseRef2 = std::vector < int > (thesePos1.size(), ref2Id + 1);
+    //     ref1Vector.insert(ref1Vector.end(), theseRef1.begin(), theseRef1.end());
+    //     ref2Vector.insert(ref2Vector.end(), theseRef2.begin(), theseRef2.end());
+    //     pos1Vector.insert(pos1Vector.end(), thesePos1.begin(), thesePos1.end());
+    //     pos2Vector.insert(pos2Vector.end(), thesePos2.begin(), thesePos2.end());
+    //     countVector.insert(countVector.end(), theseCounts.begin(), theseCounts.end());
+    //     progress3.increment();
+    // }
     std::vector<int> ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector;
-    int nElements = matrix.n_nonzero;
-    ref1Vector.reserve(nElements);
-    ref2Vector.reserve(nElements);
-    pos1Vector.reserve(nElements);
-    pos2Vector.reserve(nElements);
-    countVector.reserve(nElements);
-    Progress progress2(nElements, true);
-    //for (arma::sp_mat::const_iterator matrixIt = matrix.begin(); matrixIt != matrix.end(); ++matrixIt) {
-    for (matrix.startIterator(); ! matrix.iteratorOver(); matrix.incIterator()) {
-        // Rcout << "\t\t[" << matrixIt.row() << ", " << matrixIt.col() << "]: " << (*matrixIt) << "\n";
-        //unsigned int pos = matrixIt.row();
-        unsigned int pos = matrix.getRow();
-        //unsigned int chrId = getChr(pos, offsets);
-        unsigned int chrId = bins2Chr[pos];
-        //pos1Vector.push_back(matrixIt.row() - pos);
-        pos1Vector.push_back(pos - offsets[chrId]);
-        ref1Vector.push_back(chrId + 1); // these are R factors, which are 1-based
-        //pos = matrixIt.col();
-        pos = matrix.getCol();
-        //chrId = getChr(pos, offsets);
-        chrId = bins2Chr[pos];
-        pos2Vector.push_back(pos - offsets[chrId]);
-        ref2Vector.push_back(chrId + 1); // these are R factors, which are 1-based
-        //countVector.push_back(*matrixIt);
-        countVector.push_back(matrix.getValue());
-        if (ref1Vector.size() >= nElements) {
-            Rcerr << "\nProblem while filling the sparse matrix.\n";
+    //Progress progress2(nRefs * (nRefs+1) / 2, true);
+    for (int ref = 0; ref < nRefs * (nRefs+1) / 2; ++ref) {
+        if (! stackedPositions[ref].empty()) {
+            std::vector<int> thisRef1Vector, thisRef2Vector, thisPos1Vector, thisPos2Vector, thisCountVector;
+            int nNonZeros = 0;
+            int ref1, ref2;
+            std::tie(ref1, ref2) = chrIndices[ref];
+            int size1 = sizes[ref1];
+            int size2 = sizes[ref2];
+            std::cout << "Ref: " << ref1 << "/" << ref2 << ": " << stackedPositions[ref].size() << " elements.\n";
+            std::vector < std::vector < int > > matrix (size1, std::vector < int > (size2, 0));
+            for (auto &positions: stackedPositions[ref]) {
+                int pos1, pos2;
+                std::tie(pos1, pos2) = positions;
+                if (matrix[pos1][pos2] == 0) {
+                    ++nNonZeros;
+                }
+                ++matrix[pos1][pos2];
+            }
+            std::cout << "\t" << nNonZeros << " non zero elements.\n";
+            thisPos1Vector.reserve(nNonZeros);
+            thisPos2Vector.reserve(nNonZeros);
+            thisCountVector.reserve(nNonZeros);
+            thisRef1Vector.insert(thisRef1Vector.begin(), nNonZeros, ref1 + 1);
+            thisRef2Vector.insert(thisRef2Vector.begin(), nNonZeros, ref2 + 1);
+            for (int pos1 = 0; pos1 < size1; ++pos1) {
+                for (int pos2 = 0; pos2 < size2; ++pos2) {
+                    if (matrix[pos1][pos2] != 0) {
+                        thisPos1Vector.push_back(pos1);
+                        thisPos2Vector.push_back(pos2);
+                        thisCountVector.push_back(matrix[pos1][pos2]);
+                    }
+                }
+            }
+            ref1Vector.insert(ref1Vector.end(), thisRef1Vector.begin(), thisRef1Vector.end());
+            ref2Vector.insert(ref2Vector.end(), thisRef2Vector.begin(), thisRef2Vector.end());
+            pos1Vector.insert(pos1Vector.end(), thisPos1Vector.begin(), thisPos1Vector.end());
+            pos2Vector.insert(pos2Vector.end(), thisPos2Vector.begin(), thisPos2Vector.end());
+            countVector.insert(countVector.end(), thisCountVector.begin(), thisCountVector.end());
         }
-        progress2.increment();
+        //progress2.increment();
     }
-    Rcout << "Sparse matrix filling done.\n";
+    //Rcout << "Counting done...\n";
     IntegerVector ref1VectorR(ref1Vector.begin(), ref1Vector.end());
     IntegerVector ref2VectorR(ref2Vector.begin(), ref2Vector.end());
     IntegerVector pos1VectorR(pos1Vector.begin(), pos1Vector.end());

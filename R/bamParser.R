@@ -1,3 +1,4 @@
-parseBamFile <- function(fileName, binSize) {
-    as_tibble(parseBamFileCpp(fileName, binSize))
+parseBamFile <- function(fileName, binSize, nThreads) {
+    #RcppParallel::setThreadOptions(numThreads = nThreads);
+    as_tibble(parseBamFileCpp(fileName, binSize, nThreads))
 }

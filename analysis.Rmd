@@ -339,8 +339,9 @@ bamFileName <- "/Scratch/mazytnicki/bovin-37163.bam"
 #bamFileName <- "/media/Stock/bovin-37163.bam"
 #bamFileName <- "/media/Stock/bovin-37163-S1.bam"
 #bamFileName <- "/media/Stock/test.bam"
-bamFileName       <- "/Scratch/mazytnicki/test.bam"
-bamData           <- parseBamFile(bamFileName, 10000)
+#bamFileName       <- "/Scratch/mazytnicki/test.bam"
+#bamFileName       <- "/Scratch/mazytnicki/smallTest.bam"
+bamData           <- parseBamFile(bamFileName, 10000, 2)
 bamObject         <- tenxcheckerExp(bamData, 10000)
 bamObject         <- estimateDistributions(bamObject)
 bamObject         <- cleanData(bamObject)
