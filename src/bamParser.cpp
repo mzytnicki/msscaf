@@ -1,7 +1,9 @@
+#include <cstdio>
 #include <string>
 #include <vector>
+#include <fstream>
 #include <unordered_map>
-#include <valarray>
+#include <queue>
 #include <progress.hpp>
 #include <progress_bar.hpp>
 #include <thread>
@@ -9,17 +11,44 @@
 #include <mutex>
 #include "sam.h"
 
+// [[Rcpp::plugins(openmp)]]
 // [[Rcpp::plugins(cpp11)]]
 
 using namespace Rcpp;
+
+const long maxRecords = 100000000;
 
 struct position_t {
     int     chrId;
     int32_t pos;
 };
 
+struct contact_t {
+    int chrId;
+    int bin1;
+    int bin2;
+    contact_t (int c = -1, int b1 = 0, int b2 = 0): chrId(c), bin1(b1), bin2(b2) {}
+    friend bool operator<(const contact_t &l, const contact_t &r) {
+        return std::tie(l.chrId, l.bin1, l.bin2) < std::tie(r.chrId, r.bin1, r.bin2);
+    }
+};
+
+struct heap_data_t {
+    int fileId;
+    int chrId;
+    int bin1;
+    int bin2;
+    heap_data_t (int f = -1 , int c = -1, int b1 = 0, int b2 = 0): fileId(f), chrId(c), bin1(b1), bin2(b2) {}
+    friend bool operator<(const heap_data_t &l, const heap_data_t &r) {
+        return std::tie(l.chrId, l.bin1, l.bin2) > std::tie(r.chrId, r.bin1, r.bin2);
+    }
+    friend bool operator>(const heap_data_t &l, const heap_data_t &r) {
+        return std::tie(l.chrId, l.bin1, l.bin2) < std::tie(r.chrId, r.bin1, r.bin2);
+    }
+};
+
 typedef std::unordered_map<std::string, std::vector<position_t>> umiMap_t;
-typedef std::vector < std::vector < std::pair < int, int > > > stackedPositions_t;
+typedef std::vector < contact_t > stackedPositions_t;
 
 std::mutex mtx;
 
@@ -36,193 +65,55 @@ void sortPositions (stackedPositions_t &stackedPositions, std::atomic_size_t &gl
     Rcout << "Over with this thread." << std::endl;
 }
 
-// struct StackedPositions : public RcppParallel::Worker {
-//     // destination matrix
-//     stackedPositions_t &stackedPositions;
-//     std::vector < std::pair < size_t, size_t > > chrIndices;
-//     
-//     StackedPositions(stackedPositions_t &sp, size_t nc): stackedPositions(sp), chrIndices(nc * (nc + 1) / 2) {
-//         size_t p = 0;
-//         for (size_t i = 0; i < nc; ++i) {
-//             for (size_t j = 0; j <= i; ++j) {
-//                 chrIndices[p++] = {i, j};
-//             }
-//         }
-//     }
-//     
-//     // take the square root of the range of elements requested
-//     void operator()(std::size_t begin, std::size_t end) {
-//         for (size_t i = begin; i < end; ++i) {
-//             std::sort(stackedPositions[chrIndices[i].first][chrIndices[i].second].begin(), stackedPositions[chrIndices[i].first][chrIndices[i].second].end());
-//         }
-//     }
-// };
-
-class SparseMatrix {
-public:
-    size_t n_rows;
-    size_t n_cols;
-private:
-    std::unordered_map<size_t, unsigned int> matrix;
-    std::unordered_map<size_t, unsigned int>::const_iterator matrixIterator;
-    size_t translateCoordinates (size_t r, size_t c) {
-        return n_rows * r + c;
-    }
-public:
-    SparseMatrix (size_t nr = 0, size_t nc = 0) {
-        n_rows = nr;
-        n_cols = nc;
-    }
-    void addElement (size_t r, size_t c) {
-        ++matrix[translateCoordinates(r, c)];
-    }
-    size_t getNElements () {
-        return matrix.size();
-    }
-    void startIterator () {
-        matrixIterator = matrix.begin();
-    }
-    bool iteratorOver () {
-        return (matrixIterator == matrix.end());
-    }
-    void incIterator () {
-        ++matrixIterator;
-    }
-    size_t getRow () {
-        return matrixIterator->first / n_rows;
-    }
-    size_t getCol () {
-        return matrixIterator->first % n_rows;
-    }
-    unsigned int getValue () {
-        return matrixIterator->second;
-    }
-};
-
-class SimpleMatrix {
-public:
-    size_t n_rows;
-    size_t n_cols;
-    size_t n_nonzero;
-private:
-    std::valarray<unsigned int> matrix;
-    size_t currentRow;
-    size_t currentCol;
-    size_t currentPos;
-    size_t translateCoordinates (size_t r, size_t c) {
-        return n_rows * (n_rows - 1) / 2 - (n_rows - c) * (n_rows - c - 1) / 2 + r;
-    }
-public:
-    SimpleMatrix (size_t n = 0): n_rows(n), n_cols(n), n_nonzero(0), matrix(static_cast<unsigned int>(0), n * (n + 1) / 2) { }
-    void addElement (size_t r, size_t c) {
-        size_t pos = translateCoordinates(r, c);
-        if (matrix[pos] == 0) {
-          ++n_nonzero;
-        }
-        ++matrix[pos];
-    }
-    bool iteratorOver () {
-        return (currentCol >= n_cols);
-    }
-    void _incIterator () {
-        ++currentPos;
-        ++currentRow;
-        if (currentRow > currentCol) {
-            currentRow = 0;
-            ++currentCol;
-        }
-    }
-    void incIterator () {
-        do {
-            _incIterator();
-        } while (matrix[currentPos] == 0);
-    }
-    void startIterator () {
-        currentPos = 0;
-        currentRow = 0;
-        currentCol = 0;
-        if (matrix[currentPos] == 0) {
-            incIterator();
-        }
-    }
-    size_t getRow () {
-        return currentRow;
-    }
-    size_t getCol () {
-        return currentCol;
-    }
-    unsigned int getValue () {
-        return matrix[currentPos];
-    }
-};
-
-unsigned int getChr (unsigned int position, std::vector <unsigned int> &offsets) {
-    unsigned int minId = 0;
-    unsigned int maxId = offsets.size() - 1;
-    unsigned int midId;
-    while (true) {
-        midId = (minId + maxId) / 2;
-        if (position < offsets[midId]) {
-            maxId = midId - 1;
-        }
-        if (position > offsets[midId+1]) {
-            minId = midId + 1;
-        }
-        return midId;
-    }
-    Rcerr << "Error!  Cannot find offset of " << position << ".\n";
-    return midId;
+void writeContacts (std::vector < std::string > &tmpFileNames, std::vector < contact_t > &contacts) {
+    std::string tmpFileName = tmpnam(NULL);
+    std::ofstream tmpFile(tmpFileName, std::ofstream::binary);
+    size_t size = contacts.size();
+    tmpFile.write(reinterpret_cast < char const * > (&size), sizeof(size));
+    tmpFile.write(reinterpret_cast < char const * > (contacts.data()), size * sizeof(contact_t));
+    tmpFile.close();
+    tmpFileNames.push_back(tmpFileName);
+    contacts.clear();
 }
 
+void sortContacts (std::string &inputFileName, std::string &outputFileName) {
+    std::vector < contact_t > contacts;
+    size_t size;
+    std::ifstream inputFile(inputFileName, std::ofstream::binary);
+    inputFile.read(reinterpret_cast < char * > (&size), sizeof(size));
+    std::cout << "Sorting '" << inputFileName << "' with " << size << " elements\n";
+    contacts.resize(size);
+    inputFile.read(reinterpret_cast <char * > (contacts.data()), size * sizeof(contact_t));
+    inputFile.close();
+    std::sort(contacts.begin(), contacts.end());
+    std::ofstream outputFile(outputFileName, std::ofstream::binary);
+    outputFile.write(reinterpret_cast < char const * > (contacts.data()), size * sizeof(contact_t));
+    outputFile.close();
+    if (remove(inputFileName.c_str()) != 0) {
+        std::cerr << "Error, cannot remove temporary file '" << inputFileName << "'\n";
+    }
+}
 
 // [[Rcpp::export]]
 DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     Rcout << "Reading " << fileName.get_cstring() << "\n";
     samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
+    DataFrame emptyDataFrame;
     if (inputFile == NULL) {
         Rcerr << "File does not exist.  Exiting.\n";
-        DataFrame outputData;
-        return outputData;
+        return emptyDataFrame;
     }
     bam_hdr_t *header     = sam_hdr_read(inputFile);
     bam1_t    *alignment  = bam_init1();
     int        nRefs      = header->n_targets;
     Rcout << "Found " << nRefs << " references\n";
     std::vector <int> sizes(header->n_targets);
-    // std::vector <unsigned int> offsets(header->n_targets+1);
     CharacterVector refs(header->n_targets);
     for (int i = 0; i < header->n_targets; ++i) {
         refs[i] = header->target_name[i];
         sizes[i] = header->target_len[i] / binSize + 1;
     }
-    // offsets[0];
-    // for (int i = 0; i < header->n_targets; ++i) {
-    //     offsets[i+1] = offsets[i] + (sizes[i] / binSize) + 1;
-    // }
-    // unsigned int nBins = offsets[header->n_targets];
-    // std::vector<unsigned int> bins2Chr(nBins);
-    // for (int i = 0; i < header->n_targets; ++i) {
-    //     for (int j = offsets[i]; j < offsets[i+1]; ++j) {
-    //         bins2Chr[j] = i;
-    //     }
-    // }
-    //std::vector<std::vector<arma::sp_mat>> matrices(nRefs);
-    //std::vector<std::vector<SparseMatrix>> matrices(nRefs);
-    //SparseMatrix matrix(nBins, nBins);
-    //arma::sp_mat matrix(nBins, nBins);
-    umiMap_t   umiMap;
-    /*
-    for (int idRef1 = 0; idRef1 < nRefs; ++idRef1) {
-        //matrices[idRef1] = std::vector<SparseMatrix>(idRef1+1);
-        matrices[idRef1] = std::vector<arma::sp_mat>(idRef1+1);
-        for (int idRef2 = 0; idRef2 <= idRef1; ++idRef2) {
-            //Rcout << "\tMatrix [" << idRef1 << ", " << idRef2 << "] has size (" << (header->target_len[idRef1] / binSize) << ", " << (header->target_len[idRef2] / binSize) << ")\n";
-            // Adding one more row and col, because division is truncated, and position "n * binSize" should go to bin "n + 1"
-            //matrices[idRef1][idRef2] = SparseMatrix((header->target_len[idRef1] / binSize) + 1, (header->target_len[idRef2] / binSize) + 1);
-            matrices[idRef1][idRef2] = arma::sp_mat((header->target_len[idRef1] / binSize) + 1, (header->target_len[idRef2] / binSize) + 1);
-        }
-    }
-    */
+    umiMap_t umiMap;
     Rcout << "Reading BAM file.\n";
     for (unsigned int cpt = 0; sam_read1(inputFile, header, alignment) > 0; ++cpt) {
         int32_t pos    = alignment->core.pos + 1;
@@ -243,8 +134,8 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     //Rcout << "Read parsing done.  Filling matrices (" << nBins << " bins).\n";
     int ref1, ref2;
     int pos1, pos2;
-    //SimpleMatrix matrix(nBins);
-    stackedPositions_t stackedPositions(nRefs * (nRefs + 1) / 2);
+    stackedPositions_t stackedPositions;
+    stackedPositions.reserve(2 * maxRecords);
     std::vector < std::pair < size_t, size_t > > chrIndices (nRefs * (nRefs + 1) / 2);
     std::vector < std::vector < size_t > > indicesChr (nRefs);
     size_t p = 0;
@@ -256,9 +147,12 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
             ++p;
         }
     }
+    std::vector < size_t > bucketSizes(nRefs * (nRefs + 1) / 2, 0);
     Progress progress1(umiMap.size(), true);
-    while (! umiMap.empty()) {
-        auto &mapElement = *umiMap.begin();
+    std::vector < std::string > tmpFileNames;
+    std::vector < std::string > tmpFileNames2;
+    size_t nRecords = 0;
+    for (auto &mapElement: umiMap) {
         auto &positions = mapElement.second;
         int nPositions = positions.size();
         for (int posId1 = 0; posId1 < nPositions; ++posId1) {
@@ -286,124 +180,117 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
                 if (pos2 >= sizes[ref2]) {
                     Rcerr << "Error: col id exceeds size (" << pos2 << " vs " << sizes[ref2] << ")." << std::endl;
                 }
-                stackedPositions[indicesChr[ref1][ref2]].emplace_back(pos1, pos2);
+                stackedPositions.emplace_back(indicesChr[ref1][ref2], pos1, pos2);
+                ++nRecords;
             }
         }
-        umiMap.erase(umiMap.begin());
+        if (nRecords >= maxRecords) {
+            writeContacts(tmpFileNames, stackedPositions);
+            stackedPositions.reserve(2 * maxRecords);
+            nRecords = 0;
+        }
         progress1.increment();
-    }
-    Rcout << "Bucketting done.  Sorting them with " << nThreads << " threads.\n";
-    // std::atomic_size_t i (0);
-    // std::vector < std::thread > threads;
-    // for (int threadId = 0; threadId < nThreads - 1; ++threadId) {
-    //     threads.push_back(std::thread(sortPositions, std::ref(stackedPositions), std::ref(i), threadId));
-    // }
-    // sortPositions(stackedPositions, i, nThreads - 1);
-    // for (auto &thread: threads) {
-    //     thread.join();
-    // }
-    // for (size_t i = 0; i < chrIndices.size(); ++i) {
-    //     std::sort(stackedPositions[chrIndices[i].first][chrIndices[i].second].begin(), stackedPositions[chrIndices[i].first][chrIndices[i].second].end());
-    // }
-    // StackedPositions stackedPositionsWorker(stackedPositions, nRefs);
-    // parallelFor(0, nRefs * (nRefs + 1) / 2, stackedPositionsWorker);
-    // //Progress progress2(nRefs * (nRefs+1) / 2, true);
-    // for (int ref1Id = 0; ref1Id < nRefs; ++ref1Id) {
-    //     for (int ref2Id = 0; ref2Id <= ref1Id; ++ref2Id) {
-    //         Rcout << "\tSorting " << ref1Id << " vs " << ref2Id << ": " << stackedPositions[ref1Id][ref2Id].size() << " elements." << std::endl;
-    //         std::sort(stackedPositions[ref1Id][ref2Id].begin(), stackedPositions[ref1Id][ref2Id].end());
-    //         //std::sort(unsortedCounts[ref1Id][ref2Id].begin(), unsortedCounts[ref1Id][ref2Id].end(), [] (const std::pair < int, int > & a, const std::pair <int, int > & b) { return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second))); }));
-    //         //progress2.increment();
-    //     }
-    // }
-    // Rcout << "Sorting done.  Getting counts.\n";
-    // Progress progress3(nRefs * (nRefs+1) / 2, true);
-    // std::vector<int> ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector;
-    // for (size_t ref = 0; ref < stackedPositions.size(); ++ref) {
-    //     int ref1Id, ref2Id;
-    //     std::tie(ref1Id, ref2Id) = chrIndices[ref];
-    //     std::vector < int > theseRef1;
-    //     std::vector < int > theseRef2;
-    //     std::vector < int > thesePos1;
-    //     std::vector < int > thesePos2;
-    //     std::vector < int > theseCounts;
-    //     std::pair < int, int > prev = { 0, 0 };
-    //     int prevCount = 0;
-    //     for (auto &p: stackedPositions[ref]) {
-    //         if (p == prev) {
-    //             ++prevCount;
-    //         }
-    //         else if (prevCount != 0) {
-    //             thesePos1.push_back(prev.first);
-    //             thesePos2.push_back(prev.second);
-    //             theseCounts.push_back(prevCount);
-    //             prevCount = 1;
-    //             prev      = p;
-    //         }
-    //     }
-    //     if (prevCount != 0) {
-    //         thesePos1.push_back(prev.first);
-    //         thesePos2.push_back(prev.second);
-    //         theseCounts.push_back(prevCount);
-    //     }
-    //     theseRef1 = std::vector < int > (thesePos1.size(), ref1Id + 1); // Factors in R start with 1
-    //     theseRef2 = std::vector < int > (thesePos1.size(), ref2Id + 1);
-    //     ref1Vector.insert(ref1Vector.end(), theseRef1.begin(), theseRef1.end());
-    //     ref2Vector.insert(ref2Vector.end(), theseRef2.begin(), theseRef2.end());
-    //     pos1Vector.insert(pos1Vector.end(), thesePos1.begin(), thesePos1.end());
-    //     pos2Vector.insert(pos2Vector.end(), thesePos2.begin(), thesePos2.end());
-    //     countVector.insert(countVector.end(), theseCounts.begin(), theseCounts.end());
-    //     progress3.increment();
-    // }
-    std::vector<int> ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector;
-    //Progress progress2(nRefs * (nRefs+1) / 2, true);
-    for (int ref = 0; ref < nRefs * (nRefs+1) / 2; ++ref) {
-        if (! stackedPositions[ref].empty()) {
-            std::vector<int> thisRef1Vector, thisRef2Vector, thisPos1Vector, thisPos2Vector, thisCountVector;
-            int nNonZeros = 0;
-            int ref1, ref2;
-            std::tie(ref1, ref2) = chrIndices[ref];
-            int size1 = sizes[ref1];
-            int size2 = sizes[ref2];
-            std::cout << "Ref: " << ref1 << "/" << ref2 << ": " << stackedPositions[ref].size() << " elements.\n";
-            std::vector < std::vector < int > > matrix (size1, std::vector < int > (size2, 0));
-            for (auto &positions: stackedPositions[ref]) {
-                int pos1, pos2;
-                std::tie(pos1, pos2) = positions;
-                if (matrix[pos1][pos2] == 0) {
-                    ++nNonZeros;
-                }
-                ++matrix[pos1][pos2];
-            }
-            std::cout << "\t" << nNonZeros << " non zero elements.\n";
-            thisPos1Vector.reserve(nNonZeros);
-            thisPos2Vector.reserve(nNonZeros);
-            thisCountVector.reserve(nNonZeros);
-            thisRef1Vector.insert(thisRef1Vector.begin(), nNonZeros, ref1 + 1);
-            thisRef2Vector.insert(thisRef2Vector.begin(), nNonZeros, ref2 + 1);
-            for (int pos1 = 0; pos1 < size1; ++pos1) {
-                for (int pos2 = 0; pos2 < size2; ++pos2) {
-                    if (matrix[pos1][pos2] != 0) {
-                        thisPos1Vector.push_back(pos1);
-                        thisPos2Vector.push_back(pos2);
-                        thisCountVector.push_back(matrix[pos1][pos2]);
-                    }
-                }
-            }
-            ref1Vector.insert(ref1Vector.end(), thisRef1Vector.begin(), thisRef1Vector.end());
-            ref2Vector.insert(ref2Vector.end(), thisRef2Vector.begin(), thisRef2Vector.end());
-            pos1Vector.insert(pos1Vector.end(), thisPos1Vector.begin(), thisPos1Vector.end());
-            pos2Vector.insert(pos2Vector.end(), thisPos2Vector.begin(), thisPos2Vector.end());
-            countVector.insert(countVector.end(), thisCountVector.begin(), thisCountVector.end());
+        if (Progress::check_abort()) {
+            return emptyDataFrame;
         }
+    }
+    umiMap.clear();
+    if (nRecords > 0) {
+        writeContacts(tmpFileNames, stackedPositions);
+    }
+    tmpFileNames2.reserve(tmpFileNames.size());
+    for (size_t i = 0; i < tmpFileNames.size(); ++i) {
+        tmpFileNames2.push_back(tmpnam(NULL));
+    }
+    #ifdef _OPENMP
+    if (nThreads > 0) {
+        omp_set_num_threads(nThreads);
+    }
+    #endif
+    Rcout << tmpFileNames.size() << " buckets with " << nThreads << " thread(s).  Sorting them.\n";
+    //Progress progress2(tmpFileNames.size(), true);
+    //#pragma omp parallel for
+    //#pragma omp parallel for default(none) private(tmpFileNames, tmpFileNames2) shared(progress2) schedule(dynamic)
+    //#pragma omp parallel for default(none) shared(tmpFileNames, tmpFileNames2, progress2) schedule(dynamic)
+    #pragma omp parallel for default(none) shared(tmpFileNames, tmpFileNames2) schedule(dynamic)
+    for (size_t i = 0; i < tmpFileNames.size(); ++i) {
+        sortContacts(tmpFileNames[i], tmpFileNames2[i]);
         //progress2.increment();
+        /*
+        if (Progress::check_abort()) {
+            return emptyDataFrame;
+        }
+        */
+    }
+    Rcout << "Merging buckets.\n";
+    std::priority_queue < heap_data_t, std::vector < heap_data_t > > heap;
+    std::vector < std::ifstream > files;
+    IntegerVector ref1VectorR;
+    IntegerVector ref2VectorR;
+    IntegerVector pos1VectorR;
+    IntegerVector pos2VectorR;
+    IntegerVector countVectorR;
+    files.reserve(tmpFileNames2.size());
+    int chrId, chrId1, chrId2;
+    int bin1, bin2;
+    contact_t record;
+    for (size_t fileId = 0; fileId < tmpFileNames2.size(); ++fileId) {
+        files.emplace_back(tmpFileNames2[fileId].c_str(), std::fstream::binary);
+        files[fileId].read(reinterpret_cast < char * >(&record), sizeof(record));
+        //std::cout << "First (" << tmpFileNames2[fileId] << "): " << fileId << " -> " << record.chrId << ":" << record.bin1 << "-" << record.bin2 << "\n";
+        heap.emplace(fileId, record.chrId, record.bin1, record.bin2);
+    }
+    unsigned int count = 0;
+    chrId = -1;
+    Progress progress3(maxRecords, true);
+    heap_data_t heapElement;
+    while (! heap.empty()) {
+        heapElement = heap.top();
+        heap.pop();
+        //std::cout << "Third: " << heapElement.fileId << " -> " << heapElement.chrId << ":" << heapElement.bin1 << "-" << heapElement.bin2 << "\n";
+        if (heapElement.fileId == 0) {
+            progress3.increment();
+        }
+        if ((heapElement.chrId == chrId) && (heapElement.bin1 == bin1) && (heapElement.bin2 == bin2)) {
+            ++count;
+        }
+        else {
+            if (count > 0) {
+            	std::tie(chrId1, chrId2) = chrIndices[chrId];
+                ref1VectorR.push_back(chrId1 + 1);
+                ref2VectorR.push_back(chrId2 + 1);
+                pos1VectorR.push_back(bin1);
+                pos2VectorR.push_back(bin2);
+                countVectorR.push_back(count);
+            }
+            chrId = heapElement.chrId;
+            bin1  = heapElement.bin1;
+            bin2  = heapElement.bin2;
+            count = 1;
+        }
+        if (files[heapElement.fileId].good()) {
+            files[heapElement.fileId].read(reinterpret_cast < char * >(&record), sizeof(record));
+            //std::cout << "Second: " << heapElement.fileId << " -> " << record.chrId << "-" << record.bin1 << "-" << record.bin2 << "\n";
+            heap.emplace(heapElement.fileId, record.chrId, record.bin1, record.bin2);
+        }
+        if (Progress::check_abort()) {
+            return emptyDataFrame;
+        }
+    }
+    if (count > 0) {
+    	std::tie(chrId1, chrId2) = chrIndices[chrId];
+        ref1VectorR.push_back(chrId1 + 1);
+        ref2VectorR.push_back(chrId2 + 1);
+        pos1VectorR.push_back(bin1);
+        pos2VectorR.push_back(bin2);
+        countVectorR.push_back(count);
+    }
+    for (auto &tmpFileName: tmpFileNames2) {
+        if (remove(tmpFileName.c_str()) != 0) {
+            std::cerr << "Error, cannot remove temporary file '" << tmpFileName << "'\n";
+        }
     }
     //Rcout << "Counting done...\n";
-    IntegerVector ref1VectorR(ref1Vector.begin(), ref1Vector.end());
-    IntegerVector ref2VectorR(ref2Vector.begin(), ref2Vector.end());
-    IntegerVector pos1VectorR(pos1Vector.begin(), pos1Vector.end());
-    IntegerVector pos2VectorR(pos2Vector.begin(), pos2Vector.end());
-    IntegerVector countVectorR(countVector.begin(), countVector.end());
     ref1VectorR.attr("class") = "factor";
     ref1VectorR.attr("levels") = refs;
     ref2VectorR.attr("class") = "factor";
