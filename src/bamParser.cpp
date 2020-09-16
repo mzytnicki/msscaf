@@ -10,7 +10,7 @@
 #include <atomic>
 #include <mutex>
 #include "sam.h"
-#include "gperftools/profiler.h"
+//#include "gperftools/profiler.h"
 
 // [[Rcpp::plugins(openmp)]]
 // [[Rcpp::plugins(cpp11)]]
@@ -78,22 +78,27 @@ public:
             matrix[cell.first] += cell.second;
         }
     }
-    void convertToPlain (std::vector < int > &bin1, std::vector < int > &bin2, std::vector < int > &count) {
+    unsigned int convertToPlain (std::vector < int > &bin1, std::vector < int > &bin2, std::vector < int > &count, unsigned int minCount) {
         if (nRows == 0) {
             printf("Error, #rows = 0\n");
         }
+        unsigned int nAdded = 0;
         std::vector < int > tmpBin1, tmpBin2, tmpCount;
         tmpBin1.reserve(matrix.size());
         tmpBin2.reserve(matrix.size());
         tmpCount.reserve(matrix.size());
         for (auto &cell: matrix) {
-            tmpBin1.push_back(cell.first / nRows);
-            tmpBin2.push_back(cell.first % nRows);
-            tmpCount.push_back(cell.second);
+            if (cell.second >= minCount) {
+                tmpBin1.push_back(cell.first / nRows);
+                tmpBin2.push_back(cell.first % nRows);
+                tmpCount.push_back(cell.second);
+                ++nAdded;
+            }
         }
         bin1.insert(bin1.end(), tmpBin1.begin(), tmpBin1.end());
         bin2.insert(bin2.end(), tmpBin2.begin(), tmpBin2.end());
         count.insert(count.end(), tmpCount.begin(), tmpCount.end());
+        return nAdded;
     }
 };
 
@@ -141,19 +146,20 @@ public:
             matrices[i].merge(otherMatrices.matrices[i]);
         }
     }
-    void convertToPlain (std::vector < int > &chrs1, std::vector < int > &chrs2, std::vector < int > &bins1, std::vector < int > &bins2, std::vector < int > &counts, std::vector < std::pair < size_t, size_t > > &translation) {
+    void convertToPlain (std::vector < int > &chrs1, std::vector < int > &chrs2, std::vector < int > &bins1, std::vector < int > &bins2, std::vector < int > &counts, std::vector < std::pair < size_t, size_t > > &translation, unsigned int minCount) {
         Progress progress(matrices.size(), true);
         std::vector < int > tmpChrs1, tmpChrs2;
+        unsigned int nAdded;
         for (size_t i = 0; i < matrices.size(); ++i) {
             //printf("Converting matrix #%zu\n", i);
             int chr1, chr2;
-            size_t nElements = matrices[i].getNElements();
             std::tie(chr1, chr2) = translation[i];
-            std::vector < int > tmpChrs1(nElements, chr1 + 1);
-            std::vector < int > tmpChrs2(nElements, chr2 + 1);
+            nAdded = matrices[i].convertToPlain(bins1, bins2, counts, minCount);
+            // R factors start with 1
+            std::vector < int > tmpChrs1(nAdded, chr1 + 1);
+            std::vector < int > tmpChrs2(nAdded, chr2 + 1);
             chrs1.insert(chrs1.end(), tmpChrs1.begin(), tmpChrs1.end());
             chrs2.insert(chrs2.end(), tmpChrs2.begin(), tmpChrs2.end());
-            matrices[i].convertToPlain(bins1, bins2, counts);
             progress.increment();
         }
     }
@@ -233,7 +239,8 @@ void sortContacts (std::string &inputFileName, std::string &outputFileName) {
 
 // [[Rcpp::export]]
 DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
-    ProfilerStart("/tmp/profile.out");
+    unsigned int minCount = 2;
+    //ProfilerStart("/tmp/profile.out");
     Rcout << "Reading " << fileName.get_cstring() << "\n";
     samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
     DataFrame emptyDataFrame;
@@ -297,7 +304,7 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
                 ref1 = positions[posId1].chrId;
                 ref2 = positions[posId2].chrId;
                 // Do not store "self" maps
-                if (ref1 != ref2) {
+                //if (ref1 != ref2) {
                     pos1 = positions[posId1].pos;
                     pos2 = positions[posId2].pos;
                     if (ref1 < ref2) {
@@ -321,7 +328,7 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
                     }
                     sparseMatrices.addElement(indicesChr[ref1][ref2], pos1, pos2);
                     ++nRecords;
-                }
+                //}
             }
         }
         if (nRecords >= maxRecords) {
@@ -386,7 +393,8 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     std::vector < int > pos1Vector;
     std::vector < int > pos2Vector;
     std::vector < int > countVector;
-    sparseMatrices.convertToPlain(ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector, chrIndices);
+    sparseMatrices.convertToPlain(ref1Vector, ref2Vector, pos1Vector, pos2Vector, countVector, chrIndices, minCount);
+    Rcout << "\n" << ref1Vector.size() << " points found.\n";
     sparseMatrices.clear();
     IntegerVector ref1VectorR (ref1Vector.begin(), ref1Vector.end());
     ref1Vector.clear();
@@ -404,6 +412,6 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     ref2VectorR.attr("class") = "factor";
     ref2VectorR.attr("levels") = refs;
     DataFrame outputData = DataFrame::create(_["ref1"] = ref1VectorR, _["bin1"] = pos1VectorR, _["ref2"] = ref2VectorR, _["bin2"] = pos2VectorR, _["count"] = countVectorR);
-    ProfilerStop();
+    //ProfilerStop();
     return outputData;
 }

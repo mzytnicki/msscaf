@@ -341,6 +341,7 @@ bamFileName <- "/Scratch/mazytnicki/bovin-37163.bam"
 #bamFileName <- "/media/Stock/test.bam"
 bamFileName <- "/media/Stock/test.bam"
 bamFileName <- "/media/Stock/smallTest.bam"
+bamFileName <- "/media/Stock/verySmallTest.bam"
 #bamFileName       <- "/Scratch/mazytnicki/test.bam"
 #bamFileName       <- "/Scratch/mazytnicki/smallTest.bam"
 bamData           <- parseBamFile(bamFileName, 10000, 12)
