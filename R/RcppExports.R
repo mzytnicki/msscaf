@@ -2,14 +2,14 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 parseBamFileCpp <- function(fileName, binSize, nThreads) {
-    .Call(`_tenxchecker_parseBamFileCpp`, fileName, binSize, nThreads)
+    .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize, nThreads)
 }
 
 parseHicCpp <- function(fname, resolution) {
-    .Call(`_tenxchecker_parseHicCpp`, fname, resolution)
+    .Call('_tenxchecker_parseHicCpp', PACKAGE = 'tenxchecker', fname, resolution)
 }
 
 parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
-    .Call(`_tenxchecker_parsePafCpp`, fname, resolution, minAlnLen, minCount, minNCells)
+    .Call('_tenxchecker_parsePafCpp', PACKAGE = 'tenxchecker', fname, resolution, minAlnLen, minCount, minNCells)
 }
 

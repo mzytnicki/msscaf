@@ -383,7 +383,7 @@ void readFooter(std::istream& fin, hicInfo &info, outputStr &output) {
 
 
 // [[Rcpp::export]]
-DataFrame parseHicCpp(std::string &fname, int resolution) {
+List parseHicCpp(std::string &fname, int resolution) {
     hicInfo info;
     outputStr output;
     std::ifstream fin;
@@ -424,9 +424,15 @@ DataFrame parseHicCpp(std::string &fname, int resolution) {
     chrs2.attr("class") = "factor";
     chrs1.attr("levels") = info.chrs;
     chrs2.attr("levels") = info.chrs;
-    return DataFrame::create(_["ref1"]  = chrs1,
-                             _["bin1"]  = bins1,
-                             _["ref2"]  = chrs2,
-                             _["bin2"]  = bins2,
-                             _["count"] = counts);
+    IntegerVector chrSizes;
+    chrSizes.assign(info.chrLengths.begin(), info.chrLengths.end());
+    chrSizes = chrSizes / resolution + 1;
+    chrSizes.names() = info.chrs;
+    DataFrame outputDataFrame = DataFrame::create(_["ref1"]  = chrs1,
+                                                  _["bin1"]  = bins1,
+                                                  _["ref2"]  = chrs2,
+                                                  _["bin2"]  = bins2,
+                                                  _["count"] = counts);
+    return List::create(_["data"] = outputDataFrame,
+                        _["sizes"] = chrSizes);
 }

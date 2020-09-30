@@ -14,10 +14,12 @@ Imports:
     RcppArmadillo,
     Rhtslib,
     zlibbioc,
+    gtools,
     magrittr,
     tidyverse,
     ggplot2,
-    BiocParallel
+    BiocParallel,
+    progress
 LinkingTo:
     RcppArmadillo,
     Rcpp,
@@ -28,3 +30,4 @@ SystemRequirements:
     C++11,
     GNU make
 LazyData: true
+RoxygenNote: 7.1.1

@@ -238,7 +238,7 @@ void sortContacts (std::string &inputFileName, std::string &outputFileName) {
 }
 
 // [[Rcpp::export]]
-DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
+List parseBamFileCpp(String fileName, int binSize, int nThreads) {
     unsigned int minCount = 2;
     //ProfilerStart("/tmp/profile.out");
     Rcout << "Reading " << fileName.get_cstring() << "\n";
@@ -413,5 +413,9 @@ DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads) {
     ref2VectorR.attr("levels") = refs;
     DataFrame outputData = DataFrame::create(_["ref1"] = ref1VectorR, _["bin1"] = pos1VectorR, _["ref2"] = ref2VectorR, _["bin2"] = pos2VectorR, _["count"] = countVectorR);
     //ProfilerStop();
-    return outputData;
+    IntegerVector chrSizes;
+    chrSizes.assign(sizes.begin(), sizes.end());
+    chrSizes.names() = refs;
+    return List::create(_["data"] = outputData,
+                        _["sizes"] = chrSizes);
 }

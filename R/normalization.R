@@ -86,7 +86,7 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
 }
 
 normalizeKR <- function(object) {
-    message("    KR normalization.")
+    #message("    KR normalization.")
     data <- object@interactionMatrix
     mat <- makeFullMatrix(data)
     n   <- nrow(mat)
@@ -105,7 +105,7 @@ normalizeKR <- function(object) {
 }
 
 normalizeMD <- function(object) {
-    message("    MD normalization.")
+    #message("    MD normalization.")
     data <- object@interactionMatrix
     data %<>%
         makeFullTibble() %>%

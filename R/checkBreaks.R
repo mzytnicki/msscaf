@@ -40,7 +40,7 @@ computeMeanTrianglesRandom <- function(i, data = data) {
 }
 
 checkBreak <- function(object) {
-    message("    Checking breaks.")
+    #message("    Checking breaks.")
     data <- object@interactionMatrix
     trianglesList <- bplapply(seq.int(object@parameters@nRandomizations),
     #trianglesList <- lapply(seq.int(object@parameters@nRandomizations),
@@ -82,8 +82,12 @@ checkBreak <- function(object) {
     #             bin   = breakPointBin))
 }
 
-normalizeAndBreak <- function(object) {
-    message(paste0("  Working on ", object@chromosome, "."))
+normalizeAndBreak <- function(object, progressBar) {
+    progressBar$tick()
+    if (isMatrixEmpty(object@interactionMatrix)) {
+        return(list(data = NULL, plot1 = NULL, plot2 = NULL, plot3 = NULL))
+    }
+    #message(paste0("  Working on ", object@chromosome, "."))
     object <- normalizeKR(object)
     object <- normalizeMD(object)
     object <- removeFarFromDiagonal(object)
@@ -94,7 +98,11 @@ checkBreaks <- function(object) {
     message("Splitting matrix.")
     objects <- splitByRef(object)
     message("Done.")
-    breaks <- lapply(objects, normalizeAndBreak)
+    pb <- progress_bar$new(total = length(objects))
+    breaks <- lapply(objects, normalizeAndBreak, progressBar = pb)
+    if (length(breaks) == 0) {
+        return(list())
+    }
     return(list(data = map_dfr(breaks, "data", .id = "ref") %>%
                     mutate(ref = factor(ref)), 
                 plot1 = map(breaks, "plot1"),
@@ -111,10 +119,10 @@ filterBreak <- function(parameters) {
     originalBreakRef <- breaksRef
     repeat {
         breakPointBin <- breaksRef %>%
-            filter(fcMeanCount <= object@parameters@breakThreshold) %>%
-            filter(bin         >= object@parameters@maxLinkRange) %>%
-            filter(bin         <= objectRef@size - object@parameters@maxLinkRange) %>%
-            filter(nCells      >= object@parameters@breakNCells) %>%
+            filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
+            filter(bin         >= objectRef@parameters@maxLinkRange) %>%
+            filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange) %>%
+            filter(nCells      >= objectRef@parameters@breakNCells) %>%
             arrange(fcMeanCount, desc(nCells)) %>%
             slice(1) %>%
             pull(bin)
@@ -127,11 +135,14 @@ filterBreak <- function(parameters) {
         bins <- c(bins, breakPointBin)
         breakPointBin <- breakPointBin[[1]]
         breaksRef %<>%
-            filter(abs(breakPointBin - bin) >= object@parameters@maxLinkRange)
+            filter(abs(breakPointBin - bin) >= objectRef@parameters@maxLinkRange)
     }
 }
 
 filterBreaks <- function(object, breaks) {
+    if (length(breaks) == 0) {
+        return(list())
+    }
     selectedBreaks <- breaks %>%
         filter(fcMeanCount <= object@parameters@breakThreshold)
         # TODO: find a better filter here?

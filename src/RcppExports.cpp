@@ -7,7 +7,7 @@
 using namespace Rcpp;
 
 // parseBamFileCpp
-DataFrame parseBamFileCpp(String fileName, int binSize, int nThreads);
+List parseBamFileCpp(String fileName, int binSize, int nThreads);
 RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP, SEXP nThreadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -20,7 +20,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // parseHicCpp
-DataFrame parseHicCpp(std::string& fname, int resolution);
+List parseHicCpp(std::string& fname, int resolution);
 RcppExport SEXP _tenxchecker_parseHicCpp(SEXP fnameSEXP, SEXP resolutionSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -32,7 +32,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // parsePafCpp
-DataFrame parsePafCpp(std::string& fname, int resolution, int minAlnLen, int minCount, int minNCells);
+List parsePafCpp(std::string& fname, int resolution, int minAlnLen, int minCount, int minNCells);
 RcppExport SEXP _tenxchecker_parsePafCpp(SEXP fnameSEXP, SEXP resolutionSEXP, SEXP minAlnLenSEXP, SEXP minCountSEXP, SEXP minNCellsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;

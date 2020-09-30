@@ -135,7 +135,7 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bins = NA) {
+plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
     if (length(bins) == 0) {
         bins <- NA
     }
@@ -143,8 +143,14 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA) {
     if ((minCount < 0) & (logColor)) {
         stop("Trying to plot a map with negative count in log scale.")
     }
-    tmp <- object@interactionMatrix %>%
-        makeSymmetric()
+    tmp <- object@interactionMatrix
+    if (length(lim) == 2) {
+        tmp %<>% dplyr::filter(bin1 >= lim[1], bin2 >= lim[1], bin1 <= lim[2], bin2 <= lim[2])
+    }
+    else if ((length(lim) != 1) | (! is.na(lim))) {
+        stop("'lim' should be a vector of size 2, or NA.")
+    }
+    tmp %<>% makeSymmetric()
     # if (!is.na(bin)) {
     #     xmin <- max(0, bin - object@parameters@nBinZoom)
     #     xmax <- min(object@size, bin + object@parameters@nBinZoom)

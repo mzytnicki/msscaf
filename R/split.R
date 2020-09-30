@@ -1,5 +1,8 @@
 splitChromosome <- function(interactionMatrix, sizes, splitPoint, oldChromosome, newChromosome) {
     previousSize <- sizes[[oldChromosome]]
+    if (splitPoint >= previousSize) {
+        stop(paste0("Error while splitting chromosome of size ", previousSize, " at point ", splitPoint, "."))
+    }
     newSize      <- previousSize - splitPoint
     firstPart    <- (splitPoint > previousSize / 2)
     shiftedChr   <- if (firstPart) newChromosome else oldChromosome
@@ -28,6 +31,9 @@ splitChromosome <- function(interactionMatrix, sizes, splitPoint, oldChromosome,
 
 
 splitChromosomes <- function(object, splitPoints) {
+    if (length(splitPoints) == 0) {
+        return(object)
+    }
     interactionMatrix <- object@interactionMatrix
     sizes             <- object@sizes
     newChromosomes    <- paste0("new_chr_", seq.int(nrow(splitPoints)))

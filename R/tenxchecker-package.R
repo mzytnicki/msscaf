@@ -14,13 +14,13 @@
 # Note: not all of these functions are exported.
 #
 # --------------------------------
-# HiCDOCExp
+# tenxchecker
 # |- functions
 # --------------------------------
 #
 # --------------------------------
-# HiCDOC
-# |- HiCDOCCore
+# tenxchecker
+# |- tenxcheckercore
 #    |- page
 #       |- function
 # --------------------------------
@@ -42,14 +42,16 @@
 #' @author Matthias Zytnicki
 #'
 #' @import methods
+#' @import gtools
 #' @import magrittr
 #' @import tidyverse
 #' @import ggplot2
 #' @import GenomicRanges
 #' @import BiocParallel
+#' @import progress
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
-#' @useDynLib HiCDOC
+#' @useDynLib tenxchecker
 #'
 #' @keywords package
 NULL

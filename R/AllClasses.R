@@ -35,6 +35,83 @@ setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
 )
 
 
+###############################################################################
+### tenxcheckerData S4 class definition
+###############################################################################
+#' Infrastructure for tenxchecker data
+#'
+#' \code{tenxcheckerData} is an S4 class providing the ...
+#'
+#' @details \code{tenxcheckerData} does this and that...
+#' TODO
+#'
+#' @name tenxcheckerData
+#' @rdname tenxcheckerData
+#' @docType class
+#' @aliases tenxcheckerData tenxcheckerData-class
+#'
+#' @slot inputMatrix  The input matrix
+#' @slot binSize      The resolution
+#' @slot maxLinkRange The maximum size of a molecule
+#' @slot sizes        The reference sizes
+#'
+#' @export
+setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
+                                      binSize      = "ANY",
+                                      maxLinkRange = "ANY", 
+                                      sizes        = "ANY")
+)
+
+
+##- tenxcheckerData S4 class constructor --------------------------------------#
+##----------------------------------------------------------------------------#
+#' @rdname tenxcheckerData
+#' @docType class
+#'
+#' @param inputMatrix A matrix with the data.
+#'
+#' @return \code{tenxcheckerExp} constructor returns an \code{tenxcheckerExp}
+#'         object of class S4.
+#'
+#' @examples
+#'
+#' @export
+tenxcheckerData <- function(inputMatrix  = NULL,
+                            binSize      = NULL,
+                            maxLinkRange = NULL,
+                            sizes        = NULL) {
+    
+    ##- checking general input arguments -------------------------------------#
+    ##------------------------------------------------------------------------#
+    
+    ##- dataSet
+    if (is.null(inputMatrix)) {
+        stop("'inputMatrix' must be specified", call. = FALSE)
+    }
+    if (!is_tibble(inputMatrix)) {
+        stop("'inputMatrix' should be a tibble", call. = FALSE)
+    }
+    if (ncol(inputMatrix) != 5) {
+        stop("'inputMatrix' should have 5 columns", call. = FALSE)
+    }
+    if (any(colnames(inputMatrix) != c("ref1", "bin1", "ref2", "bin2", "count"))) {
+        stop("'inputMatrix' names are incorrect", call. = FALSE)
+    }
+    
+    ##- parameters
+    
+    
+    ##- end checking ---------------------------------------------------------#
+    
+    object <- new("tenxcheckerData")
+    
+    object@inputMatrix  <- inputMatrix
+    object@binSize      <- binSize
+    object@maxLinkRange <- maxLinkRange
+    object@sizes        <- sizes
+    
+    return(invisible(object))
+}
 
 ###############################################################################
 ### tenxchecker S4 class definition
@@ -53,7 +130,7 @@ setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
 #' @docType class
 #' @aliases tenxcheckerExp tenxcheckerExp-class
 #'
-#' @slot inputMatrix  The input matrix
+#' @slot data  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
@@ -79,32 +156,14 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
 #'         object of class S4.
 #'
 #' @examples
-#' basedir    <- system.file("extdata", package="HiCDOC", mustWork = TRUE)
-#' matrix     <- read.csv(file.path(basedir, "sampleMatrix.tsv"))
-#'
-#' srnaExp <- HiCDOCExp(matrix)
-#' srnaExp
 #'
 #' @export
-tenxcheckerExp <- function(matrix   = NULL,
-                           binSize  = NULL) {
+tenxcheckerExp <- function(data = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
     
     ##- dataSet
-    if (is.null(matrix)) {
-        stop("'matrix' must be specified", call. = FALSE)
-    }
-    if (!is_tibble(matrix)) {
-        stop("'matrix' should be a tibble", call. = FALSE)
-    }
-    if (ncol(matrix) != 5) {
-        stop("'matrix' should have 5 columns", call. = FALSE)
-    }
-    if (any(colnames(matrix) != c("ref1", "bin1", "ref2", "bin2", "count"))) {
-        stop("'matrix' names are incorrect", call. = FALSE)
-    }
     
     ##- parameters
     
@@ -112,15 +171,19 @@ tenxcheckerExp <- function(matrix   = NULL,
     ##- end checking ---------------------------------------------------------#
     
     object <- new("tenxcheckerExp")
+    object@parameters <- new("tenxcheckerParameters")
+    object@interactionMatrix       <- data@inputMatrix
+    object@parameters@binSize      <- data@binSize
+    object@parameters@maxLinkRange <- data@maxLinkRange
+    object@sizes                   <- data@sizes
     
-    object@chromosomes <- unique(sort(c(as.vector(matrix$ref1), as.vector(matrix$ref2))))
-    object@interactionMatrix <- matrix %>%
+    object@chromosomes <- mixedsort(unique(c(as.vector(object@interactionMatrix$ref1), as.vector(object@interactionMatrix$ref2))))
+    object@interactionMatrix <- object@interactionMatrix %>%
         mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         mutate(ref2 = factor(ref2, levels = object@chromosomes))
     object@newChromosomes    <- c()
     object@mergedChromosomes <- c()
     
-    object@parameters <- new("tenxcheckerParameters")
     object@parameters@sampleSize      <- 10000
     object@parameters@loessSpan       <- 0.5
     object@parameters@minNBins        <- 20
@@ -128,12 +191,13 @@ tenxcheckerExp <- function(matrix   = NULL,
     object@parameters@minRowCount     <- 100
     object@parameters@breakThreshold  <- -1
     object@parameters@breakNCells     <- 100
-    object@parameters@maxLinkRange    <- 10
     object@parameters@nRandomizations <- 10
     object@parameters@pvalueThreshold <- 1e-4
     object@parameters@nBinZoom        <- 100
 
-    object@sizes <- computeRefSizes(object)
+    if (! is.null(object@sizes)) {
+        object@sizes <- computeRefSizes(object)
+    }
     
     return(invisible(object))
 }
@@ -167,22 +231,17 @@ setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
 )
 
 
-##- HiCDOCExp S4 class constructor -------------------------------------------#
+##- tenxchecker S4 class constructor -----------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname HiCDOCExp
+#' @rdname tenxchecker
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{HiCDOCExp} constructor returns an \code{HiCDOCExp}
+#' @return \code{tenxchecker} constructor returns an \code{tenxcheckerExp}
 #'         object of class S4.
 #'
 #' @examples
-#' basedir    <- system.file("extdata", package="HiCDOC", mustWork = TRUE)
-#' matrix     <- read.csv(file.path(basedir, "sampleMatrix.tsv"))
-#'
-#' srnaExp <- HiCDOCExp(matrix)
-#' srnaExp
 #'
 #' @export
 tenxcheckerRefExp <- function(matrix     = NULL,
@@ -248,22 +307,17 @@ setClass("tenxchecker2RefExp", slots = c(interactionMatrix  = "ANY",
 )
 
 
-##- HiCDOCExp S4 class constructor -------------------------------------------#
+##- tenxcheckerExp S4 class constructor --------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname HiCDOCExp
+#' @rdname tenxcheckerExp
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{HiCDOCExp} constructor returns an \code{HiCDOCExp}
+#' @return \code{tenxcheckerExp} constructor returns an \code{tenxcheckerExp}
 #'         object of class S4.
 #'
 #' @examples
-#' basedir    <- system.file("extdata", package="HiCDOC", mustWork = TRUE)
-#' matrix     <- read.csv(file.path(basedir, "sampleMatrix.tsv"))
-#'
-#' srnaExp <- HiCDOCExp(matrix)
-#' srnaExp
 #'
 #' @export
 tenxchecker2RefExp <- function(matrix      = NULL,

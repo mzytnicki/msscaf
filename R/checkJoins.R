@@ -26,7 +26,7 @@ computeTest <- function(object, xmin, xmax, ymin, ymax, name) {
     return(list(data = corner, test = test))
 }
 
-checkJoin <- function(object) {
+checkJoin <- function(object, progressBar) {
     # message(paste0("  Matrix ",
     #                object@chromosome1,
     #                "/",
@@ -83,6 +83,7 @@ checkJoin <- function(object) {
                           x2 = lastLim1,
                           y1 = firstLim2,
                           y2 = lastLim2)
+    progressBar$tick()
     return(list(ref1  = object@chromosome1,
                 ref2  = object@chromosome2,
                 plot1 = plot1,
@@ -96,7 +97,8 @@ checkJoin <- function(object) {
 checkJoins <- function(object) {
     message("Splitting matrix.")
     objects <- splitBy2Ref(object)
-    joins <- lapply(objects, checkJoin)
+    pb <- progress_bar$new(total = length(objects))
+    joins <- lapply(objects, checkJoin, progressBar = pb)
     tibble(ref1  = map_chr(joins, "ref1"),
            ref2  = map_chr(joins, "ref2"),
            tUL   = map(joins, "tUL"),
@@ -110,7 +112,8 @@ checkJoins <- function(object) {
         mutate(pvalue = map_dbl(test, "p.value")) %>%
         separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
         mutate(vert = factor(vert)) %>%
-        mutate(hor = factor(hor))
+        mutate(hor = factor(hor)) %>%
+        arrange(pvalue)
 }
 
 filterJoins <- function(object, joins) {

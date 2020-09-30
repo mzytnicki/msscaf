@@ -1,27 +1,27 @@
 estimateMoleculeSize <- function(object) {
-    sampleSize = 100000
-    backgroundTopFrac = 0.75
+    #backgroundTopFrac = 0.75
     d <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         mutate(distance = abs(bin1 - bin2)) %>%
         select(distance, count) %>%
-        sample_n(min(sampleSize, nrow(.))) %>%
+        sample_n(min(object@parameters@sampleSize, nrow(.))) %>%
         mutate(loess = predict(loess(count ~ distance, data = ., span = 0.1)))
-    background <- object@interactionMatrix %>%
-        filter(ref1 != ref2) %>%
-        select(count) %>%
-        sample_n(min(sampleSize, nrow(.))) %>%
-        top_frac(backgroundTopFrac, count) %>%
-        arrange(count) %>%
-        head(n = 1) %>%
-        pull(count)
-    backgroundPlot <- object@interactionMatrix %>%
-        filter(ref1 != ref2) %>%
-        select(count) %>%
-        ggplot(aes(x = count)) +
-        geom_freqpoly() +
-        geom_vline(xintercept = background, linetype = "dashed") +
-        scale_y_log10()
+    background <- object@parameters@minCount
+    # background <- object@interactionMatrix %>%
+    #     filter(ref1 != ref2) %>%
+    #     select(count) %>%
+    #     sample_n(min(sampleSize, nrow(.))) %>%
+    #     top_frac(backgroundTopFrac, count) %>%
+    #     arrange(count) %>%
+    #     head(n = 1) %>%
+    #     pull(count)
+    # backgroundPlot <- object@interactionMatrix %>%
+    #     filter(ref1 != ref2) %>%
+    #     select(count) %>%
+    #     ggplot(aes(x = count)) +
+    #     geom_freqpoly() +
+    #     geom_vline(xintercept = background, linetype = "dashed") +
+    #     scale_y_log10()
     distance <- d %>%
         select(distance, loess) %>%
         distinct() %>%
@@ -36,19 +36,19 @@ estimateMoleculeSize <- function(object) {
         geom_vline(xintercept = distance, linetype = "dashed") +
         scale_y_log10()
     message(paste0("Estimated molecule size: ", distance, "."))
-    return(list(size = distance, plot = p, backgroundPlot = backgroundPlot))
+    return(list(size = distance, plot = p))
+    #return(list(size = distance, plot = p, backgroundPlot = backgroundPlot))
 }
 
 estimateBackgroundCounts <- function(object) {
-    sampleSize <- 100000
     d <- object@interactionMatrix %>%
-        filter((ref1 != ref2) | (abs(bin1 - bin2) > object@parameters@maxLinkRange)) %>%
-        select(count)
-    sampleSize <- min(sampleSize, nrow(d))
-    d %<>% sample_n(sampleSize)
+        filter(ref1 != ref2) %>%
+        #filter((ref1 != ref2) | (abs(bin1 - bin2) > object@parameters@maxLinkRange)) %>%
+        select(count) %>%
+        sample_n(min(object@parameters@sampleSize, nrow(.)))
     t <- transform(table(d), cum_freq = cumsum(Freq)) %>%
-        mutate(relative = cum_freq / sampleSize) %>%
-        filter(relative >= 0.1) %>%
+        mutate(relative = cum_freq / object@parameters@sampleSize) %>%
+        filter(relative >= 0.5) %>%
         head(1) %>%
         pull(d)
     t <- as.integer(levels(t))[t] + 1
@@ -56,7 +56,8 @@ estimateBackgroundCounts <- function(object) {
         # geom_freqpoly() +
         geom_freqpoly(binwidth=1) +
         geom_vline(xintercept = t, linetype = "dashed") +
-        xlim(0, 10)
+        xlim(1, max(30, 2 * t)) +
+        scale_y_log10()
     message(paste0("Estimated background count: ", t, "."))
     return(list(count = t, plot = p))
 }
@@ -107,11 +108,13 @@ estimateMinRowCount <- function(object) {
 }
 
 estimateDistributions <- function(object) {
-    l <- estimateMoleculeSize(object)
-    object@parameters@maxLinkRange <- l$size
-    object@parameters@breakNCells <- 0.75 * ((object@parameters@maxLinkRange * (object@parameters@maxLinkRange + 1)) / 2)
     l <- estimateBackgroundCounts(object)
     object@parameters@minCount <- l$count
+    if (is.null(object@parameters@maxLinkRange)) {
+        l <- estimateMoleculeSize(object)
+        object@parameters@maxLinkRange <- l$size
+    }
+    object@parameters@breakNCells <- 0.75 * ((object@parameters@maxLinkRange * (object@parameters@maxLinkRange + 1)) / 2)
     l <- estimateMinRowCount(object)
     object@parameters@minRowCount <- l$count
     return(object)

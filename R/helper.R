@@ -63,6 +63,10 @@ computeRefSizes <- function(object) {
         deframe()
 }
 
+isMatrixEmpty <- function(data) {
+    return(nrow(data) == 0)
+}
+
 makeSymmetric <- function(data) {
     if ("ref1" %in% colnames(data)) {
         data %<>%
