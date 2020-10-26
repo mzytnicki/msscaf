@@ -1,3 +1,26 @@
+ICE <- function(A, nIter = 10000, maxDelta = 0.1) {
+    for (iter in seq.int(nIter)) {
+        s       <- colSums(A)
+        sm      <- mean(s)
+        if (log10(sm) > 300) {
+          message("Warning, algorithm diverges")
+          return(A)
+        }
+        bias    <- s / sm
+        A       <- A / bias
+        A       <- A %*% Diagonal(x = 1 / bias)
+        #message(paste0("max(s): ", max(s), ", min(sm): ", min(sm)))
+        delta   <- max(abs(s / sm - 1))
+        #message(paste0("delta: ", delta))
+        if (delta < maxDelta) {
+            return(A)
+        }
+    }
+    message(paste0("Warning, algorithm did not converge in ", nIter, " iterations."))
+    return(A)
+}
+
+
 KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
     n <- nrow(A)
     e <- matrix(1, nrow = n, ncol = 1)
@@ -60,7 +83,7 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
         }
         x <- x * y
         if (log10(min(x)) < -300) {
-          message("Warning, algorithm diverges")
+          stop("Warning, algorithm diverges")
           result <- t(t(x[,1] * A) * x[,1])
           return(result)
         }
@@ -88,32 +111,74 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
 normalizeKR <- function(object) {
     #message("    KR normalization.")
     data <- object@interactionMatrix
+    if (nrow(data) == 0) {
+        # Matrix is empty, do not normalize it
+        return(object)
+    }
+    nCellsNotDiag <- data %>%
+        filter(bin1 != bin2) %>%
+        nrow()
+    if (nCellsNotDiag <= 2 * object@size) {
+        # There is almost nothing except the diagonal.  The algorithm will diverge anyway.
+        return(object)
+    }
     mat <- makeFullMatrix(data)
     n   <- nrow(mat)
     nullRows <- which((colSums(mat) == 0) | (rowSums(mat) == 0))
     if (length(nullRows) > 0) {
-        message(paste0("      ", length(nullRows), " rows/columns are empty."))
+        # message(paste0("      ", length(nullRows), " rows/columns are empty."))
+        diag(mat)[nullRows] <- 1
     }
-    diag(mat)[nullRows] <- 1
-    matKR <- KR(mat)
-    matKR[nullRows, ] <- 0
-    matKR[, nullRows] <- 0
-    vecKR <- as.vector(t(matKR))
-    vecKR[is.na(vecKR)] <- 0
-    object@interactionMatrix <- makeTibbleFromList(vecKR, n)
+    matKR <- tryCatch(
+        expr = {
+             KR(mat)
+        },
+        error = function(e){
+            # message("KR did not converge, resorting to ICE normalization.")
+            ICE(mat)
+        })
+    if (length(nullRows) > 0) {
+        matKR[nullRows, ] <- 0
+        matKR[, nullRows] <- 0
+    }
+    s <- summary(mat)
+    object@interactionMatrix <- tibble(bin1  = s$i - 1,
+                                       bin2  = s$j - 1,
+                                       count = s$x)
     return(object)
 }
 
 normalizeMD <- function(object) {
     #message("    MD normalization.")
     data <- object@interactionMatrix
+    if (nrow(data) == 0) {
+        # Matrix is empty, do not normalize it
+        return(object)
+    }
+    nCellsNotDiag <- data %>%
+        filter(bin1 != bin2) %>%
+        nrow()
+    if (nCellsNotDiag <= 2 * object@size) {
+        # Matrix is too sparse, everything is on diagonal
+        data %<>% filter(bin1 != bin2)
+        medianValue <- median(data$count)
+        data %<>% 
+            mutate(count = log2((count + 0.0001) / (medianValue + 0.0001))) %>%
+            filter(count != 0)
+        object@interactionMatrix <- data
+        return(object)
+    }
     data %<>%
-        makeFullTibble() %>%
+        #makeFullTibble() %>%
         mutate(distance = abs(bin1 - bin2))
+    if (max(data$distance) == 0) {
+        # Everything is on the diagonal, skip
+        return(object)
+    }
     sampled <- data %>%
         sample_n(size = min(object@parameters@sampleSize, nrow(data))) %>%
         rename(sampledDistance = distance) %>%
-        select(c(sampledDistance, count)) %>%
+        dplyr::select(c(sampledDistance, count)) %>%
         arrange(sampledDistance)
     
     optimizeSpan <- function(model, spans = c(0.01, 0.9)) {
@@ -139,7 +204,7 @@ normalizeMD <- function(object) {
     sampled %<>%
         mutate(loess = predict(l)) %>%
         mutate(loess = pmax(loess, 0)) %>%
-        select(-count) %>%
+        dplyr::select(-count) %>%
         unique()
     sampledDistances <- unique(sort(sampled$sampledDistance))
     uniqueDistances <- unique(sort(data$distance))
@@ -149,11 +214,11 @@ normalizeMD <- function(object) {
                                sampledDistances[which.min(abs(x - sampledDistances))]
                            })) %>%
         left_join(sampled, by = "sampledDistance") %>%
-        select(-sampledDistance)
+        dplyr::select(-sampledDistance)
     data %<>% left_join(valueMap, by = "distance") %>%
         mutate(count = log2((count + 0.0001) / (loess + 0.0001))) %>%
-        select(-c(distance, loess)) %>%
-        filter(bin1 <= bin2) %>%
+        dplyr::select(-c(distance, loess)) %>%
+        filter(bin1 >= bin2) %>%
         filter(count != 0)
     object@interactionMatrix <- data
     return(object)

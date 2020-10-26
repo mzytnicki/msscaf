@@ -1,5 +1,5 @@
 // [[Rcpp::depends(RcppProgress)]]
-#include <chrono>
+//#include <chrono>
 #include <progress.hpp>
 #include <progress_bar.hpp>
 

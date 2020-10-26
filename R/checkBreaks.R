@@ -21,13 +21,16 @@ randomizeData <- function(data) {
 
 computeMeanTriangle <- function(value, data = data) {
     data %>%
-        filter(bin1 <= value) %>%
-        filter(bin2 >= value) %>%
-        summarise(nCells = n(), meanCount = mean(count))
+        dplyr::filter(bin1 >= value) %>%
+        dplyr::filter(bin2 <= value) %>%
+        dplyr::summarise(nCells = n(), meanCount = mean(count))
 }
 
 computeMeanTriangles <- function(data) {
     n <- max(data$bin1, data$bin2)
+    if (n < 0) {
+        stop("Error while computing triangles: matrix is empty.")
+    }
     map_df(seq(n), computeMeanTriangle, data = data) %>%
         rowid_to_column(var = "bin")
 }
@@ -42,20 +45,30 @@ computeMeanTrianglesRandom <- function(i, data = data) {
 checkBreak <- function(object) {
     #message("    Checking breaks.")
     data <- object@interactionMatrix
-    trianglesList <- bplapply(seq.int(object@parameters@nRandomizations),
-    #trianglesList <- lapply(seq.int(object@parameters@nRandomizations),
-                          computeMeanTrianglesRandom,
-                          data = data)
-    triangles <- bind_rows(trianglesList) %>%
-        select(bin, nCells, fcMeanCount) %>%
-        group_by(bin) %>%
-        summarise(nCells = mean(nCells), fcMeanCount = mean(fcMeanCount)) %>%
-        ungroup()
+    if (nrow(data) == 0) {
+       # Matrix is empty, skip
+       return(list(data =  NULL,
+                   plot1 = NULL,
+                   plot2 = NULL,
+                   plot3 = NULL))
+    }
+    triangles <- computeMeanTriangles(data) %>%
+        rename(fcMeanCount = meanCount) %>%
+        mutate(fcMeanCount = fcMeanCount - median(fcMeanCount))
+    # trianglesList <- bplapply(seq.int(object@parameters@nRandomizations),
+    # trianglesList <- lapply(seq.int(object@parameters@nRandomizations),
+    #                       computeMeanTrianglesRandom,
+    #                       data = data)
+    # triangles <- bind_rows(trianglesList) %>%
+    #     dplyr::select(bin, nCells, fcMeanCount) %>%
+    #     group_by(bin) %>%
+    #     summarise(nCells = mean(nCells), fcMeanCount = mean(fcMeanCount)) %>%
+    #     ungroup()
     # breakPointBin <- NA
     # breakPoint <- triangles %>%
     #     arrange(fcMeanCount, desc(nCells)) %>%
     #     slice(1) %>%
-    #     select(bin, fcMeanCount, nCells) %>%
+    #     dplyr::select(bin, fcMeanCount, nCells) %>%
     #     as.list()
     # if (breakPoint$fcMeanCount <= object@parameters@breakThreshold &
     #     breakPoint$nCells >= object@parameters@breakNCells) {
@@ -87,7 +100,7 @@ normalizeAndBreak <- function(object, progressBar) {
     if (isMatrixEmpty(object@interactionMatrix)) {
         return(list(data = NULL, plot1 = NULL, plot2 = NULL, plot3 = NULL))
     }
-    #message(paste0("  Working on ", object@chromosome, "."))
+    message(paste0("\n  Working on ", object@chromosome, ".\n"))
     object <- normalizeKR(object)
     object <- normalizeMD(object)
     object <- removeFarFromDiagonal(object)
@@ -99,12 +112,13 @@ checkBreaks <- function(object) {
     objects <- splitByRef(object)
     message("Done.")
     pb <- progress_bar$new(total = length(objects))
-    breaks <- lapply(objects, normalizeAndBreak, progressBar = pb)
-    if (length(breaks) == 0) {
+    breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
+    #breaks <- lapply(objects, normalizeAndBreak, progressBar = pb)
+    data   <- map_dfr(breaks, "data", .id = "ref")
+    if (nrow(data) == 0) {
         return(list())
     }
-    return(list(data = map_dfr(breaks, "data", .id = "ref") %>%
-                    mutate(ref = factor(ref)), 
+    return(list(data = data %>% mutate(ref = factor(ref)), 
                 plot1 = map(breaks, "plot1"),
                 plot2 = map(breaks, "plot2"),
                 plot3 = map(breaks, "plot3")))
@@ -148,7 +162,7 @@ filterBreaks <- function(object, breaks) {
         # TODO: find a better filter here?
         #filter(nCells      >= object@parameters@breakNCells) %>%
     selectedRefs <- selectedBreaks %>%
-        select(ref) %>%
+        dplyr::select(ref) %>%
         distinct() %>%
         pull() %>%
         as.character()
@@ -170,10 +184,10 @@ filterBreaks <- function(object, breaks) {
         return(list(breaks = c(), plots = c()))
     }
     selectedPlots <- selectedBreaks %>%
-        select(ref, plot1, plot2) %>%
+        dplyr::select(ref, plot1, plot2) %>%
         mutate(ref = flatten_chr(ref))
     selectedSplits <- selectedBreaks %>%
-        select(ref, bins) %>%
+        dplyr::select(ref, bins) %>%
         mutate(ref = flatten_chr(ref)) %>%
         unnest(bins) %>%
         rename(bin = bins)

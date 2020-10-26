@@ -1,3 +1,45 @@
+plotMoleculeSizeDistribution <- function(object) {
+    object@interactionMatrix %>%
+        filter(ref1 == ref2) %>%
+        mutate(distance = abs(bin1 - bin2)) %>%
+        dplyr::select(distance, count) %>%
+        sample_n(min(object@parameters@sampleSize, nrow(.))) %>%
+        mutate(loess = predict(loess(count ~ distance, data = ., span = 0.01))) %>%
+            ggplot(aes(distance, count)) +
+            geom_point(color = "grey50") +
+            geom_line(aes(x = distance, y = loess)) + 
+            geom_hline(yintercept = object@parameters@minCount, linetype = "dashed") +
+            geom_vline(xintercept = object@parameters@maxLinkRange, linetype = "dashed") +
+            xlim(1, max(30, 2 * object@parameters@maxLinkRange)) +
+            scale_y_log10()
+}
+
+plotBackgroundCountDistribution <- function(object) {
+    object@interactionMatrix %>%
+        filter(ref1 != ref2) %>%
+        dplyr::select(count) %>%
+        sample_n(min(object@parameters@sampleSize, nrow(.))) %>%
+        ggplot(aes(count)) +
+            geom_freqpoly(binwidth=1) +
+            geom_vline(xintercept = object@parameters@minCount, linetype = "dashed") +
+            xlim(1, max(30, 2 * object@parameters@minCount)) +
+            scale_y_log10()
+}
+
+plotRowCountDistribution <- function(object) {
+    object@interactionMatrix %>%
+        makeSymmetric() %>%
+        group_by(ref1, bin1) %>%
+        summarise(countSum = sum(count)) %>%
+        ungroup() %>%
+        dplyr::select(countSum) %>%
+        ggplot(aes(countSum)) +
+#            geom_freqpoly(binwidth=1) +
+            geom_freqpoly() +
+            geom_vline(xintercept = object@parameters@minRowCount, linetype = "dashed") +
+            xlim(1, max(30, 2 * object@parameters@minRowCount))
+}
+
 plotScaffoldSizeDistribution <- function(object, log) {
     p <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
@@ -40,13 +82,13 @@ plotDiagonalStrength <- function(object) {
         filter(ref1 == ref2) %>%
         makeSymmetric() %>%
         mutate(distance = abs(bin1 - bin2)) %>%
-        select(ref1, bin1, distance, count) %>%
+        dplyr::select(ref1, bin1, distance, count) %>%
         arrange(ref1, bin1, distance)
     tmp1 <- tmp %>%
         group_by(ref1, bin1) %>%
         mutate(diagonalSum = cumsum(count)) %>%
         ungroup() %>%
-        select(ref1, bin1, distance, diagonalSum)
+        dplyr::select(ref1, bin1, distance, diagonalSum)
     p <- tmp %>%
         group_by(ref1, bin1) %>%
         summarise(countSum = sum(count)) %>%
@@ -54,7 +96,7 @@ plotDiagonalStrength <- function(object) {
         right_join(tmp1, by = c("ref1", "bin1")) %>%
         mutate(diagPc = diagonalSum / countSum) %>%
         filter(distance <= 2 * object@parameters@maxLinkRange) %>%
-        select(ref1, bin1, distance, diagPc) %>%
+        dplyr::select(ref1, bin1, distance, diagPc) %>%
         rename(ref = ref1) %>%
         rename(bin = bin1) %>%
         group_by(ref)

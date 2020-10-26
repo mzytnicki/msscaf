@@ -1,5 +1,5 @@
 removeSmallScaffolds <- function(object) {
-    message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% makeSymmetric() %>% select(ref1) %>% distinct() %>% nrow() , ")."))
+    message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% makeSymmetric() %>% dplyr::select(ref1) %>% distinct() %>% nrow() , ")."))
     changed <- TRUE
     while (changed) {
         previousChromosomes <- object@chromosomes
@@ -9,7 +9,7 @@ removeSmallScaffolds <- function(object) {
             summarise(refSizes = max(bin1)) %>%
             ungroup() %>%
             filter(refSizes >= object@parameters@minNBins) %>%
-            select(ref1) %>%
+            dplyr::select(ref1) %>%
             pull()
         object@chromosomes <- as.vector(mixedsort(unique(bigRefs)))
         object@interactionMatrix %<>%
@@ -29,7 +29,7 @@ removeLowCountRows <- function(object) {
     message("Removing low counts rows.")
     nRows <- object@interactionMatrix %>%
         makeSymmetric() %>%
-        select(ref1, bin1) %>%
+        dplyr::select(ref1, bin1) %>%
         distinct() %>%
         nrow()
     object@lowCounts <- object@interactionMatrix %>%

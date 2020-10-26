@@ -49,6 +49,7 @@
 #' @import GenomicRanges
 #' @import BiocParallel
 #' @import progress
+#' @import Matrix
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
 #' @useDynLib tenxchecker

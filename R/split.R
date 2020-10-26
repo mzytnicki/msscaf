@@ -34,6 +34,7 @@ splitChromosomes <- function(object, splitPoints) {
     if (length(splitPoints) == 0) {
         return(object)
     }
+    splitPoints %<>% arrange(ref, desc(bin))
     interactionMatrix <- object@interactionMatrix
     sizes             <- object@sizes
     newChromosomes    <- paste0("new_chr_", seq.int(nrow(splitPoints)))

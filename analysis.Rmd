@@ -322,13 +322,13 @@ hicObject@parameters@maxLinkRange <- 500
 hicObject@parameters@minRowCount  <- 200
 hicObject@parameters@minNBins    <- 2
 hicObject <- cleanData(hicObject)
-#hicObjects <- splitByRef(hicObject)
-#plot.10X(hicObjects)
 hicBreaks <- checkBreaks(hicObject)
 hicObject@parameters@breakNCells    <- 1000
 hicObject@parameters@breakThreshold <- -1.5
 filteredHicBreaks <- filterBreaks(hicObject, hicBreaks$data)
 hicObject <- splitChromosomes(hicObject, filteredHicBreaks$breaks)
+hicObject@parameters@maxLinkRange <- 10
+hicObject@parameters@breakNCells <- 10
 joins <- checkJoins(hicObject)
 filteredJoins <- filterJoins(hicObject, joins)
 hicObject <- scaffold(hicObject, joins)
@@ -354,10 +354,17 @@ bamFileName <- "/media/Stock/verySmallTest.bam"
 #bamFileName       <- "/Scratch/mazytnicki/verySmallTest.bam"
 bamData           <- parseBamFile(bamFileName, 10000, 12)
 bamObject         <- tenxcheckerExp(bamData)
+plotBackgroundCountDistribution(bamObject)
+plotMoleculeSizeDistribution(bamObject)
+plotRowCountDistribution(bamObject)
 bamObject         <- estimateDistributions(bamObject)
+bamObject@parameters@minCount <- 5
+bamObject@parameters@maxLinkRange <- 10
+bamObject@parameters@minRowCount <- 250000
+bamObject@parameters@minNBins <- 2
 bamObject@parameters@maxLinkRange   <- 10
 bamObject@parameters@breakThreshold <- -6
-bamObject@parameters@breakNCells    <- 50
+object@parameters@breakNCells <- 0.75 * ((object@parameters@maxLinkRange * (object@parameters@maxLinkRange + 1)) / 2)
 bamObject         <- cleanData(bamObject)
 bamBreaks         <- checkBreaks(bamObject)
 filteredBamBreaks <- filterBreaks(bamObject, bamBreaks$data)
@@ -397,15 +404,19 @@ library("devtools")
 library("magrittr")
 library("tidyverse")
 library("BiocParallel")
+library("tibble")
 devtools::load_all(".")
 ontFileName <- "/home/mazytnicki/Genotoul/seqoccin/assemblies/assemblers/mixed/bos_taurus/Trio2/test/nanopore/aln12345.paf"
 ontFileName <- "/Scratch/mazytnicki/aln12345.paf"
-ontData <- parsePafFile(ontFileName, 10000, 50, 10, 10)
+ontData <- parsePafFile(ontFileName, 1000, 500, 10, 10)
 ontObject <- tenxcheckerExp(ontData)
 ontObject <- estimateDistributions(ontObject)
-ontObject@parameters@minCount <- 2
-ontObject@parameters@minRowCount <- 10
-ontObject@parameters@minNBins <- 2
+# ontObject@parameters@minCount <- 2
+# ontObject@parameters@minRowCount <- 2
+# ontObject@parameters@minNBins <- 2
+plotBackgroundCountDistribution(ontObject)
+plotMoleculeSizeDistribution(ontObject)
+plotRowCountDistribution(ontObject)
 ontObject <- cleanData(ontObject)
 ontBreaks <- checkBreaks(ontObject)
 filteredOntBreaks <- filterBreaks(ontObject, ontBreaks$data)
