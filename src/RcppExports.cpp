@@ -19,6 +19,56 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// computeNRrows
+int computeNRrows(DataFrame& data, IntegerVector& sizes);
+RcppExport SEXP _tenxchecker_computeNRrows(SEXP dataSEXP, SEXP sizesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeNRrows(data, sizes));
+    return rcpp_result_gen;
+END_RCPP
+}
+// computeSymmetricColSum
+IntegerVector computeSymmetricColSum(DataFrame& data, IntegerVector& sizes);
+RcppExport SEXP _tenxchecker_computeSymmetricColSum(SEXP dataSEXP, SEXP sizesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeSymmetricColSum(data, sizes));
+    return rcpp_result_gen;
+END_RCPP
+}
+// removeLowCountRowsCpp
+DataFrame removeLowCountRowsCpp(DataFrame& data, IntegerVector& sizes, int threshold);
+RcppExport SEXP _tenxchecker_removeLowCountRowsCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type threshold(thresholdSEXP);
+    rcpp_result_gen = Rcpp::wrap(removeLowCountRowsCpp(data, sizes, threshold));
+    return rcpp_result_gen;
+END_RCPP
+}
+// removeSmallScaffoldsCpp
+DataFrame removeSmallScaffoldsCpp(DataFrame& data, int nRefs, int threshold);
+RcppExport SEXP _tenxchecker_removeSmallScaffoldsCpp(SEXP dataSEXP, SEXP nRefsSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type nRefs(nRefsSEXP);
+    Rcpp::traits::input_parameter< int >::type threshold(thresholdSEXP);
+    rcpp_result_gen = Rcpp::wrap(removeSmallScaffoldsCpp(data, nRefs, threshold));
+    return rcpp_result_gen;
+END_RCPP
+}
 // parseHicCpp
 List parseHicCpp(std::string& fname, int resolution);
 RcppExport SEXP _tenxchecker_parseHicCpp(SEXP fnameSEXP, SEXP resolutionSEXP) {
@@ -49,6 +99,10 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 3},
+    {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
+    {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
+    {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
+    {"_tenxchecker_removeSmallScaffoldsCpp", (DL_FUNC) &_tenxchecker_removeSmallScaffoldsCpp, 3},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},
     {NULL, NULL, 0}

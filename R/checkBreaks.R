@@ -23,7 +23,8 @@ computeMeanTriangle <- function(value, data = data) {
     data %>%
         dplyr::filter(bin1 >= value) %>%
         dplyr::filter(bin2 <= value) %>%
-        dplyr::summarise(nCells = n(), meanCount = mean(count))
+        dplyr::summarise(nCells = n(), meanCount = mean(count)) %>%
+        tidyr::replace_na(list(meanCount = 0))
 }
 
 computeMeanTriangles <- function(data) {
@@ -95,25 +96,31 @@ checkBreak <- function(object) {
     #             bin   = breakPointBin))
 }
 
-normalizeAndBreak <- function(object, progressBar) {
+normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     progressBar$tick()
     if (isMatrixEmpty(object@interactionMatrix)) {
         return(list(data = NULL, plot1 = NULL, plot2 = NULL, plot3 = NULL))
     }
-    message(paste0("\n  Working on ", object@chromosome, ".\n"))
-    object <- normalizeKR(object)
-    object <- normalizeMD(object)
-    object <- removeFarFromDiagonal(object)
+    #message(paste0("\n  Working on ", object@chromosome, ".\n"))
+    if (kr) {
+        object <- normalizeKR(object)
+    }
+    if (md) {
+        object <- normalizeMD(object)
+    }
+    if (diag) {
+        object <- removeFarFromDiagonal(object)
+    }
     checkBreak(object)
 }
 
-checkBreaks <- function(object) {
+checkBreaks <- function(object, kr = TRUE, md = TRUE, diag = TRUE) {
     message("Splitting matrix.")
     objects <- splitByRef(object)
     message("Done.")
     pb <- progress_bar$new(total = length(objects))
-    breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
-    #breaks <- lapply(objects, normalizeAndBreak, progressBar = pb)
+    #breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
+    breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
     data   <- map_dfr(breaks, "data", .id = "ref")
     if (nrow(data) == 0) {
         return(list())
@@ -141,6 +148,12 @@ filterBreak <- function(parameters) {
             slice(1) %>%
             pull(bin)
         if (length(breakPointBin) == 0) {
+            if (length(bins) >= 1000) {
+                stop(paste0("Found ", length(bins), " filtered breaks in ref '",
+                               as.character(reference),
+                               "'.  This is probably too much, please decrease ",
+                               "'object@parameters@breakThreshold'.")) 
+            }
             return(list(ref   = as.character(reference),
                         bins  = bins,
                         plot1 = plotTriangles(originalBreakRef, bins),
@@ -175,9 +188,9 @@ filterBreaks <- function(object, breaks) {
         group_by(ref) %>%
         group_split()
     functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
-    #selectedBreaks <- lapply(selectedRefs, filterBreak, object = object, breaks = breaks)
     # parallel seems to need too much RAM
     selectedBreaks <- bplapply(functionParameters, filterBreak)
+    #selectedBreaks <- lapply(functionParameters, filterBreak)
     selectedBreaks <- as_tibble(transpose(selectedBreaks))
     if (is.null(unlist(selectedBreaks$bins))) {
         message("No break passed the filter.")

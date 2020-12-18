@@ -31,12 +31,13 @@ estimateBackgroundCounts <- function(object) {
 }
 
 estimateMinRowCount <- function(object) {
-    tmp <- object@interactionMatrix %>%
-        makeSymmetric() %>%
-        group_by(ref1, bin1) %>%
-        summarise(countSum = sum(count)) %>%
-        ungroup() %>%
-        pull(countSum)
+    tmp <- computeSymmetricColSum(object@interactionMatrix, object@sizes)
+#   tmp <- object@interactionMatrix %>%
+#       makeSymmetric() %>%
+#       group_by(ref1, bin1) %>%
+#       summarise(countSum = sum(count)) %>%
+#       ungroup() %>%
+#       pull(countSum)
     tryCatch({
             f <- fitdistr(tmp, densfun="logistic")
             t <- max(object@parameters@minCount,

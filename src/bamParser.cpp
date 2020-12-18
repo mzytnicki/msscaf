@@ -98,6 +98,7 @@ public:
         bin1.insert(bin1.end(), tmpBin1.begin(), tmpBin1.end());
         bin2.insert(bin2.end(), tmpBin2.begin(), tmpBin2.end());
         count.insert(count.end(), tmpCount.begin(), tmpCount.end());
+        clear();
         return nAdded;
     }
 };
@@ -145,6 +146,7 @@ public:
         for (size_t i = 0; i < matrices.size(); ++i) {
             matrices[i].merge(otherMatrices.matrices[i]);
         }
+	otherMatrices.clear();
     }
     void convertToPlain (std::vector < int > &chrs1, std::vector < int > &chrs2, std::vector < int > &bins1, std::vector < int > &bins2, std::vector < int > &counts, std::vector < std::pair < size_t, size_t > > &translation, unsigned int minCount) {
         Progress progress(matrices.size(), true);

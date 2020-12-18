@@ -5,6 +5,22 @@ parseBamFileCpp <- function(fileName, binSize, nThreads) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize, nThreads)
 }
 
+computeNRrows <- function(data, sizes) {
+    .Call('_tenxchecker_computeNRrows', PACKAGE = 'tenxchecker', data, sizes)
+}
+
+computeSymmetricColSum <- function(data, sizes) {
+    .Call('_tenxchecker_computeSymmetricColSum', PACKAGE = 'tenxchecker', data, sizes)
+}
+
+removeLowCountRowsCpp <- function(data, sizes, threshold) {
+    .Call('_tenxchecker_removeLowCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes, threshold)
+}
+
+removeSmallScaffoldsCpp <- function(data, nRefs, threshold) {
+    .Call('_tenxchecker_removeSmallScaffoldsCpp', PACKAGE = 'tenxchecker', data, nRefs, threshold)
+}
+
 parseHicCpp <- function(fname, resolution) {
     .Call('_tenxchecker_parseHicCpp', PACKAGE = 'tenxchecker', fname, resolution)
 }

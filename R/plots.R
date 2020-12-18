@@ -178,21 +178,25 @@ plotRowCountDensity <- function(object) {
 }
 
 plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
+    minLim <- 1
+    maxLim <- object@size
     if (length(bins) == 0) {
         bins <- NA
     }
-    minCount <- object@interactionMatrix %>% pull(count) %>% min()
+    scaleFactor <- computeScaleFactor(object)
+    data        <- object@interactionMatrix %>% rescale(scaleFactor)
+    minCount    <- data %>% pull(count) %>% min()
     if ((minCount < 0) & (logColor)) {
         stop("Trying to plot a map with negative count in log scale.")
     }
-    tmp <- object@interactionMatrix
     if (length(lim) == 2) {
-        tmp %<>% dplyr::filter(bin1 >= lim[1], bin2 >= lim[1], bin1 <= lim[2], bin2 <= lim[2])
+        minLim <- lim[1]
+        maxLim <- lim[2]
     }
     else if ((length(lim) != 1) | (! is.na(lim))) {
         stop("'lim' should be a vector of size 2, or NA.")
     }
-    tmp %<>% makeSymmetric()
+    data %<>% makeSymmetric()
     # if (!is.na(bin)) {
     #     xmin <- max(0, bin - object@parameters@nBinZoom)
     #     xmax <- min(object@size, bin + object@parameters@nBinZoom)
@@ -201,11 +205,11 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
     #                     bin2 >= xmin,
     #                     bin2 <= xmax)
     # }
-    p <- tmp %>% 
+    p <- data %>% 
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) +
-            scale_x_continuous(expand = c(0, 0)) +
-            scale_y_reverse(expand = c(0, 0)) +
+            scale_x_continuous(expand = c(0, 0), limits = c(minLim, maxLim)) +
+            scale_y_continuous(expand = c(0, 0), limits = c(minLim, maxLim)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
             ggtitle(object@chromosome)
@@ -215,7 +219,7 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
         p <- p + scale_fill_gradient2()
         #p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
-    if (!is.na(bins)) {
+    if ((length(bins) == 1) & (!is.na(bins))) {
         for (bin in bins) {
             p <- p +
                 geom_hline(yintercept = bin, linetype = "dotted") +
@@ -231,7 +235,9 @@ plot.10X2Ref <- function(object,
                          x2 = NULL,
                          y1 = NULL,
                          y2 = NULL) {
-    p <- object@interactionMatrix %>%
+    scaleFactor <- computeScaleFactor(object)
+    data        <- object@interactionMatrix %>% rescale(scaleFactor)
+    p <- data %>%
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) + 
             scale_x_continuous(expand = c(0, 0)) +
@@ -271,7 +277,9 @@ plot.10X <- function(object, logColor = TRUE, ref = NULL) {
             plot.10XRef()
         return(p)
     }
-    p <- object@interactionMatrix %>%
+    scaleFactor <- computeScaleFactor(object)
+    data        <- object@interactionMatrix %>% rescale(scaleFactor)
+    p <- data %>%
         makeSymmetric() %>%
         ggplot(aes(x = bin1, y = bin2)) + 
         geom_raster(aes(fill = count)) + 

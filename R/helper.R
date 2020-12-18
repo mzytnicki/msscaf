@@ -36,7 +36,7 @@ splitBy2Ref <- function(object) {
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
         group_by(ref1_ref2) %>%
         summarise(nCounts = n(), maxCounts = max(count)) %>%
-        filter(maxCounts >= object@parameters@maxLinkRange) %>%
+        #filter(maxCounts >= object@parameters@maxLinkRange) %>%
         filter(nCounts >= object@parameters@breakNCells) %>%
         pull(ref1_ref2)
     message(paste0("Keeping ", length(pairs), " pairs of references."))
@@ -54,12 +54,18 @@ splitBy2Ref <- function(object) {
 computeRefSizes <- function(object) {
     bind_rows(object@interactionMatrix %>%
                   dplyr::select(c(ref1, bin1)) %>%
-                  rename(ref = ref1, bin = bin1),
+                  group_by(ref1) %>%
+                  summarise(size = max(bin1)) %>%
+                  ungroup() %>%
+                  dplyr::rename(ref = ref1),
               object@interactionMatrix %>%
                   dplyr::select(c(ref2, bin2)) %>%
-                  rename(ref = ref2, bin = bin2)) %>%
+                  group_by(ref2) %>%
+                  summarise(size = max(bin2)) %>%
+                  ungroup() %>%
+                  dplyr::rename(ref = ref2)) %>%
         group_by(ref) %>%
-        summarise(size = max(bin)) %>%
+        summarise(size = max(size)) %>%
         deframe()
 }
 
@@ -108,4 +114,46 @@ makeTibbleFromList <- function(data, n) {
            count = data) %>%
         filter(count != 0) %>%
         filter(bin1 <= bin2)
+}
+
+computeScaleFactor <- function(object) {
+    if (is(object, "tenxcheckerExp")) {
+        length <- sum(object@sizes)
+    }
+    else if (is(object, "tenxchecker2RefExp")) {
+        length <- max(object@size1, object@size2)
+    }
+    else if (is(object, "tenxcheckerRefExp")) {
+        length <- object@size
+    }
+    else {
+        stop("Do not know what to do with object.")
+    }
+    scaleFactor <- ceiling(log10(length))
+    if (scaleFactor <= 3) {
+        return(1)
+    }
+    return(10^(scaleFactor - 3))
+}
+
+rescale <- function(data, scale) {
+    if (scale == 1) {
+        return(data)
+    }
+    data %<>%
+        dplyr::mutate(bin1 = round(bin1 / scale) * scale) %>%
+        dplyr::mutate(bin2 = round(bin2 / scale) * scale)
+    if ("ref1" %in% colnames(data)) {
+        data %<>%
+            dplyr::group_by(ref1, ref2, bin1, bin2) %>%
+            dplyr::summarise(count = mean(count)) %>%
+            dplyr::ungroup()
+    }
+    else {
+        data %<>%
+            dplyr::group_by(bin1, bin2) %>%
+            dplyr::summarise(count = mean(count)) %>%
+            dplyr::ungroup()
+    }
+    data
 }

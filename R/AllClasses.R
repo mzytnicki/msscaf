@@ -102,6 +102,19 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     
     
     ##- end checking ---------------------------------------------------------#
+
+    # Convert "diagonal matrices" to upper matrices
+    diagonalData <- inputMatrix %>%
+        dplyr::filter(ref1 == ref2) %>%
+        dplyr::mutate(maxBin = pmax(bin1, bin2)) %>%
+        dplyr::mutate(minBin = pmin(bin1, bin2)) %>%
+        dplyr::select(-c(bin1, bin2))            %>%
+        dplyr::rename(bin1 = maxBin)             %>%
+        dplyr::rename(bin2 = minBin)
+    inputMatrix <- inputMatrix %>% 
+        dplyr::filter(ref1 != ref2) %>%
+        dplyr::bind_rows(diagonalData) %>%
+        dplyr::arrange(ref1, ref2, bin1, bin2)
     
     object <- new("tenxcheckerData")
     

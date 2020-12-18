@@ -1,47 +1,48 @@
 removeSmallScaffolds <- function(object) {
-    message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% makeSymmetric() %>% dplyr::select(ref1) %>% distinct() %>% nrow() , ")."))
-    changed <- TRUE
-    while (changed) {
-        previousChromosomes <- object@chromosomes
-        bigRefs <- object@interactionMatrix %>%
-            makeSymmetric() %>%
-            group_by(ref1) %>%
-            summarise(refSizes = max(bin1)) %>%
-            ungroup() %>%
-            filter(refSizes >= object@parameters@minNBins) %>%
-            dplyr::select(ref1) %>%
-            pull()
-        object@chromosomes <- as.vector(mixedsort(unique(bigRefs)))
-        object@interactionMatrix %<>%
-            filter(ref1 %in% object@chromosomes, ref2 %in% object@chromosomes) %>%
-            mutate(ref1 = droplevels(ref1)) %>%
-            mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
-            mutate(ref2 = droplevels(ref2)) %>%
-            mutate(ref2 = factor(ref2, levels = object@chromosomes))
-        changed <- (length(previousChromosomes) != length(object@chromosomes))
-    }
+    object@interactionMatrix <- as_tibble(removeSmallScaffoldsCpp(object@interactionMatrix, length(object@chromosomes), object@parameters@minNBins))
+    object@chromosomes <- as.vector(mixedsort(unique(c(levels(object@interactionMatrix$ref1), levels(object@interactionMatrix$ref2)))))
     object@sizes <- object@sizes[object@chromosomes]
-    message(paste0("Keeping ", length(object@chromosomes), " big references."))
     return(object)
+#   message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% makeSymmetric() %>% dplyr::select(ref1) %>% distinct() %>% nrow() , ")."))
+#   changed <- TRUE
+#   while (changed) {
+#       previousChromosomes <- object@chromosomes
+#       bigRefs <- object@interactionMatrix %>%
+#           makeSymmetric() %>%
+#           group_by(ref1) %>%
+#           summarise(refSizes = max(bin1)) %>%
+#           ungroup() %>%
+#           filter(refSizes >= object@parameters@minNBins) %>%
+#           dplyr::select(ref1) %>%
+#           pull()
+#       object@chromosomes <- as.vector(mixedsort(unique(bigRefs)))
+#       object@interactionMatrix %<>%
+#           filter(ref1 %in% object@chromosomes, ref2 %in% object@chromosomes) %>%
+#           mutate(ref1 = droplevels(ref1)) %>%
+#           mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
+#           mutate(ref2 = droplevels(ref2)) %>%
+#           mutate(ref2 = factor(ref2, levels = object@chromosomes))
+#       changed <- (length(previousChromosomes) != length(object@chromosomes))
+#   }
+#   object@sizes <- object@sizes[object@chromosomes]
+#   message(paste0("Keeping ", length(object@chromosomes), " big references."))
+#   return(object)
 }
 
 removeLowCountRows <- function(object) {
     message("Removing low counts rows.")
-    nRows <- object@interactionMatrix %>%
-        makeSymmetric() %>%
-        dplyr::select(ref1, bin1) %>%
-        distinct() %>%
-        nrow()
-    object@lowCounts <- object@interactionMatrix %>%
-        makeSymmetric() %>%
-        group_by(ref1, bin1) %>%
-        summarise(countSum = sum(count)) %>%
-        ungroup() %>%
-        filter(countSum < object@parameters@minRowCount)
-    message(paste0("Removing ", nrow(object@lowCounts), " / ", nRows, " rows."))
-    object@interactionMatrix <- object@interactionMatrix %>%
-        anti_join(object@lowCounts, by = c("ref1" = "ref1", "bin1" = "bin1")) %>%
-        anti_join(object@lowCounts, by = c("ref2" = "ref1", "bin2" = "bin1"))
+    object@interactionMatrix <- as_tibble(removeLowCountRowsCpp(object@interactionMatrix, object@sizes, object@parameters@minRowCount))
+#   nRows <- computeNRrows(object@interactionMatrix, object@sizes)
+#   object@lowCounts <- object@interactionMatrix %>%
+#       makeSymmetric() %>%
+#       group_by(ref1, bin1) %>%
+#       summarise(countSum = sum(count)) %>%
+#       ungroup() %>%
+#       filter(countSum < object@parameters@minRowCount)
+#   message(paste0("Removing ", nrow(object@lowCounts), " / ", nRows, " rows."))
+#   object@interactionMatrix <- object@interactionMatrix %>%
+#       anti_join(object@lowCounts, by = c("ref1" = "ref1", "bin1" = "bin1")) %>%
+#       anti_join(object@lowCounts, by = c("ref2" = "ref1", "bin2" = "bin1"))
     return(object)
 }
 

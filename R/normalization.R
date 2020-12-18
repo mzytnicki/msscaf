@@ -218,7 +218,6 @@ normalizeMD <- function(object) {
     data %<>% left_join(valueMap, by = "distance") %>%
         mutate(count = log2((count + 0.0001) / (loess + 0.0001))) %>%
         dplyr::select(-c(distance, loess)) %>%
-        filter(bin1 >= bin2) %>%
         filter(count != 0)
     object@interactionMatrix <- data
     return(object)

@@ -20,6 +20,17 @@ struct interval_t {
   interval_t (uint32_t c, uint32_t s, uint32_t e): chrId(c), start(s), end(e) {}
 };
 
+bool operator<(const interval_t &lhs, const interval_t &rhs) {
+  if (lhs.chrId < rhs.chrId) return true;
+  if (lhs.chrId > rhs.chrId) return false;
+  if (lhs.start < rhs.start) return true;
+  if (lhs.start > rhs.start) return false;
+  return (lhs.end <= rhs.end);
+}
+
+std::ostream& operator<<(std::ostream& os, interval_t const &interval) {
+  return os << interval.chrId << ":" << interval.start << "-" << interval.end;
+}
 
 int median(std::vector<int> &v) {
   if (v.size() == 0) return 0;
@@ -93,36 +104,32 @@ void updateMatrixCounts(std::unordered_map < uint64_t, int > &matrixCounts,
 void updateMatrices(std::unordered_map < uint64_t, SparseMatrix > &matrices,
                     std::unordered_set < uint64_t >               &validMatrices,
                     std::vector < interval_t >                    &intervals) {
+  //Rcerr << "Entering UM with " << intervals.size() << " intervals\n";
+  std::sort(intervals.begin(), intervals.end());
   for (size_t intervalId1 = 0; intervalId1 < intervals.size(); ++intervalId1) {
     interval_t &interval1 = intervals[intervalId1];
+    if (interval1.start > interval1.end) Rcerr << "Problem in 'updateMatrices': [" << intervalId1 << "] " << interval1 << "\n";
+    //Rcerr << "\tInt 1 ["  << intervalId1 << "]: " << interval1.chrId << ": " << interval1.start << "-" << interval1.end << "\n";
     for (size_t intervalId2 = 0; intervalId2 <= intervalId1; ++intervalId2) {
       interval_t &interval2 = intervals[intervalId2];
-      if (interval2.chrId > interval1.chrId) {
-        if (validMatrices.find(getKey(interval2.chrId, interval1.chrId)) != validMatrices.end()) {
-          for (uint32_t bin2 = interval2.start; bin2 <= interval2.end; ++bin2) {
-            for (uint32_t bin1 = interval1.start; bin1 <= interval1.end; ++bin1) {
-              if ((interval1.chrId == interval2.chrId) && (bin2 > bin1)) {
-                matrices[getKey(interval2.chrId, interval1.chrId)].addElement(bin2, bin1);
-              }
-              else {
-                matrices[getKey(interval2.chrId, interval1.chrId)].addElement(bin1, bin2);
-              }
-              //Rcerr << "Adding (1) " << bin2 << "-" << bin1 << " to matrix " << interval2.chrId << "-" << interval1.chrId << "\n";
+      //Rcerr << "\t\tInt 2 ["  << intervalId2 << "]: " << interval2.chrId << ": " << interval2.start << "-" << interval2.end << "\n";
+      if (interval1.chrId < interval2.chrId) Rcerr << "Problem in 'updateMatrices': [" << intervalId1 << "] " << interval1 << ", [" << intervalId2 << "] " << interval2 << "\n";
+      if (interval1.chrId > interval2.chrId) {
+        if (validMatrices.find(getKey(interval1.chrId, interval2.chrId)) != validMatrices.end()) {
+          for (uint32_t bin1 = interval1.start; bin1 <= interval1.end; ++bin1) {
+            for (uint32_t bin2 = interval2.start; bin2 <= interval2.end; ++bin2) {
+              matrices[getKey(interval1.chrId, interval2.chrId)].addElement(bin1, bin2);
+              //Rcerr << "Adding (2) " << bin1 << "-" << bin2 << " to matrix " << interval1.chrId << "-" << interval2.chrId << "\n";
             }
           }
         }
-        //else { Rcerr << "1: " << interval2.chrId << "-" << interval1.chrId << " does not fit.\n"; }
+        //else { Rcerr << "2: " << interval1.chrId << "-" << interval2.chrId << " does not fit.\n"; }
       }
       else {
         if (validMatrices.find(getKey(interval1.chrId, interval2.chrId)) != validMatrices.end()) {
           for (uint32_t bin1 = interval1.start; bin1 <= interval1.end; ++bin1) {
             for (uint32_t bin2 = interval2.start; bin2 <= interval2.end; ++bin2) {
-              if ((interval1.chrId == interval2.chrId) && (bin2 > bin1)) {
-                matrices[getKey(interval1.chrId, interval2.chrId)].addElement(bin2, bin1);
-              }
-              else {
-                matrices[getKey(interval1.chrId, interval2.chrId)].addElement(bin1, bin2);
-              }
+              matrices[getKey(interval1.chrId, interval2.chrId)].addElement(std::max<uint32_t>(bin1, bin2), std::min<uint32_t>(bin1, bin2));
               //Rcerr << "Adding (2) " << bin1 << "-" << bin2 << " to matrix " << interval1.chrId << "-" << interval2.chrId << "\n";
             }
           }
@@ -135,8 +142,8 @@ void updateMatrices(std::unordered_map < uint64_t, SparseMatrix > &matrices,
 
 // [[Rcpp::export]]
 List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount, int minNCells) {
-  int nChrs = 0;
-  std::unordered_map <std::string, int> chrIds;
+  uint32_t nChrs = 0;
+  std::unordered_map <std::string, uint32_t> chrIds;
   std::unordered_map < uint64_t, int > matrixCounts;
   std::unordered_set < uint64_t > validMatrices;
   std::unordered_map < uint64_t, SparseMatrix > matrices;
@@ -155,11 +162,11 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
   // First pass: get the size of the chromosomes, count the number of reads per matrix
   for (nLines = 0; std::getline(infile, line); ++nLines) {
     std::string chr, readName;
-    int chrId;
-    long start, end, size, dummyLong;
+    uint32_t chrId;
+    uint32_t start, end, size, dummyLong;
     char strand;
     std::istringstream iss(line);
-    if (nLines % 10000000 == 0) {
+    if (nLines % 1000000 == 0) {
       Rcerr << "\t" << nLines << " lines read.\n";
     }
     if (! (iss >> readName)) {
@@ -200,7 +207,7 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
       chrSizes.push_back(end, chr);
       //Rcerr << "new " << chr << " => " << chrId << "\n";
     }
-    else if (end > chrSizes[chrIt->second]) {
+    else if (end > static_cast<uint32_t>(chrSizes[chrIt->second])) {
       chrId = chrIt->second;
       chrSizes[chrId] = end;
     }
@@ -212,7 +219,7 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
       intervals.clear();
       currentReadName = readName;
     }
-    if (size >= minAlnLen) {
+    if (size >= static_cast<uint32_t>(minAlnLen)) {
       //Rcerr << "adding " << chrId << "\n";
       ++nLongEnough;
       intervals.emplace_back(chrId, start, end);
@@ -236,12 +243,12 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
   currentReadName.clear();
   infile.clear();
   infile.seekg(0);
-  long previousSize = 0;
+  uint32_t previousSize = 0;
   Progress progress(nLines, true);
   while(std::getline(infile, line)) {
     std::string chr, readName;
-    int chrId;
-    long start, end, size, dummyLong;
+    uint32_t chrId;
+    uint32_t start, end, size, dummyLong;
     char strand;
     std::istringstream iss(line);
     iss >> readName >> dummyLong >> dummyLong >> dummyLong >> strand >> chr >> dummyLong >> start >> end;
@@ -258,7 +265,7 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
       intervals.clear();
       currentReadName = readName;
     }
-    if (size >= minAlnLen) {
+    if (size >= static_cast<uint32_t>(minAlnLen)) {
       intervals.emplace_back(chrId, start, end);
     }
     previousSize = size;
@@ -269,11 +276,9 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
   for (auto chrId: chrIds) {
     chrs[chrId.second] = chrId.first;
   }
-  int nMatrices = 0;
+  Rcerr << "Merging matrices.\n";
+  Progress progress2(matrices.size(), true);
   for (auto &matrixId: matrices) {
-    if (nMatrices % 100000 == 0) {
-      Rcerr << "Exporting matrix # " << nMatrices << " / " << matrices.size() << "\n";
-    }
     uint32_t chrId1 = getFirstKey(matrixId.first);
     uint32_t chrId2 = getSecondKey(matrixId.first);
     SparseMatrix &matrix = matrixId.second;
@@ -298,7 +303,7 @@ List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount
       stdCounts.insert(stdCounts.end(), tmpCounts.begin(), tmpCounts.end());
     }
     //else { Rcerr << "Matrix has too few elements: " << matrix.getNElements() << "/" << minNCells << "\n"; }
-    ++nMatrices;
+    progress2.increment();
   }
   chrs1 = stdChrs1;
   chrs2 = stdChrs2;
