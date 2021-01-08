@@ -131,35 +131,54 @@ checkBreaks <- function(object, kr = TRUE, md = TRUE, diag = TRUE) {
                 plot3 = map(breaks, "plot3")))
 }
 
+estimateBreakThreshold <- function(object, breaks, pvalue) {
+    object@parameters@breakThreshold <- breaks %>%
+        filter(nCells == object@parameters@breakNCells) %>%
+        mutate(absFcMeanCount = abs(fcMeanCount)) %>%
+        arrange(desc(absFcMeanCount)) %>%
+        mutate(class = if_else(fcMeanCount >= 0, 1, 0)) %>%
+        mutate(cumSumClass = cumsum(class)) %>%
+        mutate(value = cumSumClass / max(cumSumClass)) %>%
+        filter(class == 0) %>%
+        filter(value <= pvalue) %>%
+        tail(n = 1) %>%
+        pull(fcMeanCount)
+    return(object)
+}
+
 filterBreak <- function(parameters) {
+    maxNBreaks <- 1000
     bins <- c()
     plot1 <- c()
     reference <- parameters$ref
     objectRef <- parameters$object
     breaksRef <- parameters$breaks
     originalBreakRef <- breaksRef
+    breaksRef <- breaksRef %>%
+        filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
+        filter(nCells      >= objectRef@parameters@breakNCells) %>%
+        filter(bin         >= objectRef@parameters@maxLinkRange) %>%
+        filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange)
     repeat {
         breakPointBin <- breaksRef %>%
-            filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
-            filter(bin         >= objectRef@parameters@maxLinkRange) %>%
-            filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange) %>%
-            filter(nCells      >= objectRef@parameters@breakNCells) %>%
             arrange(fcMeanCount, desc(nCells)) %>%
             slice(1) %>%
             pull(bin)
         if (length(breakPointBin) == 0) {
-            if (length(bins) >= 1000) {
-                stop(paste0("Found ", length(bins), " filtered breaks in ref '",
-                               as.character(reference),
-                               "'.  This is probably too much, please decrease ",
-                               "'object@parameters@breakThreshold'.")) 
-            }
             return(list(ref   = as.character(reference),
                         bins  = bins,
                         plot1 = plotTriangles(originalBreakRef, bins),
                         plot2 = plot.10XRef(objectRef, TRUE, bins)))
         }
         bins <- c(bins, breakPointBin)
+        if (length(bins) >= maxNBreaks) {
+            stop(paste0("Found more than ",
+                        maxNBreaks,
+                        " filtered breaks in ref '",
+                        as.character(reference),
+                        "'.  This is probably too much, please decrease ",
+                        "'object@parameters@breakThreshold'.")) 
+        }
         breakPointBin <- breakPointBin[[1]]
         breaksRef %<>%
             filter(abs(breakPointBin - bin) >= objectRef@parameters@maxLinkRange)
@@ -170,11 +189,7 @@ filterBreaks <- function(object, breaks) {
     if (length(breaks) == 0) {
         return(list())
     }
-    selectedBreaks <- breaks %>%
-        filter(fcMeanCount <= object@parameters@breakThreshold)
-        # TODO: find a better filter here?
-        #filter(nCells      >= object@parameters@breakNCells) %>%
-    selectedRefs <- selectedBreaks %>%
+    selectedRefs <- breaks %>%
         dplyr::select(ref) %>%
         distinct() %>%
         pull() %>%
@@ -184,7 +199,7 @@ filterBreaks <- function(object, breaks) {
         return(list(breaks = c(), plots = c()))
     }
     splitObject <- splitByRef(object)[selectedRefs]
-    splitBreaks <- selectedBreaks %>%
+    splitBreaks <- breaks %>%
         group_by(ref) %>%
         group_split()
     functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
