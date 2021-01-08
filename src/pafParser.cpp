@@ -141,7 +141,7 @@ void updateMatrices(std::unordered_map < uint64_t, SparseMatrix > &matrices,
 }
 
 // [[Rcpp::export]]
-List parsePafCpp(std::string &fname, int resolution, int minAlnLen, int minCount, int minNCells) {
+List parsePafCpp(std::string &fname, uint32_t resolution, int minAlnLen, int minCount, int minNCells) {
   uint32_t nChrs = 0;
   std::unordered_map <std::string, uint32_t> chrIds;
   std::unordered_map < uint64_t, int > matrixCounts;
