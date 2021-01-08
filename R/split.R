@@ -40,8 +40,8 @@ splitChromosomes <- function(object, splitPoints) {
     newChromosomes    <- paste0("new_chr_", seq.int(nrow(splitPoints)))
     splitPoints       <- splitPoints %>% mutate(newChromosome = newChromosomes)
     nSplits           <- nrow(splitPoints)
+    pb <- progress_bar$new(total = nSplits)
     for (nSplit in seq.int(to = nSplits)) {
-        message(paste0("  Splitting point ", nSplit, "/", nSplits, ": ", splitPoints$ref[[nSplit]]))
         newChromosome <- paste0("new_chr_", nSplit)
         out <- splitChromosome(interactionMatrix,
                                sizes,
@@ -50,6 +50,7 @@ splitChromosomes <- function(object, splitPoints) {
                                splitPoints$newChromosome[[nSplit]])
         interactionMatrix <- out$interactionMatrix
         sizes             <- out$sizes
+        pb$tick()
     }
     object@sizes                 <- sizes
     object@interactionMatrix     <- interactionMatrix
