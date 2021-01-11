@@ -52,21 +52,22 @@ splitBy2Ref <- function(object) {
 }
 
 computeRefSizes <- function(object) {
-    bind_rows(object@interactionMatrix %>%
-                  dplyr::select(c(ref1, bin1)) %>%
-                  group_by(ref1) %>%
-                  summarise(size = max(bin1)) %>%
-                  ungroup() %>%
-                  dplyr::rename(ref = ref1),
-              object@interactionMatrix %>%
-                  dplyr::select(c(ref2, bin2)) %>%
-                  group_by(ref2) %>%
-                  summarise(size = max(bin2)) %>%
-                  ungroup() %>%
-                  dplyr::rename(ref = ref2)) %>%
-        group_by(ref) %>%
-        summarise(size = max(size)) %>%
-        deframe()
+    # bind_rows(object@interactionMatrix %>%
+    #               dplyr::select(c(ref1, bin1)) %>%
+    #               group_by(ref1) %>%
+    #               summarise(size = max(bin1)) %>%
+    #               ungroup() %>%
+    #               dplyr::rename(ref = ref1),
+    #           object@interactionMatrix %>%
+    #               dplyr::select(c(ref2, bin2)) %>%
+    #               group_by(ref2) %>%
+    #               summarise(size = max(bin2)) %>%
+    #               ungroup() %>%
+    #               dplyr::rename(ref = ref2)) %>%
+    #     group_by(ref) %>%
+    #     summarise(size = max(size)) %>%
+    #     deframe()
+    return(computeRefSizesCpp(object@interactionMatrix))
 }
 
 isMatrixEmpty <- function(data) {
