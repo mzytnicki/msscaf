@@ -208,7 +208,7 @@ tenxcheckerExp <- function(data = NULL) {
     object@parameters@pvalueThreshold <- 1e-4
     object@parameters@nBinZoom        <- 100
 
-    if (! is.null(object@sizes)) {
+    if (is.null(object@sizes)) {
         object@sizes <- computeRefSizes(object)
     }
     
