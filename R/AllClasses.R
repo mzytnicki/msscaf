@@ -20,8 +20,7 @@
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
-                                            minCount        = "ANY",
+setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             minRowCount     = "ANY",
                                             binSize         = "ANY",
                                             sampleSize      = "ANY",
@@ -30,7 +29,6 @@ setClass("tenxcheckerParameters", slots = c(minNBins        = "ANY",
                                             breakNCells     = "ANY", 
                                             maxLinkRange    = "ANY", 
                                             nRandomizations = "ANY", 
-                                            pvalueThreshold = "ANY", 
                                             nBinZoom        = "ANY")
 )
 
@@ -97,11 +95,21 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     if (any(colnames(inputMatrix) != c("ref1", "bin1", "ref2", "bin2", "count"))) {
         stop("'inputMatrix' names are incorrect", call. = FALSE)
     }
+    if ((! is.factor(inputMatrix$ref1)) | (! is.factor(inputMatrix$ref2))) {
+        stop("References should be factors.", call. = FALSE)
+    }
     
     ##- parameters
     
     
     ##- end checking ---------------------------------------------------------#
+
+    if (! identical(levels(inputMatrix$ref1), levels(inputMatrix$ref2))) {
+        stop("Levels of the references should be identical.")
+    }
+    if (! identical(names(sizes), levels(inputMatrix$ref1))) {
+        stop("Names of the sizes of chromosomes should match with the names of the matrix.")
+    }
 
     # Convert "diagonal matrices" to upper matrices
     diagonalData <- inputMatrix %>%
@@ -122,9 +130,31 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     object@binSize      <- binSize
     object@maxLinkRange <- maxLinkRange
     object@sizes        <- sizes
+
+    chromosomes <- mixedsort(levels(object@inputMatrix$ref1))
+    object@inputMatrix <- object@inputMatrix %>%
+        mutate(ref1 = fct_relevel(ref1, chromosomes)) %>%
+        mutate(ref2 = fct_relevel(ref2, chromosomes))
+    if (is.null(object@sizes)) {
+        object@sizes <- computeRefSizes(object)
+    }
+    object@sizes <- object@sizes[mixedsort(names(object@sizes))]
     
     return(invisible(object))
 }
+
+setClass("tenxcheckerBreaks", slots = c(data            = "ANY",
+                                        filteredData    = "ANY",
+                                        changePlots     = "ANY",
+                                        changeDistPlots = "ANY",
+                                        mapPlots        = "ANY")
+)
+
+setClass("tenxcheckerJoins", slots = c(data      = "ANY",
+                                       testPlots = "ANY",
+                                       mapPlots  = "ANY")
+)
+
 
 ###############################################################################
 ### tenxchecker S4 class definition
@@ -148,13 +178,45 @@ tenxcheckerData <- function(inputMatrix  = NULL,
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
-                                     chromosomes        = "ANY",
-                                     sizes              = "ANY",
-                                     lowCounts          = "ANY",
-                                     newChromosomes     = "ANY",
-                                     mergedChromosomes  = "ANY",
-                                     parameters         = "ANY")
+setClass("tenxcheckerExp", slots = c(interactionMatrix = "ANY",
+                                     name              = "ANY",
+                                     parameters        = "ANY",
+                                     breaks            = "ANY",
+                                     joins             = "ANY")
+)
+
+
+###############################################################################
+### tenxchecker S4 class definition
+###############################################################################
+#' Infrastructure for tenxchecker experiment and differential interaction
+#'
+#' \code{tenxchecker} is an S4 class providing the infrastructure (slots)
+#' to store the input data, methods parameters, intermediate calculations
+#' and results of a differential interaction pipeline
+#'
+#' @details \code{tenxchecker} does this and that...
+#' TODO
+#'
+#' @name tenxcheckerExp
+#' @rdname tenxcheckerExp
+#' @docType class
+#' @aliases tenxcheckerExp tenxcheckerExp-class
+#'
+#' @slot data  The input matrix
+#' @slot parameters   An named \code{list}. The parameters for the
+#'                    segmentation methods. See \code{\link{parameters}}.
+#'
+#' @export
+setClass("tenxcheckerClass", slots = c(data               = "ANY",
+                                       binSize            = "ANY",
+                                       minNBins           = "ANY",
+                                       chromosomes        = "ANY",
+                                       sizes              = "ANY",
+                                       breaks             = "ANY",
+                                       joins              = "ANY",
+                                       newChromosomes     = "ANY",
+                                       mergedChromosomes  = "ANY")
 )
 
 
@@ -171,47 +233,97 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix  = "ANY",
 #' @examples
 #'
 #' @export
-tenxcheckerExp <- function(data = NULL) {
+tenxchecker <- function(binSize, minNBins = 20) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
-    
-    ##- dataSet
-    
-    ##- parameters
-    
+    if (!is.numeric(binSize)) {
+        stop("'bin size' should be numeric.")
+    }
     
     ##- end checking ---------------------------------------------------------#
     
-    object <- new("tenxcheckerExp")
-    object@parameters <- new("tenxcheckerParameters")
-    object@interactionMatrix       <- data@inputMatrix
-    object@parameters@binSize      <- data@binSize
-    object@parameters@maxLinkRange <- data@maxLinkRange
-    object@sizes                   <- data@sizes
-    
-    object@chromosomes <- mixedsort(unique(c(as.vector(object@interactionMatrix$ref1), as.vector(object@interactionMatrix$ref2))))
-    object@interactionMatrix <- object@interactionMatrix %>%
-        mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
-        mutate(ref2 = factor(ref2, levels = object@chromosomes))
+    object <- new("tenxcheckerClass")
+    object@binSize           <- binSize
+    object@minNBins          <- minNBins
+    object@data              <- c()
+    object@breaks            <- NULL
+    object@joins             <- NULL
+    object@chromosomes       <- NULL
     object@newChromosomes    <- c()
     object@mergedChromosomes <- c()
-    
-    object@parameters@sampleSize      <- 10000
-    object@parameters@loessSpan       <- 0.5
-    object@parameters@minNBins        <- 20
-    object@parameters@minCount        <- 3
-    object@parameters@minRowCount     <- 100
-    object@parameters@breakThreshold  <- -1
-    object@parameters@breakNCells     <- 100
-    object@parameters@nRandomizations <- 10
-    object@parameters@pvalueThreshold <- 1e-4
-    object@parameters@nBinZoom        <- 100
 
-    if (is.null(object@sizes)) {
-        object@sizes <- computeRefSizes(object)
-    }
+    return(invisible(object))
+}
+
+##- add experiment -----------------------------------------------------------#
+##----------------------------------------------------------------------------#
+#' @param data A \code{tenxcheckerData}
+#'
+#' @return An \code{tenxcheckerExp}
+#'
+#' @examples
+#'
+#' @export
+addExp <- function(object, data, expName) {
     
+    ##- checking general input arguments -------------------------------------#
+    ##------------------------------------------------------------------------#
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Input should be 'tenxcheckerClass'.")
+    }
+    if (! is(data, "tenxcheckerData")) {
+        stop("Input should be 'tenxcheckerData'.")
+    }
+    if (! is.character(expName)) {
+        stop("Name should be character.")
+    }
+    if (length(expName) != 1) {
+        stop("Name should have size 1.")
+    }
+    if (expName %in% names(object@data)) {
+        stop("Name is already used.  Please choose another one.")
+    }
+    ##- end checking ---------------------------------------------------------#
+
+
+    if (length(object@data) == 0) {
+        object@chromosomes <- levels(data@inputMatrix$ref1)
+        object@sizes       <- data@sizes
+    }
+    else {
+        refTrans           <- mergeRefs(object@chromosomes, levels(data@inputMatrix$ref1))
+        object@chromosomes <- mixedsort(refTrans$all)
+        object@sizes       <- mergeSizes(object@sizes, data@sizes, refTrans)
+        object             <- updateRefs(object, refTrans)
+    }
+
+    parameters <- new("tenxcheckerParameters")
+    parameters@binSize         <- data@binSize
+    parameters@sampleSize      <- 10000
+    parameters@loessSpan       <- 0.5
+    parameters@minCount        <- 3
+    parameters@minRowCount     <- 100
+    parameters@breakThreshold  <- -1
+    parameters@breakNCells     <- 100
+    parameters@nRandomizations <- 10
+    parameters@nBinZoom        <- 100
+
+    newData <- new("tenxcheckerExp")
+    newData@interactionMatrix <- data@inputMatrix
+    newData@name              <- expName
+    newData@parameters        <- parameters
+    newData@breaks            <- NULL
+
+    if (length(object@data) != 0) {
+        refTrans <- refTrans %>%
+            dplyr::select(all, name2) %>%
+            dplyr::rename(new = all) %>%
+            dplyr::rename(old = name2)
+        newData <- updateRefsMatrices(newData, refTrans)
+    }
+    object@data <- c(object@data, newData)
+
     return(invisible(object))
 }
 
@@ -271,6 +383,15 @@ tenxcheckerRefExp <- function(matrix     = NULL,
     }
     if (!is_tibble(matrix)) {
         stop("'matrix' should be a tibble", call. = FALSE)
+    }
+    if (is.null(chromosome) | is.na(chromosome)) {
+        stop("'chromosome' must be specified", call. = FALSE)
+    }
+    if (is.null(size) | is.na(size)) {
+        stop(paste0("'size' must be specified for ref ", chromosome), call. = FALSE)
+    }
+    if (is.null(parameters) | is.na(parameters)) {
+        stop("'parameters' must be specified", call. = FALSE)
     }
     
     ##- parameters

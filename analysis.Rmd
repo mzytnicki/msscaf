@@ -472,7 +472,8 @@ cut -f 1-2 /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa.fai > /Scratch/mazytni
 ~/Apps/samtools-1.10/samtools view -c /Scratch/mazytnicki/Mother_1/possorted_bam.bam
 # 1590040440
 
-./checkBreaks /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len breaks_hic.tsv 100000 10000 predicted.out putative.out > d
+../CheckScaffolding/checkBreaks /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len breaks_hic.tsv 100000 10000 predicted.out putative.out > difference_breaks_hic.txt
+../CheckScaffolding/checkBreaks /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len breaks_ont.tsv 100000 10000 predicted.out putative.out > difference_breaks_ont.txt
 
 ./checkJoins /Scratch/mazytnicki/Mother_1/mapping.paf joins.txt 10000 10000
 
@@ -520,11 +521,13 @@ plot.10X(hicObject)
 library("devtools")
 library("magrittr")
 library("tidyverse")
-library("BiocParallel")
-register(MulticoreParam(workers = 10), default = TRUE)
+#library("BiocParallel")
+#register(MulticoreParam(workers = 10), default = TRUE)
 devtools::load_all(".")
 bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam.bam"
-bamData           <- parseBamFile(bamFileName, 10000, 12)
+#bamFileName <- "/Scratch/mazytnicki/verySmallTest.bam"
+bamData           <- parseBamFile(bamFileName, 10000)
+gc()
 bamObject         <- tenxcheckerExp(bamData)
 #plotBackgroundCountDistribution(bamObject)
 #plotMoleculeSizeDistribution(bamObject)
@@ -537,14 +540,18 @@ bamObject@parameters@minNBins <- 2
 bamObject@parameters@maxLinkRange   <- 10
 bamObject@parameters@breakThreshold <- -3
 bamObject@parameters@breakNCells <- 0.75 * ((bamObject@parameters@maxLinkRange * (bamObject@parameters@maxLinkRange + 1)) / 2)
+gc()
 bamObject         <- cleanData(bamObject)
+gc()
 bamBreaks         <- checkBreaks(bamObject)
+bamObject         <- estimateBreakThreshold(bamObject, bamBreaks$data, 0.05)
 filteredBamBreaks <- filterBreaks(bamObject, bamBreaks$data)
 bamObject <- splitChromosomes(bamObject, filteredBamBreaks$breaks)
+gc()
 joins <- checkJoins(bamObject)
+gc()
 joins <- filterJoins(bamObject, joins)
 bamObject <- scaffold(bamObject, joins)
-plot.10X(object)
 ```
 
 ```{r}
@@ -560,7 +567,7 @@ ontData <- parsePafFile(ontFileName, 10000, 500, 10, 10)
 ontObject <- tenxcheckerExp(ontData)
 ontObject <- estimateDistributions(ontObject)
 ontObject@parameters@minCount <- 2
-ontObject@parameters@minRowCount <- 2
+ontObject@parameters@minRowCount <- 10
 ontObject@parameters@minNBins <- 2
 plotBackgroundCountDistribution(ontObject)
 plotMoleculeSizeDistribution(ontObject)
@@ -568,10 +575,53 @@ plotRowCountDistribution(ontObject)
 ontObject <- cleanData(ontObject)
 ontBreaks <- checkBreaks(ontObject, FALSE, FALSE, TRUE)
 ontObject@parameters@maxLinkRange <- 2
+ontObject@parameters@breakNCells <- 3
+ontObject@parameters@breakThreshold <- -5
+ontObject <- estimateBreakThreshold(ontObject, ontBreaks$data, 0.05)
 filteredOntBreaks <- filterBreaks(ontObject, ontBreaks$data)
-filteredHicBreaks$breaks %>% mutate(pos = bin * hicObject@parameters@binSize) %>% mutate(ref = str_to_lower(ref)) %>% select(ref, pos) %>% write_tsv("breaks_hic.tsv", col_names = FALSE)
+filteredOntBreaks$breaks %>% mutate(pos = bin * ontObject@parameters@binSize) %>% mutate(ref = str_to_lower(ref)) %>% select(ref, pos) %>% write_tsv("breaks_ont.tsv", col_names = FALSE)
 ontObject <- splitChromosomes(ontObject, filteredOntBreaks$breaks)
 joins <- checkJoins(ontObject)
 joins <- filterJoins(ontObject, joins)
 ontObject <- scaffold(ontObject, joins)
 ```
+
+```{r}
+library("devtools")
+library("magrittr")
+library("tidyverse")
+devtools::load_all(".")
+resolution  <- 10000
+hicFileName <- "/Scratch/mazytnicki/Mother_1/inter_30.hic"
+hicData     <- parseHicFile(hicFileName, resolution)
+gc()
+ontFileName <- "/Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf"
+ontData     <- parsePafFile(ontFileName, resolution, 500, 10, 10)
+gc()
+bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam.bam"
+bamData     <- parseBamFile(bamFileName, resolution)
+gc()
+allObject <- tenxchecker(resolution)
+allObject <- addExp(allObject, ontData, "ONT")
+allObject <- addExp(allObject, hicData, "HiC")
+allObject <- addExp(allObject, bamData, "10X")
+allObject <- estimateDistributions(allObject)
+allObject@data[[1]]@parameters@minCount       <- 3
+allObject@data[[1]]@parameters@maxLinkRange   <- 500
+allObject@data[[1]]@parameters@minRowCount    <- 10
+allObject@data[[1]]@parameters@loessSpan      <- 0.5
+allObject@data[[1]]@parameters@maxLinkRange   <- 2
+allObject@data[[1]]@parameters@breakNCells    <- 3
+allObject@data[[1]]@parameters@breakThreshold <- -5
+allObject@data[[2]]@parameters@minCount       <- 2
+allObject@data[[2]]@parameters@minRowCount    <- 10
+allObject@data[[2]]@parameters@breakNCells    <- 30
+allObject <- cleanData(allObject)
+allObject <- findBreaks(allObject, 0.05)
+allObject <- splitChromosomes(allObject)
+allObject <- findJoins(allObject, 0.05)
+```
+
+```{bash}
+# From tapou
+~/Desktop/Apps/quast-5.0.2/quast-lg.py /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa -r /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz -t 6 -o /home/mazytnicki/Desktop/Projects/Other/Assembly/Quast/

@@ -7,15 +7,25 @@
 using namespace Rcpp;
 
 // parseBamFileCpp
-List parseBamFileCpp(String fileName, int32_t binSize, int nThreads);
-RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP, SEXP nThreadsSEXP) {
+List parseBamFileCpp(String fileName, int32_t binSize);
+RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< String >::type fileName(fileNameSEXP);
     Rcpp::traits::input_parameter< int32_t >::type binSize(binSizeSEXP);
-    Rcpp::traits::input_parameter< int >::type nThreads(nThreadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(parseBamFileCpp(fileName, binSize, nThreads));
+    rcpp_result_gen = Rcpp::wrap(parseBamFileCpp(fileName, binSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// computeRefSizesCpp
+IntegerVector computeRefSizesCpp(DataFrame& data);
+RcppExport SEXP _tenxchecker_computeRefSizesCpp(SEXP dataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeRefSizesCpp(data));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -57,15 +67,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // removeSmallScaffoldsCpp
-DataFrame removeSmallScaffoldsCpp(DataFrame& data, int nRefs, int threshold);
-RcppExport SEXP _tenxchecker_removeSmallScaffoldsCpp(SEXP dataSEXP, SEXP nRefsSEXP, SEXP thresholdSEXP) {
+DataFrame removeSmallScaffoldsCpp(DataFrame& data, CharacterVector keptRefs);
+RcppExport SEXP _tenxchecker_removeSmallScaffoldsCpp(SEXP dataSEXP, SEXP keptRefsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< int >::type nRefs(nRefsSEXP);
-    Rcpp::traits::input_parameter< int >::type threshold(thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(removeSmallScaffoldsCpp(data, nRefs, threshold));
+    Rcpp::traits::input_parameter< CharacterVector >::type keptRefs(keptRefsSEXP);
+    rcpp_result_gen = Rcpp::wrap(removeSmallScaffoldsCpp(data, keptRefs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -98,11 +107,12 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 3},
+    {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
+    {"_tenxchecker_computeRefSizesCpp", (DL_FUNC) &_tenxchecker_computeRefSizesCpp, 1},
     {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
     {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
-    {"_tenxchecker_removeSmallScaffoldsCpp", (DL_FUNC) &_tenxchecker_removeSmallScaffoldsCpp, 3},
+    {"_tenxchecker_removeSmallScaffoldsCpp", (DL_FUNC) &_tenxchecker_removeSmallScaffoldsCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},
     {NULL, NULL, 0}

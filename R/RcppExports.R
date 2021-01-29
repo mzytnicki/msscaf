@@ -21,8 +21,8 @@ removeLowCountRowsCpp <- function(data, sizes, threshold) {
     .Call('_tenxchecker_removeLowCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes, threshold)
 }
 
-removeSmallScaffoldsCpp <- function(data, nRefs, threshold) {
-    .Call('_tenxchecker_removeSmallScaffoldsCpp', PACKAGE = 'tenxchecker', data, nRefs, threshold)
+removeSmallScaffoldsCpp <- function(data, keptRefs) {
+    .Call('_tenxchecker_removeSmallScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
 }
 
 parseHicCpp <- function(fname, resolution) {

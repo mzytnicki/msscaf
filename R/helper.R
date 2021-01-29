@@ -1,10 +1,95 @@
-splitByRef <- function(object) {
+# Add the new references to the previously seen references
+# Potentially change case
+# Return a tibble, where the r1 is the set of the previous refs,
+#    r2, the set of new refs
+#    all, the merged set
+mergeRefs <- function(refs1, refs2) {
+    # If one set is contained in the other one, get the biggest
+    # Or if the two sets are nearly the same, get the union
+    if ((all(refs2 %in% refs1)) |
+        (all(refs1 %in% refs2)) |
+        (length(intersect(refs1, refs2)) >= 0.8 * length(refs1))) {
+        r <- tibble(all = mixedsort(distinct(c(refs1, refs2)))) %>%
+            dplyr::mutate(r1 = if_else(all %in% refs1)) %>%
+            dplyr::mutate(r2 = if_else(all %in% refs2))
+        return(r)
+    }
+    # Tweak the case
+    r1 <- tibble(name1 = refs1, key = str_to_lower(refs1))
+    r2 <- tibble(name2 = refs2, key = str_to_lower(refs2))
+    r <- full_join(r1, r2, by = "key")
+    if (nrow(r) > 1.2 * length(refs1)) {
+        stop("Cannot merge references.\nPlease check that chromosomes are similar.")
+    }
+    r %>%
+        dplyr::mutate(all = if_else(is.na(name1), name2, name1)) %>%
+        dplyr::select(-key)
+}
+
+# Add the ref sizes to the previously ref sizes
+# Return the new merged set
+mergeSizes <- function(sizes1, sizes2, refs) {
+    if (is.null(sizes2)) {
+        return(sizes1)
+    }
+    sizes <- refs %>%
+        left_join(enframe(sizes1, name = "name1", value = "size1"), by = "name1") %>%
+        left_join(enframe(sizes2, name = "name2", value = "size2"), by = "name2") %>%
+        dplyr::mutate(size = pmax(size1, size2, na.rm = TRUE)) %>%
+	dplyr::select(c("all", "size")) %>%
+        tibble::deframe()
+    sizes <- sizes[mixedsort(names(sizes))]
+    return(sizes)
+}
+
+updateRefsMatrices <- function(object, translationTable) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerExp'.")
+    }
+    oldLevels <- tibble(old = levels(object@interactionMatrix$ref1))
+    newLevels <- oldLevels %>%
+        left_join(translationTable, by = "old") %>%
+        pull(new)
+    addLevels <- translationTable %>%
+        anti_join(oldLevels, by = "old") %>%
+        pull(new)
+    orderedLevels <- mixedsort(translationTable$new)
+    levels(object@interactionMatrix$ref1) <- newLevels
+    object@interactionMatrix$ref1 <- fct_expand(object@interactionMatrix$ref1, addLevels)
+    levels(object@interactionMatrix$ref1) <- orderedLevels
+    levels(object@interactionMatrix$ref2) <- newLevels
+    object@interactionMatrix$ref2 <- fct_expand(object@interactionMatrix$ref2, addLevels)
+    levels(object@interactionMatrix$ref2) <- orderedLevels
+    return(object)
+}
+
+updateRefs <- function(object, translationTable) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Object should be a 'tenxcheckerClass'.")
+    }
+    translationTable <- translationTable %>%
+        dplyr::select(all, name1) %>%
+        dplyr::rename(new = all) %>%
+        dplyr::rename(old = name1)
+    object@data <- map(object@data, updateRefsMatrices, translationTable = translationTable)
+    return(object)
+}
+
+normalizeRefs <- function(object) {
+    levels(object@interactionMatrix$ref1) <- stringr::str_to_lower(levels(object@interactionMatrix$ref1))
+    levels(object@interactionMatrix$ref2) <- stringr::str_to_lower(levels(object@interactionMatrix$ref2))
+    object@chromosomes <- stringr::str_to_lower(object@chromosomes)
+    names(object@sizes) <- stringr::str_to_lower(names(object@sizes))
+    return(object)
+}
+
+splitByRef <- function(object, chromosomes, sizes) {
     data <- object@interactionMatrix %>%
         filter(ref1 == ref2) %>%
         dplyr::select(-ref2) %>%
         split(.$ref1) %>%
         map(~ dplyr::select(.x, -ref1))
-    pmap(list(data, object@chromosomes, object@sizes),
+    pmap(list(data, chromosomes, sizes),
          tenxcheckerRefExp,
          parameters = object@parameters)
 }
@@ -17,11 +102,14 @@ extractRef <- function(object, ref) {
     return(tenxcheckerRefExp(data, ref, object@sizes[[ref]], object@parameters))
 }
 
-create2Ref <- function(data, object = object) {
+create2Ref <- function(data, object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerExp'.")
+    }
     ref1  <- as.character(data$ref1[[1]])
     ref2  <- as.character(data$ref2[[1]])
-    size1 <- object@sizes[[ref1]]
-    size2 <- object@sizes[[ref2]]
+    size1 <- sizes[[ref1]]
+    size2 <- sizes[[ref2]]
     return(tenxchecker2RefExp(data %>% dplyr::select(-c(ref1, ref2)),
                               ref1,
                               ref2,
@@ -30,7 +118,10 @@ create2Ref <- function(data, object = object) {
                               object@parameters))
 }
 
-splitBy2Ref <- function(object) {
+splitBy2Ref <- function(object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerExp'.")
+    }
     pairs <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
@@ -48,25 +139,10 @@ splitBy2Ref <- function(object) {
         group_split() %>%
         map(~ dplyr::select(.x, -ref1_ref2))
     names(data) <- pairs
-    lapply(data, create2Ref, object = object)
+    lapply(data, create2Ref, object = object, sizes = sizes)
 }
 
 computeRefSizes <- function(object) {
-    # bind_rows(object@interactionMatrix %>%
-    #               dplyr::select(c(ref1, bin1)) %>%
-    #               group_by(ref1) %>%
-    #               summarise(size = max(bin1)) %>%
-    #               ungroup() %>%
-    #               dplyr::rename(ref = ref1),
-    #           object@interactionMatrix %>%
-    #               dplyr::select(c(ref2, bin2)) %>%
-    #               group_by(ref2) %>%
-    #               summarise(size = max(bin2)) %>%
-    #               ungroup() %>%
-    #               dplyr::rename(ref = ref2)) %>%
-    #     group_by(ref) %>%
-    #     summarise(size = max(size)) %>%
-    #     deframe()
     return(computeRefSizesCpp(object@interactionMatrix))
 }
 

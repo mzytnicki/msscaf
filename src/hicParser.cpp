@@ -1,5 +1,4 @@
 // [[Rcpp::depends(RcppProgress)]]
-//#include <chrono>
 #include <progress.hpp>
 #include <progress_bar.hpp>
 
@@ -130,7 +129,6 @@ void readHeader(std::istream& fin, hicInfo &info) {
         int length;
         getline(fin, name, '\0');
         fin.read((char*) &length, sizeof(int));
-        //cout << "Chromosome " << name << " (" << chrTypes.size() << "): " << length << "\n";
         info.chrs.push_back(name);
         info.chrLengths.push_back(length);
     }
@@ -371,12 +369,8 @@ void readFooter(std::istream& fin, hicInfo &info, outputStr &output) {
         int sizeinbytes;
         fin.read((char*)& sizeinbytes, sizeof(int));
         pos = fin.tellg();
-        //auto start = std::chrono::high_resolution_clock::now();
         //Rcerr << "  Reading matrix: " << str << ", " << fpos << ", " << sizeinbytes << ", " << pos << "\n";
         readMatrix(fin, fpos, sizeinbytes, info, output);
-        //auto stop = std::chrono::high_resolution_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start); 
-        //Rcerr << "  Reading matrix:  done in " << duration.count() << " ms\n";
         fin.seekg(pos, std::ios::beg);
     }
 }
@@ -414,11 +408,12 @@ List parseHicCpp(std::string &fname, int resolution) {
     if (info.firstChromosomeAll) {
         // the first chr can be 'ALL'; remove it
         info.chrs.erase(0);
+        info.chrLengths.erase(info.chrLengths.begin());
     }
     else {
         // factors start with in R
-        bins1 = bins1 - 1;
-        bins2 = bins2 - 1;
+        chrs1 = chrs1 - 1;
+        chrs2 = chrs2 - 1;
     }
     chrs1.attr("class") = "factor";
     chrs2.attr("class") = "factor";

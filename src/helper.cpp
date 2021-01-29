@@ -104,7 +104,7 @@ DataFrame removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int thre
         passedThreshold[i] = (colSums[i] >= threshold);
     }
     int nPassed = std::count(passedThreshold.begin(), passedThreshold.end(), true);
-    Rcerr << "Keeping " << nPassed << "/" << nElements << " rows.\n";
+    Rcerr << "\tKeeping " << nPassed << "/" << nElements << " rows.\n";
     std::vector < int > refs1C;
     std::vector < int > refs2C;
     std::vector < int > bins1C;
@@ -135,59 +135,48 @@ DataFrame removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int thre
 }
 
 // [[Rcpp::export]]
-DataFrame removeSmallScaffoldsCpp (DataFrame &data, int nRefs, int threshold) {
-    IntegerVector   tmp = data["ref1"];
-    CharacterVector refNames = tmp.attr("levels");
+DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
+    IntegerVector   tmpRefs1 = data["ref1"];
+    CharacterVector refNames = tmpRefs1.attr("levels");
+    int             nRefs    = refNames.size();
+    int             nKept    = keptRefs.size();
     std::vector < int > refs1  = as < std::vector < int > > (data["ref1"]);
     std::vector < int > refs2  = as < std::vector < int > > (data["ref2"]);
     std::vector < int > bins1  = as < std::vector < int > > (data["bin1"]);
     std::vector < int > bins2  = as < std::vector < int > > (data["bin2"]);
     std::vector < int > counts = as < std::vector < int > > (data["count"]);
-    std::vector < int > refMax (nRefs + 1, 0);               // factors (such as 'refs') start with 1 in R
-    std::vector < bool > passedThreshold (nRefs + 1, false);
-    int nElements, nPassed, previousNPassed = 0;
-    Rcerr << "Removing small scaffolds (currently: " << nRefs << ").\n";
-    // Do it several times, since deleting a ref can trigger another deletion
-    while (true) {
-        nElements = 0;
-        refMax.assign(nRefs + 1, 0); // factors (such as 'refs') start with 1 in R
-        for (size_t i = 0; i < refs1.size(); ++i) {
-            refMax[refs1[i]] = std::max<int>(bins1[i], refMax[refs1[i]]);
-            refMax[refs2[i]] = std::max<int>(bins2[i], refMax[refs2[i]]);
-        }
-        for (int i = 1; i <= nRefs; ++i) { // factors start with 1
-            passedThreshold[i] = (refMax[i] >= threshold);
-        }
-        nPassed = std::count(passedThreshold.begin(), passedThreshold.end(), true);
-        if ((nPassed == 0) || (nPassed == previousNPassed)) {
-            break;
-        }
-        // In-place update of the data
-        for (size_t i = 0; i < refs1.size(); ++i) {
-            if (passedThreshold[refs1[i]] && passedThreshold[refs2[i]]) {
-                refs1[nElements]  = refs1[i];
-                refs2[nElements]  = refs2[i];
-                bins1[nElements]  = bins1[i];
-                bins2[nElements]  = bins2[i];
-                counts[nElements] = counts[i];
-                ++nElements;
+    std::vector < bool > keptIds (nRefs + 1, false); // Levels start with 1 in R
+    int nElements = 0;
+    for (int i = 0; i < nRefs; ++i) {
+        for (int j = 0; j < nKept; ++j) {
+            if (refNames[i] == keptRefs[j]) {
+                keptIds[i+1] = true; // Levels start with 1 in R
+                break;
             }
         }
-        refs1.resize(nElements);
-        refs2.resize(nElements);
-        bins1.resize(nElements);
-        bins2.resize(nElements);
-        counts.resize(nElements);
-        previousNPassed = nPassed;
     }
+    // In-place update of the data
+    for (size_t i = 0; i < refs1.size(); ++i) {
+        if (keptIds[refs1[i]] && keptIds[refs2[i]]) {
+            refs1[nElements]  = refs1[i];
+            refs2[nElements]  = refs2[i];
+            bins1[nElements]  = bins1[i];
+            bins2[nElements]  = bins2[i];
+            counts[nElements] = counts[i];
+            ++nElements;
+        }
+    }
+    refs1.resize(nElements);
+    refs2.resize(nElements);
+    bins1.resize(nElements);
+    bins2.resize(nElements);
+    counts.resize(nElements);
     // Recompute factors for the refs
-    CharacterVector refNamesPassed (nPassed);
     std::vector < int > translateRefIds (nRefs + 1);
     int refId = 1;                     // factors start with 1
     for (int i = 1; i <= nRefs; ++i) { // factors start with 1
-        if (passedThreshold[i]) {
+        if (keptIds[i]) {
             // CharacterVector start with 0
-            refNamesPassed[refId - 1] = refNames[i - 1];
             translateRefIds[i] = refId;
             ++refId;
         }
@@ -203,9 +192,8 @@ DataFrame removeSmallScaffoldsCpp (DataFrame &data, int nRefs, int threshold) {
     IntegerVector countsR = wrap(counts);
     refs1R.attr("class") = "factor";
     refs2R.attr("class") = "factor";
-    refs1R.attr("levels") = refNamesPassed;
-    refs2R.attr("levels") = refNamesPassed;
+    refs1R.attr("levels") = keptRefs;
+    refs2R.attr("levels") = keptRefs;
     DataFrame outputData = Rcpp::DataFrame::create(_["ref1"]= refs1R, _["bin1"]= bins1R, _["ref2"]= refs2R, _["bin2"]= bins2R, _["count"]= countsR);
-    Rcerr << "Keeping " << nPassed << " big references.\n";
     return outputData;
 }

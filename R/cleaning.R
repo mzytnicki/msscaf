@@ -1,53 +1,45 @@
-removeSmallScaffolds <- function(object) {
-    object@interactionMatrix <- as_tibble(removeSmallScaffoldsCpp(object@interactionMatrix, length(object@chromosomes), object@parameters@minNBins))
-    object@chromosomes <- as.vector(mixedsort(unique(c(levels(object@interactionMatrix$ref1), levels(object@interactionMatrix$ref2)))))
-    object@sizes <- object@sizes[object@chromosomes]
+.removeSmallScaffolds <- function(object, keptRefs) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    object@interactionMatrix <- as_tibble(removeSmallScaffoldsCpp(object@interactionMatrix, keptRefs))
     return(object)
-#   message(paste0("Removing small scaffolds (currently: ", object@interactionMatrix %>% makeSymmetric() %>% dplyr::select(ref1) %>% distinct() %>% nrow() , ")."))
-#   changed <- TRUE
-#   while (changed) {
-#       previousChromosomes <- object@chromosomes
-#       bigRefs <- object@interactionMatrix %>%
-#           makeSymmetric() %>%
-#           group_by(ref1) %>%
-#           summarise(refSizes = max(bin1)) %>%
-#           ungroup() %>%
-#           filter(refSizes >= object@parameters@minNBins) %>%
-#           dplyr::select(ref1) %>%
-#           pull()
-#       object@chromosomes <- as.vector(mixedsort(unique(bigRefs)))
-#       object@interactionMatrix %<>%
-#           filter(ref1 %in% object@chromosomes, ref2 %in% object@chromosomes) %>%
-#           mutate(ref1 = droplevels(ref1)) %>%
-#           mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
-#           mutate(ref2 = droplevels(ref2)) %>%
-#           mutate(ref2 = factor(ref2, levels = object@chromosomes))
-#       changed <- (length(previousChromosomes) != length(object@chromosomes))
-#   }
-#   object@sizes <- object@sizes[object@chromosomes]
-#   message(paste0("Keeping ", length(object@chromosomes), " big references."))
-#   return(object)
+}
+
+removeSmallScaffolds <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message(paste0("Removing small scaffolds (currently: ", length(object@chromosomes), ")."))
+    object@chromosomes       <- names(object@sizes[object@sizes >= object@minNBins])
+    object@sizes             <- object@sizes[object@chromosomes]
+    object@data              <- map(object@data, .removeSmallScaffolds, keptRefs = object@chromosomes)
+    message(paste0("\tKeeping ", length(object@chromosomes), " scaffolds with at least ", object@minNBins, " bins."))
+    return(object)
+}
+
+.removeLowCountRows <- function(object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    message(paste0("Dataset '", object@name , "': Removing low counts rows."))
+    object@interactionMatrix <- as_tibble(removeLowCountRowsCpp(object@interactionMatrix, sizes, object@parameters@minRowCount))
+    return(object)
 }
 
 removeLowCountRows <- function(object) {
-    message("Removing low counts rows.")
-    object@interactionMatrix <- as_tibble(removeLowCountRowsCpp(object@interactionMatrix, object@sizes, object@parameters@minRowCount))
-#   nRows <- computeNRrows(object@interactionMatrix, object@sizes)
-#   object@lowCounts <- object@interactionMatrix %>%
-#       makeSymmetric() %>%
-#       group_by(ref1, bin1) %>%
-#       summarise(countSum = sum(count)) %>%
-#       ungroup() %>%
-#       filter(countSum < object@parameters@minRowCount)
-#   message(paste0("Removing ", nrow(object@lowCounts), " / ", nRows, " rows."))
-#   object@interactionMatrix <- object@interactionMatrix %>%
-#       anti_join(object@lowCounts, by = c("ref1" = "ref1", "bin1" = "bin1")) %>%
-#       anti_join(object@lowCounts, by = c("ref2" = "ref1", "bin2" = "bin1"))
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- map(object@data, .removeLowCountRows, sizes = object@sizes)
     return(object)
 }
 
-removeLowCount <- function(object) {
-    message("Removing low counts.")
+.removeLowCount <- function(object) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    message(paste0("Dataset '", object@name , "': Removing low counts."))
     nCells <- object@interactionMatrix %>%
         nrow()
     nLowCounts <- object@interactionMatrix %>%
@@ -55,7 +47,15 @@ removeLowCount <- function(object) {
         nrow()
     object@interactionMatrix %<>%
         filter(count >= object@parameters@minCount)
-    message(paste0("Removing ", nLowCounts, " / ", nCells, " cells."))
+    message(paste0("\tRemoved ", nLowCounts, " / ", nCells, " cells."))
+    return(object)
+}
+
+removeLowCount <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- map(object@data, .removeLowCount)
     return(object)
 }
 
@@ -67,8 +67,11 @@ removeFarFromDiagonal <- function(object) {
 }
 
 cleanData <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
     object <- removeLowCount(object)
     object <- removeLowCountRows(object)
     object <- removeSmallScaffolds(object)
-    return(object)
+    return(invisible(object))
 }

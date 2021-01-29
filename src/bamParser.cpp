@@ -242,6 +242,7 @@ void updateMatrixCounts(matrixCounts_t &matrixCounts, positions_t &positions, in
     }
 }
 
+/*
 void updateMatrices(matrices_t &matrices, positions_t &positions, validMatrices_t &validMatrices, indicesChr_t &indicesChr) {
     for (size_t positionId1 = 0; positionId1 < positions.size(); ++positionId1) {
         position_t &position1 = positions[positionId1];
@@ -257,9 +258,39 @@ void updateMatrices(matrices_t &matrices, positions_t &positions, validMatrices_
     }
     positions.clear();
 }
+*/
 
-void dump(matrix_t            &matrix,
-          size_t               chrId,
+void updateMatrices(matrices_t &matrices, positions_t &positions, uint64_t firstChrId, uint64_t lastChrId, indicesChr_t &indicesChr) {
+    for (size_t positionId1 = 0; positionId1 < positions.size(); ++positionId1) {
+        position_t &position1 = positions[positionId1];
+        //if (position1.start > position1.end) Rcerr << "Problem in 'updateMatrices': [" << positionId1 << "] " << position1 << "\n";
+        for (size_t positionId2 = 0; positionId2 <= positionId1; ++positionId2) {
+            position_t &position2 = positions[positionId2];
+            //if (position1.chrId < position2.chrId) Rcerr << "Problem in 'updateMatrices': [" << positionId1 << "] " << position1 << ", [" << positionId2 << "] " << position2 << "\n";
+            uint64_t chrId = indicesChr[position1.chrId][position2.chrId];
+            if ((firstChrId <= chrId) && (chrId < lastChrId)) {
+                ++matrices[chrId - firstChrId][getKey(position1.pos, position2.pos)];
+            }
+        }
+    }
+}
+
+void updateMatrix(matrix_t &matrix, positions_t &positions, uint64_t chrId, indicesChr_t &indicesChr) {
+    for (size_t positionId1 = 0; positionId1 < positions.size(); ++positionId1) {
+        position_t &position1 = positions[positionId1];
+        //if (position1.start > position1.end) Rcerr << "Problem in 'updateMatrices': [" << positionId1 << "] " << position1 << "\n";
+        for (size_t positionId2 = 0; positionId2 <= positionId1; ++positionId2) {
+            position_t &position2 = positions[positionId2];
+            //if (position1.chrId < position2.chrId) Rcerr << "Problem in 'updateMatrices': [" << positionId1 << "] " << position1 << ", [" << positionId2 << "] " << position2 << "\n";
+            if (chrId == indicesChr[position1.chrId][position2.chrId]) {
+                ++matrix[getKey(position1.pos, position2.pos)];
+            }
+        }
+    }
+}
+
+void dump(matrices_t          &matrices,
+          size_t               firstChrId,
           chrIndices_t        &chrIndices,
           std::vector < int > &stdChrs1,
           std::vector < int > &stdChrs2,
@@ -268,24 +299,36 @@ void dump(matrix_t            &matrix,
           std::vector < int > &stdCounts,
           unsigned int         minCount) {
     size_t chrId1, chrId2;
-    size_t nElements = matrix.size();
-    std::tie(chrId1, chrId2) = chrIndices[chrId];
-    std::vector < int > tmpChrs1(nElements, chrId1);
-    std::vector < int > tmpChrs2(nElements, chrId2);
-    std::vector < int > tmpBins1, tmpBins2, tmpCounts;
-    tmpBins1.reserve(nElements);
-    tmpBins2.reserve(nElements);
-    tmpCounts.reserve(nElements);
-    for (auto it = matrix.begin(); it != matrix.end(); ++it) {
-        tmpBins1.push_back(getFirstKey(it->first));
-        tmpBins2.push_back(getSecondKey(it->first));
-        tmpCounts.push_back(it->second);
+    for (size_t matrixId = 0; matrixId < matrices.size(); ++matrixId) {
+        matrix_t &matrix = matrices[matrixId];
+        size_t    chrId  = firstChrId + matrixId;
+        for (auto it = matrix.begin(); it != matrix.end(); ) {
+            if (it->second < minCount) {
+                it = matrix.erase(it);
+            }
+            else {
+                it++;
+            }
+        }
+        size_t nElements = matrix.size();
+        std::tie(chrId1, chrId2) = chrIndices[chrId];
+        std::vector < int > tmpChrs1(nElements, chrId1);
+        std::vector < int > tmpChrs2(nElements, chrId2);
+        std::vector < int > tmpBins1, tmpBins2, tmpCounts;
+        tmpBins1.reserve(nElements);
+        tmpBins2.reserve(nElements);
+        tmpCounts.reserve(nElements);
+        for (auto it = matrix.begin(); it != matrix.end(); ++it) {
+            tmpBins1.push_back(getFirstKey(it->first));
+            tmpBins2.push_back(getSecondKey(it->first));
+            tmpCounts.push_back(it->second);
+        }
+        stdChrs1.insert(stdChrs1.end(), tmpChrs1.begin(), tmpChrs1.end());
+        stdChrs2.insert(stdChrs2.end(), tmpChrs2.begin(), tmpChrs2.end());
+        stdBins1.insert(stdBins1.end(), tmpBins1.begin(), tmpBins1.end());
+        stdBins2.insert(stdBins2.end(), tmpBins2.begin(), tmpBins2.end());
+        stdCounts.insert(stdCounts.end(), tmpCounts.begin(), tmpCounts.end());
     }
-    stdChrs1.insert(stdChrs1.end(), tmpChrs1.begin(), tmpChrs1.end());
-    stdChrs2.insert(stdChrs2.end(), tmpChrs2.begin(), tmpChrs2.end());
-    stdBins1.insert(stdBins1.end(), tmpBins1.begin(), tmpBins1.end());
-    stdBins2.insert(stdBins2.end(), tmpBins2.begin(), tmpBins2.end());
-    stdCounts.insert(stdCounts.end(), tmpCounts.begin(), tmpCounts.end());
 }
 
 /*
@@ -335,9 +378,10 @@ void sortContacts (std::string &inputFileName, std::string &outputFileName) {
 */
 
 // [[Rcpp::export]]
-List parseBamFileCpp(String fileName, int32_t binSize, int nThreads) {
+List parseBamFileCpp(String fileName, int32_t binSize) {
     unsigned int minCount = 2;
     unsigned int minCountPerMatrix = 100;
+    unsigned int nMatricesPerBatch = 100000;
     //ProfilerStart("/tmp/profile.out");
     Rcout << "Reading " << fileName.get_cstring() << "\n";
     samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
@@ -410,9 +454,26 @@ List parseBamFileCpp(String fileName, int32_t binSize, int nThreads) {
     for (size_t i = 0; i < matrixCounts.size(); ++i) {
         validMatrices[i] = (matrixCounts[i] >= minCountPerMatrix);
     }
-    Rcout << "Found " <<
-        std::count(validMatrices.begin(), validMatrices.end(), true) <<
-            "/" << nMatrices << " valid matrices.  Filling matrices.\n";
+    size_t nValidMatrices = std::count(validMatrices.begin(), validMatrices.end(), true);
+    Rcout << "Found " << nValidMatrices << "/" << nMatrices << " valid matrices.  Filling them.\n";
+    std::vector < int > stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts;
+    Progress progress2(ceil(nValidMatrices / nMatricesPerBatch), true);
+    for (size_t matrixId = 0; matrixId < nMatrices; matrixId += nMatricesPerBatch) {
+        if (validMatrices[matrixId]) {
+            matrices_t matrices (nMatricesPerBatch);
+            for (auto &positions: positionss) {
+                updateMatrices(matrices, positions, matrixId, matrixId + nMatricesPerBatch, indicesChr);
+            }
+            //Rcout << "\tMatrix " << matrixId << " (" << chrIndices[matrixId].first << ", " << chrIndices[matrixId].second << "): " << matrix.size() << " elements.\n";
+            dump(matrices, matrixId, chrIndices, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount);
+            progress2.increment();
+        }
+    }
+    positionss.clear();
+    IntegerVector chrs1, chrs2;
+    IntegerVector bins1, bins2, counts;
+    Rcout << "Exporting.\n";
+    /*
     Progress progress2(positionss.size(), true);
     matrices_t matrices (nMatrices);
     for (auto &positions: positionss) {
@@ -427,6 +488,7 @@ List parseBamFileCpp(String fileName, int32_t binSize, int nThreads) {
     for (size_t i = 0; i < matrices.size(); ++i) {
         dump(matrices[i], i, chrIndices, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount);
     }
+    */
     chrs1 = stdChrs1;
     chrs2 = stdChrs2;
     bins1 = stdBins1;
@@ -439,7 +501,9 @@ List parseBamFileCpp(String fileName, int32_t binSize, int nThreads) {
     chrs1.attr("levels") = chrs;
     chrs2.attr("levels") = chrs;
     IntegerVector chrSizes;
-    chrSizes = sizes;
+    for (size_t i = 0; i < sizes.size(); ++i) {
+        chrSizes.push_back(sizes[i], as<std::string>(chrs[i]));
+    }
     DataFrame outputDataFrame = DataFrame::create(_["ref1"]  = chrs1,
                                                   _["bin1"]  = bins1,
                                                   _["ref2"]  = chrs2,

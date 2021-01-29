@@ -27,6 +27,9 @@ computeTest <- function(object, xmin, xmax, ymin, ymax, name) {
 }
 
 checkJoin <- function(object, progressBar) {
+    if (! is(object, "tenxchecker2RefExp")) {
+        stop("Parameter should be a 'tenxchecker2RefExp'.")
+    }
     # message(paste0("  Matrix ",
     #                object@chromosome1,
     #                "/",
@@ -74,49 +77,88 @@ checkJoin <- function(object, progressBar) {
                         dataUR$data,
                         dataBL$data,
                         dataBR$data)
-    plot1 <- ggplot(counts, aes(x = type, y = count)) + 
+    testPlot <- ggplot(counts, aes(x = type, y = count)) + 
         geom_boxplot() +
         geom_jitter() +
         scale_y_log10()
-    plot2 <- plot.10X2Ref(object,
+    mapPlot <- plot.10X2Ref(object,
                           x1 = firstLim1,
                           x2 = lastLim1,
                           y1 = firstLim2,
                           y2 = lastLim2)
     progressBar$tick()
-    return(list(ref1  = object@chromosome1,
-                ref2  = object@chromosome2,
-                plot1 = plot1,
-                plot2 = plot2,
-                tUL   = dataUL$test,
-                tUR   = dataUR$test,
-                tBL   = dataBL$test,
-                tBR   = dataBR$test))
+    return(list(ref1     = object@chromosome1,
+                ref2     = object@chromosome2,
+                testPlot = testPlot,
+                mapPlot  = mapPlot,
+                tUL      = dataUL$test,
+                tUR      = dataUR$test,
+                tBL      = dataBL$test,
+                tBR      = dataBR$test))
 }
 
-checkJoins <- function(object) {
-    message("Splitting matrix.")
-    objects <- splitBy2Ref(object)
+.checkJoins <- function(object, sizes, pvalueThreshold) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    message(paste0("Checking joins for '", object@name, "'."))
+    objects <- splitBy2Ref(object, sizes)
     pb <- progress_bar$new(total = length(objects))
     joins <- lapply(objects, checkJoin, progressBar = pb)
-    tibble(ref1  = map_chr(joins, "ref1"),
-           ref2  = map_chr(joins, "ref2"),
-           tUL   = map(joins, "tUL"),
-           tUR   = map(joins, "tUR"),
-           tBL   = map(joins, "tBL"),
-           tBR   = map(joins, "tBR"),
-           plot1 = map(joins, "plot1"),
-           plot2 = map(joins, "plot2")) %>%
+    joins <- tibble(ref1     = map_chr(joins, "ref1"),
+                    ref2     = map_chr(joins, "ref2"),
+                    tUL      = map(joins, "tUL"),
+                    tUR      = map(joins, "tUR"),
+                    tBL      = map(joins, "tBL"),
+                    tBR      = map(joins, "tBR"),
+                    testPlot = map(joins, "testPlot"),
+                    mapPlot  = map(joins, "mapPlot")) %>%
         gather(key = "key", value = "test", tUL, tUR, tBL, tBR) %>%
         filter(!unlist(map(test, is_null))) %>%
         mutate(pvalue = map_dbl(test, "p.value")) %>%
         separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
         mutate(vert = factor(vert)) %>%
         mutate(hor = factor(hor)) %>%
-        arrange(pvalue)
+        arrange(pvalue) %>%
+        filter(pvalue <= pvalueThreshold)
+    joinsObject <- new("tenxcheckerJoins")
+    joinsObject@data <- joins %>%
+        dplyr::select(-c(test, testPlot, mapPlot))
+    joinsObject@testPlots <- joins %>%
+        dplyr::select(ref1, ref2, testPlot) %>%
+        tidyr::unite("name", ref1, ref2) %>%
+        deframe()
+    joinsObject@mapPlots <- joins %>%
+        dplyr::select(ref1, ref2, mapPlot) %>%
+        tidyr::unite("name", ref1, ref2) %>%
+        deframe()
+    object@joins <- joinsObject
+    return(object)
 }
 
-filterJoins <- function(object, joins) {
-    joins %>%
-        filter(pvalue <= object@parameters@pvalueThreshold)
+checkJoins <- function(object, pvalue) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- map(object@data, .checkJoins, sizes = object@sizes, pvalue)
+    return(invisible(object))
+}
+
+mergeJoins <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    joins <- dplyr::bind_rows(map(map(object@data, "joins"), "data")) %>%
+        dplyr::distinct() %>%
+        dplyr::arrange(ref1, ref2)
+    object@joins <- joins                                                                                                                                                                                        
+    return(invisible(object))                                                                                                                                                                                      
+}
+
+findJoins <- function(object, pvalue = 0.05) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object <- checkJoins(object, pvalue)
+    object <- mergeJoins(object)
 }

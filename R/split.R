@@ -1,61 +1,69 @@
-splitChromosome <- function(interactionMatrix, sizes, splitPoint, oldChromosome, newChromosome) {
-    previousSize <- sizes[[oldChromosome]]
-    if (splitPoint >= previousSize) {
-        stop(paste0("Error while splitting chromosome of size ", previousSize, " at point ", splitPoint, "."))
+.splitChromosome <- function(object, refs, prevRef, newRef, shiftedRef, splitPoint, comparator) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("First parameter should be a tenxcheckerExp.")
     }
-    newSize      <- previousSize - splitPoint
-    firstPart    <- (splitPoint > previousSize / 2)
-    shiftedChr   <- if (firstPart) newChromosome else oldChromosome
+    #message(str(prevRef))
+    #message(str(newRef))
+    #message(str(object@interactionMatrix))
+    newRef <- factor(newRef, levels = refs)
+    levels(object@interactionMatrix$ref1) <- refs
+    levels(object@interactionMatrix$ref2) <- refs
+    object@interactionMatrix <- object@interactionMatrix %>% 
+        dplyr::mutate(ref1 = if_else((ref1 == prevRef) & (!comparator(bin1)), newRef, ref1)) %>%
+        dplyr::mutate(ref2 = if_else((ref2 == prevRef) & (!comparator(bin2)), newRef, ref2)) %>%
+        dplyr::mutate(bin1 = if_else(ref1 == shiftedRef, as.integer(bin1 - splitPoint + 1), bin1)) %>%
+        dplyr::mutate(bin2 = if_else(ref2 == shiftedRef, as.integer(bin2 - splitPoint + 1), bin2))
+    return(object)
+}
+
+splitChromosome <- function(object, parameters) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    prevRef    <- parameters$ref
+    splitPoint <- parameters$bin
+    newRef     <- parameters$newRef
+    #message(str(parameters))
+    #message(str(prevRef))
+    prevSize   <- object@sizes[[prevRef]]
+    if (splitPoint >= prevSize) {
+        stop(paste0("Error while splitting chromosome '", prevRef, "' of size ", prevSize, " at point ", splitPoint, "."))
+    }
+    newSize    <- prevSize - splitPoint
+    firstPart  <- (splitPoint > prevSize / 2)
+    shiftedRef <- if (firstPart) newRef else prevRef
     if (firstPart) {
         comparator <- function(x) { (x < splitPoint) }
     } else {
         comparator <- function(x) { (x > splitPoint) }
     }
-    interactionMatrix <- interactionMatrix %>% 
-        mutate(ref1 = as.character(ref1)) %>%
-        mutate(ref2 = as.character(ref2)) %>%
-        mutate(ref1 = ifelse((ref1 == oldChromosome) & (!comparator(bin1)), newChromosome, ref1)) %>%
-        mutate(ref2 = ifelse((ref2 == oldChromosome) & (!comparator(bin2)), newChromosome, ref2)) %>%
-        mutate(bin1 = ifelse(ref1 == shiftedChr, bin1 - splitPoint + 1, bin1)) %>%
-        mutate(bin2 = ifelse(ref2 == shiftedChr, bin2 - splitPoint + 1, bin2))
+    object@data <- map(object@data, .splitChromosome, object@chromosomes, prevRef = prevRef, newRef = newRef, shiftedRef = shiftedRef, splitPoint = splitPoint, comparator = comparator)
     if (firstPart) {
-        sizes[[oldChromosome]] <- splitPoint
-        sizes[[newChromosome]] <- newSize
+        object@sizes[[prevRef]] <- splitPoint
+        object@sizes[[newRef]]  <- newSize
     }
     else {
-        sizes[[newChromosome]] <- splitPoint
-        sizes[[oldChromosome]] <- newSize
+        object@sizes[[newRef]]  <- splitPoint
+        object@sizes[[prevRef]] <- newSize
     }
-    return(list(interactionMatrix = interactionMatrix, sizes = sizes))
+    return(object)
 }
 
-
-splitChromosomes <- function(object, splitPoints) {
-    if (length(splitPoints) == 0) {
-        return(object)
+splitChromosomes <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
     }
-    splitPoints %<>% arrange(ref, desc(bin))
-    interactionMatrix <- object@interactionMatrix
-    sizes             <- object@sizes
-    newChromosomes    <- paste0("new_chr_", seq.int(nrow(splitPoints)))
-    splitPoints       <- splitPoints %>% mutate(newChromosome = newChromosomes)
-    nSplits           <- nrow(splitPoints)
+    nSplits            <- nrow(object@breaks)
+    newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
+    object@chromosomes <- c(object@chromosomes, newRefs)
+    parameters <- object@breaks %>%
+        arrange(ref, desc(bin)) %>%
+        mutate(newRef = newRefs) %>%
+        transpose()
     pb <- progress_bar$new(total = nSplits)
-    for (nSplit in seq.int(to = nSplits)) {
-        newChromosome <- paste0("new_chr_", nSplit)
-        out <- splitChromosome(interactionMatrix,
-                               sizes,
-                               splitPoints$bin[[nSplit]],
-                               splitPoints$ref[[nSplit]],
-                               splitPoints$newChromosome[[nSplit]])
-        interactionMatrix <- out$interactionMatrix
-        sizes             <- out$sizes
+    for (param in parameters) {
+        object <- splitChromosome(object, param)
         pb$tick()
     }
-    object@sizes                 <- sizes
-    object@interactionMatrix     <- interactionMatrix
-    object@chromosomes           <- c(object@chromosomes, newChromosomes)
-    object@newChromosomes        <- splitPoints$ref
-    names(object@newChromosomes) <- newChromosomes
-    return(object)
+    return(invisible(object))
 }

@@ -39,7 +39,7 @@ computeMeanTriangles <- function(data) {
 computeMeanTrianglesRandom <- function(i, data = data) {
     dataRandom <- randomizeData(data)
     computeMeanTriangles(data) %>%
-        add_column(randMeanCount = computeMeanTriangles(dataRandom)$meanCount) %>%
+        mutate(randMeanCount = computeMeanTriangles(dataRandom)$meanCount) %>%
         mutate(fcMeanCount = meanCount - randMeanCount)
 }
 
@@ -48,58 +48,29 @@ checkBreak <- function(object) {
     data <- object@interactionMatrix
     if (nrow(data) == 0) {
        # Matrix is empty, skip
-       return(list(data =  NULL,
-                   plot1 = NULL,
-                   plot2 = NULL,
-                   plot3 = NULL))
+       return(list(data           = NULL,
+                   changePlot     = NULL,
+                   changeDistPlot = NULL,
+                   mapPlot        = NULL))
     }
     triangles <- computeMeanTriangles(data) %>%
         rename(fcMeanCount = meanCount) %>%
         mutate(fcMeanCount = fcMeanCount - median(fcMeanCount))
-    # trianglesList <- bplapply(seq.int(object@parameters@nRandomizations),
-    # trianglesList <- lapply(seq.int(object@parameters@nRandomizations),
-    #                       computeMeanTrianglesRandom,
-    #                       data = data)
-    # triangles <- bind_rows(trianglesList) %>%
-    #     dplyr::select(bin, nCells, fcMeanCount) %>%
-    #     group_by(bin) %>%
-    #     summarise(nCells = mean(nCells), fcMeanCount = mean(fcMeanCount)) %>%
-    #     ungroup()
-    # breakPointBin <- NA
-    # breakPoint <- triangles %>%
-    #     arrange(fcMeanCount, desc(nCells)) %>%
-    #     slice(1) %>%
-    #     dplyr::select(bin, fcMeanCount, nCells) %>%
-    #     as.list()
-    # if (breakPoint$fcMeanCount <= object@parameters@breakThreshold &
-    #     breakPoint$nCells >= object@parameters@breakNCells) {
-    #     breakPointBin <- breakPoint$bin
-    # }
-    plot1 <- plotTriangles(triangles)
-    # if (!is.na(breakPointBin)) {
-    #     plot1 <- plot1 + geom_vline(xintercept = breakPointBin,
-    #                                 colour = "red",
-    #                                 linetype = "longdash")
-    # }
-    plot2 <- triangles %>%
+    changePlot     <- plotTriangles(triangles)
+    changeDistPlot <- triangles %>%
         ggplot(aes(x = fcMeanCount)) +
             geom_histogram()
-    plot3 <- plot.10XRef(object, FALSE)
-    return(list(data = triangles,
-                plot1 = plot1,
-                plot2 = plot2,
-                plot3 = plot3))
-    # return(list(plot1 = plot1,
-    #             plot2 = plot2,
-    #             plot3 = plot3,
-    #             ref   = object@chromosome,
-    #             bin   = breakPointBin))
+    mapPlot <- plot.10XRef(object, FALSE)
+    return(list(data           = triangles,
+                changePlot     = changePlot,
+                changeDistPlot = changeDistPlot,
+                mapPlot        = mapPlot))
 }
 
 normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     progressBar$tick()
     if (isMatrixEmpty(object@interactionMatrix)) {
-        return(list(data = NULL, plot1 = NULL, plot2 = NULL, plot3 = NULL))
+        return(list(data = NULL, changePlot = NULL, changeDistPlot = NULL, mapPlot = NULL))
     }
     #message(paste0("\n  Working on ", object@chromosome, ".\n"))
     if (kr) {
@@ -114,46 +85,75 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     checkBreak(object)
 }
 
-checkBreaks <- function(object, kr = TRUE, md = TRUE, diag = TRUE) {
-    message("Splitting matrix.")
-    objects <- splitByRef(object)
+.checkBreaks <- function(object, chromosomes, sizes) {
+    message(paste0("Dataset '", object@name , "': Splitting matrix."))
+    md   = FALSE
+    diag = FALSE
+    kr   = FALSE
+    if (object@name == "HiC") {
+        kr = TRUE
+    }
+    objects <- splitByRef(object, chromosomes, sizes)
     message("Done.")
     pb <- progress_bar$new(total = length(objects))
     #breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
     breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
-    data   <- map_dfr(breaks, "data", .id = "ref")
+    data   <- map_dfr(breaks, "data", .id = "ref") %>% mutate(ref = factor(ref))
     if (nrow(data) == 0) {
         return(list())
     }
-    return(list(data = data %>% mutate(ref = factor(ref)), 
-                plot1 = map(breaks, "plot1"),
-                plot2 = map(breaks, "plot2"),
-                plot3 = map(breaks, "plot3")))
-}
-
-estimateBreakThreshold <- function(object, breaks, pvalue) {
-    object@parameters@breakThreshold <- breaks %>%
-        filter(nCells == object@parameters@breakNCells) %>%
-        mutate(absFcMeanCount = abs(fcMeanCount)) %>%
-        arrange(desc(absFcMeanCount)) %>%
-        mutate(class = if_else(fcMeanCount >= 0, 1, 0)) %>%
-        mutate(cumSumClass = cumsum(class)) %>%
-        mutate(value = cumSumClass / max(cumSumClass)) %>%
-        filter(class == 0) %>%
-        filter(value <= pvalue) %>%
-        tail(n = 1) %>%
-        pull(fcMeanCount)
+    breaksObject                 <- new("tenxcheckerBreaks")
+    breaksObject@data            <- data
+    breaksObject@changePlots     <- map(breaks, "changePlot")
+    breaksObject@changeDistPlots <- map(breaks, "changeDistPlot")
+    breaksObject@mapPlots        <- map(breaks, "mapPlot")
+    object@breaks <- breaksObject
     return(object)
 }
 
+checkBreaks <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("Finding statistics.")
+    object@data <- map(object@data, .checkBreaks, chromosomes = object@chromosomes, sizes = object@sizes)
+    return(invisible(object))
+}
+
+.estimateBreakThreshold <- function(object, pvalue) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
+    }
+    object@parameters@breakThreshold <- object@breaks@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        dplyr::mutate(absFcMeanCount = abs(fcMeanCount)) %>%
+        dplyr::arrange(desc(absFcMeanCount)) %>%
+        dplyr::mutate(class = if_else(fcMeanCount >= 0, 1, 0)) %>%
+        dplyr::mutate(cumSumClass = cumsum(class)) %>%
+        dplyr::mutate(value = cumSumClass / max(cumSumClass)) %>%
+        dplyr::filter(class == 0) %>%
+        dplyr::filter(value <= pvalue) %>%
+        tail(n = 1) %>%
+        dplyr::pull(fcMeanCount)
+    return(object)
+}
+
+estimateBreakThreshold <- function(object, pvalue) {
+    if (! is(object, "tenxcheckerClass")) {                                                                                                                                                                        
+        stop("Parameter should be a tenxcheckerClass.")                                                                                                                                                            
+    }                                                                                                                                                                                                              
+    object@data <- map(object@data, .estimateBreakThreshold, pvalue = pvalue)
+    return(invisible(object))
+}
+
 filterBreak <- function(parameters) {
-    maxNBreaks <- 1000
-    bins <- c()
-    plot1 <- c()
-    reference <- parameters$ref
-    objectRef <- parameters$object
-    breaksRef <- parameters$breaks
+    maxNBreaks       <- 1000
+    bins             <- c()
+    reference        <- parameters$ref
+    objectRef        <- parameters$object
+    breaksRef        <- parameters$breaks
     originalBreakRef <- breaksRef
+    message(paste0("Dataset '", objectRef@name , "'."))
     breaksRef <- breaksRef %>%
         filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
         filter(nCells      >= objectRef@parameters@breakNCells) %>%
@@ -165,10 +165,10 @@ filterBreak <- function(parameters) {
             slice(1) %>%
             pull(bin)
         if (length(breakPointBin) == 0) {
-            return(list(ref   = as.character(reference),
-                        bins  = bins,
-                        plot1 = plotTriangles(originalBreakRef, bins),
-                        plot2 = plot.10XRef(objectRef, TRUE, bins)))
+            return(list(ref        = as.character(reference),
+                        bins       = bins,
+                        changePlot = plotTriangles(originalBreakRef, bins),
+                        mapPlot    = plot.10XRef(objectRef, TRUE, bins)))
         }
         bins <- c(bins, breakPointBin)
         if (length(bins) >= maxNBreaks) {
@@ -185,11 +185,11 @@ filterBreak <- function(parameters) {
     }
 }
 
-filterBreaks <- function(object, breaks) {
-    if (length(breaks) == 0) {
+.filterBreaks <- function(object, chromosomes, sizes) {
+    if (nrow(object@breaks@data) == 0) {
         return(list())
     }
-    selectedRefs <- breaks %>%
+    selectedRefs <- object@breaks@data %>%
         dplyr::select(ref) %>%
         distinct() %>%
         pull() %>%
@@ -198,8 +198,8 @@ filterBreaks <- function(object, breaks) {
         message("No break found.")
         return(list(breaks = c(), plots = c()))
     }
-    splitObject <- splitByRef(object)[selectedRefs]
-    splitBreaks <- breaks %>%
+    splitObject <- splitByRef(object, chromosomes, sizes)[selectedRefs]
+    splitBreaks <- object@breaks@data %>%
         group_by(ref) %>%
         group_split()
     functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
@@ -211,13 +211,82 @@ filterBreaks <- function(object, breaks) {
         message("No break passed the filter.")
         return(list(breaks = c(), plots = c()))
     }
-    selectedPlots <- selectedBreaks %>%
-        dplyr::select(ref, plot1, plot2) %>%
+    selectedBreaks <- selectedBreaks %>%
         mutate(ref = flatten_chr(ref))
+    changePlots <- selectedBreaks %>%
+        dplyr::select(ref, changePlot) %>%
+        deframe()
+    mapPlots <- selectedBreaks %>%
+        dplyr::select(ref, mapPlot) %>%
+        deframe()
     selectedSplits <- selectedBreaks %>%
         dplyr::select(ref, bins) %>%
-        mutate(ref = flatten_chr(ref)) %>%
         unnest(bins) %>%
         rename(bin = bins)
-    return(list(breaks = selectedSplits, plots = selectedPlots))
+    object@breaks@filteredData <- selectedSplits
+    object@breaks@changePlots  <- changePlots
+    object@breaks@mapPlots     <- mapPlots
+    return(object)
+}
+
+filterBreaks <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("Filtering results.")
+    object@data <- map(object@data, .filterBreaks, chromosomes = object@chromosomes, sizes = object@sizes)
+    return(invisible(object))
+}
+
+..compareBreaks <- function(object1, object2) {
+    if (! is(object1, "tenxcheckerExp")) {
+        stop("Parameter 1 should be a tenxcheckerExp.")
+    }
+    if (! is(object2, "tenxcheckerExp")) {
+        stop("Parameter 2 should be a tenxcheckerExp.")
+    }
+    newData <- object1@breaks@filteredData %>%
+            dplyr::left_join(object2@breaks@data, by = c("ref", "bin")) %>%
+            dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
+            dplyr::select("ref", "bin")
+    object1@breaks@filteredData <- newData
+    return(object1)
+}
+
+.compareBreaks <- function(object1, objects) {
+    if (! is(object1, "tenxcheckerExp")) {
+        stop("Parameter 1 should be a tenxcheckerExp.")
+    }
+    object1 <- purrr::reduce(objects, ..compareBreaks, .init = object1)
+    return(object1)
+}
+
+compareBreaks <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- map(object@data, .compareBreaks, objects = object@data)
+    return(invisible(object))
+}
+
+mergeBreaks <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    breaks <- dplyr::bind_rows(map(map(object@data, "breaks"), "filteredData")) %>%
+        dplyr::distinct() %>%
+        dplyr::arrange(ref, desc(bin))
+    object@breaks <- breaks
+    return(invisible(object))
+}
+
+findBreaks <- function(object, pvalue = 0.05) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object <- checkBreaks(object)
+    object <- estimateBreakThreshold(object, pvalue)
+    object <- filterBreaks(object)
+    object <- compareBreaks(object)
+    object <- mergeBreaks(object)
 }
