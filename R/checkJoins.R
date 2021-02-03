@@ -133,6 +133,7 @@ checkJoin <- function(object, progressBar) {
         tidyr::unite("name", ref1, ref2) %>%
         deframe()
     object@joins <- joinsObject
+    message(paste0("\t", nrow(joins), " joins found."))
     return(object)
 }
 

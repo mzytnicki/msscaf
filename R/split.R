@@ -53,7 +53,10 @@ splitChromosomes <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    nSplits            <- nrow(object@breaks)
+    nSplits <- nrow(object@breaks)
+    if (nSplits == 0) {
+        return(invisible(object))
+    }
     newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
     object@chromosomes <- c(object@chromosomes, newRefs)
     parameters <- object@breaks %>%

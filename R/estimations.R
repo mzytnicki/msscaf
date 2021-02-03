@@ -4,15 +4,18 @@
     }
     d <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
-        dplyr::select(count) %>%
-        sample_n(min(object@parameters@sampleSize, nrow(.)))
-    t <- transform(table(d), cum_freq = cumsum(Freq)) %>%
-        mutate(relative = cum_freq / object@parameters@sampleSize) %>%
+        dplyr::select(count)
+    sampleSize <- min(object@parameters@sampleSize, nrow(d))
+    d <- d %>%
+        sample_n(sampleSize)
+    threshold <- transform(table(d), cum_freq = cumsum(Freq)) %>%
+        mutate(relative = cum_freq / sampleSize) %>%
         filter(relative >= 0.5) %>%
         head(1) %>%
         pull(d)
-    object@parameters@minCount <- as.integer(levels(t))[t] + 1
-    message(paste0("Dataset '", object@name, "': Estimated background count: ", t, "."))
+    threshold <- as.integer(levels(threshold))[threshold]
+    object@parameters@minCount <- threshold
+    message(paste0("Dataset '", object@name, "': Estimated background count: ", threshold, "."))
     return(object)
 }
 
@@ -43,7 +46,6 @@ estimateBackgroundCounts <- function(object) {
             pull(distance)
         message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, "."))
     }
-    object@parameters@breakNCells <- 0.75 * ((object@parameters@maxLinkRange * (object@parameters@maxLinkRange + 1)) / 2)
     return(object)
 }
 
@@ -90,6 +92,5 @@ estimateDistributions <- function(object) {
     }
     object <- estimateBackgroundCounts(object)
     object <- estimateMoleculeSize(object)
-    object <- estimateMinRowCount(object, object@sizes)
     return(invisible(object))
 }

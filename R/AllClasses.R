@@ -300,12 +300,13 @@ addExp <- function(object, data, expName) {
 
     parameters <- new("tenxcheckerParameters")
     parameters@binSize         <- data@binSize
+    parameters@maxLinkRange    <- data@maxLinkRange
     parameters@sampleSize      <- 10000
     parameters@loessSpan       <- 0.5
     parameters@minCount        <- 3
     parameters@minRowCount     <- 100
-    parameters@breakThreshold  <- -1
-    parameters@breakNCells     <- 100
+    parameters@breakThreshold  <- NULL
+    parameters@breakNCells     <- NULL
     parameters@nRandomizations <- 10
     parameters@nBinZoom        <- 100
 
@@ -314,6 +315,7 @@ addExp <- function(object, data, expName) {
     newData@name              <- expName
     newData@parameters        <- parameters
     newData@breaks            <- NULL
+    newData@joins             <- NULL
 
     if (length(object@data) != 0) {
         refTrans <- refTrans %>%
@@ -390,8 +392,8 @@ tenxcheckerRefExp <- function(matrix     = NULL,
     if (is.null(size) | is.na(size)) {
         stop(paste0("'size' must be specified for ref ", chromosome), call. = FALSE)
     }
-    if (is.null(parameters) | is.na(parameters)) {
-        stop("'parameters' must be specified", call. = FALSE)
+    if (!is(parameters, "tenxcheckerParameters")) {
+        stop("'parameters' should be 'tenxcheckerParameters' class instance", call. = FALSE)
     }
     
     ##- parameters

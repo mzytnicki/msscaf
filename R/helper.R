@@ -9,9 +9,9 @@ mergeRefs <- function(refs1, refs2) {
     if ((all(refs2 %in% refs1)) |
         (all(refs1 %in% refs2)) |
         (length(intersect(refs1, refs2)) >= 0.8 * length(refs1))) {
-        r <- tibble(all = mixedsort(distinct(c(refs1, refs2)))) %>%
-            dplyr::mutate(r1 = if_else(all %in% refs1)) %>%
-            dplyr::mutate(r2 = if_else(all %in% refs2))
+        r <- tibble(all = mixedsort(unique(c(refs1, refs2)))) %>%
+            dplyr::mutate(name1 = if_else(all %in% refs1, all, NA_character_)) %>%
+            dplyr::mutate(name2 = if_else(all %in% refs2, all, NA_character_))
         return(r)
     }
     # Tweak the case
@@ -130,7 +130,7 @@ splitBy2Ref <- function(object, sizes) {
         #filter(maxCounts >= object@parameters@maxLinkRange) %>%
         filter(nCounts >= object@parameters@breakNCells) %>%
         pull(ref1_ref2)
-    message(paste0("Keeping ", length(pairs), " pairs of references."))
+    message(paste0("\tKeeping ", length(pairs), " pairs of references."))
     data <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
@@ -193,9 +193,9 @@ makeTibbleFromList <- function(data, n) {
         filter(bin1 <= bin2)
 }
 
-computeScaleFactor <- function(object) {
+computeScaleFactor <- function(object, sizes) {
     if (is(object, "tenxcheckerExp")) {
-        length <- sum(object@sizes)
+        length <- sum(sizes)
     }
     else if (is(object, "tenxchecker2RefExp")) {
         length <- max(object@size1, object@size2)

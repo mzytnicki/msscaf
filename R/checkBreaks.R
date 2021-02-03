@@ -86,7 +86,7 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
 }
 
 .checkBreaks <- function(object, chromosomes, sizes) {
-    message(paste0("Dataset '", object@name , "': Splitting matrix."))
+    message(paste0("\tDataset '", object@name , "'.\n\t\tSplitting matrix."))
     md   = FALSE
     diag = FALSE
     kr   = FALSE
@@ -94,9 +94,9 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
         kr = TRUE
     }
     objects <- splitByRef(object, chromosomes, sizes)
-    message("Done.")
     pb <- progress_bar$new(total = length(objects))
     #breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
+    message("\t\tComputing stats.")
     breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
     data   <- map_dfr(breaks, "data", .id = "ref") %>% mutate(ref = factor(ref))
     if (nrow(data) == 0) {
@@ -124,6 +124,14 @@ checkBreaks <- function(object) {
     if (! is(object, "tenxcheckerExp")) {
         stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
     }
+    message(paste0("\tDataset '", object@name , "'."))
+    # Take half of the 9th decile as the minimum number of cells.
+    object@parameters@breakNCells <- object@breaks@data %>%
+        dplyr::slice_max(nCells, prop = 0.9) %>%
+        dplyr::arrange(nCells) %>%
+        dplyr::slice_head(n = 1) %>%
+        dplyr::pull(nCells)
+    object@parameters@breakNCells <- object@parameters@breakNCells / 2
     object@parameters@breakThreshold <- object@breaks@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
         dplyr::mutate(absFcMeanCount = abs(fcMeanCount)) %>%
@@ -133,7 +141,7 @@ checkBreaks <- function(object) {
         dplyr::mutate(value = cumSumClass / max(cumSumClass)) %>%
         dplyr::filter(class == 0) %>%
         dplyr::filter(value <= pvalue) %>%
-        tail(n = 1) %>%
+        dplyr::slice_tail(n = 1) %>%
         dplyr::pull(fcMeanCount)
     return(object)
 }
@@ -142,23 +150,23 @@ estimateBreakThreshold <- function(object, pvalue) {
     if (! is(object, "tenxcheckerClass")) {                                                                                                                                                                        
         stop("Parameter should be a tenxcheckerClass.")                                                                                                                                                            
     }                                                                                                                                                                                                              
+    message("Estimating break thresholds")
     object@data <- map(object@data, .estimateBreakThreshold, pvalue = pvalue)
     return(invisible(object))
 }
 
 filterBreak <- function(parameters) {
-    maxNBreaks       <- 1000
+    maxNBreaks       <- 10000
     bins             <- c()
     reference        <- parameters$ref
     objectRef        <- parameters$object
     breaksRef        <- parameters$breaks
     originalBreakRef <- breaksRef
-    message(paste0("Dataset '", objectRef@name , "'."))
     breaksRef <- breaksRef %>%
-        filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
-        filter(nCells      >= objectRef@parameters@breakNCells) %>%
-        filter(bin         >= objectRef@parameters@maxLinkRange) %>%
-        filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange)
+        dplyr::filter(fcMeanCount <= objectRef@parameters@breakThreshold) %>%
+        dplyr::filter(nCells      >= objectRef@parameters@breakNCells) %>%
+        dplyr::filter(bin         >= objectRef@parameters@maxLinkRange) %>%
+        dplyr::filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange)
     repeat {
         breakPointBin <- breaksRef %>%
             arrange(fcMeanCount, desc(nCells)) %>%
@@ -181,13 +189,20 @@ filterBreak <- function(parameters) {
         }
         breakPointBin <- breakPointBin[[1]]
         breaksRef %<>%
-            filter(abs(breakPointBin - bin) >= objectRef@parameters@maxLinkRange)
+            filter(abs(breakPointBin - bin) > objectRef@parameters@maxLinkRange)
     }
 }
 
 .filterBreaks <- function(object, chromosomes, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
+    }
+    object@breaks@filteredData <- tibble(ref = factor(c(), levels = object@breaks@data), bin = integer())
+    object@breaks@changePlots  <- c()
+    object@breaks@mapPlots     <- c()
+    message(paste0("\tDataset '", object@name , "': Filtering breaks."))
     if (nrow(object@breaks@data) == 0) {
-        return(list())
+        return(object)
     }
     selectedRefs <- object@breaks@data %>%
         dplyr::select(ref) %>%
@@ -195,8 +210,8 @@ filterBreak <- function(parameters) {
         pull() %>%
         as.character()
     if (length(selectedRefs) == 0) {
-        message("No break found.")
-        return(list(breaks = c(), plots = c()))
+        message("\t\tNo break found.")
+        return(object)
     }
     splitObject <- splitByRef(object, chromosomes, sizes)[selectedRefs]
     splitBreaks <- object@breaks@data %>%
@@ -208,8 +223,8 @@ filterBreak <- function(parameters) {
     #selectedBreaks <- lapply(functionParameters, filterBreak)
     selectedBreaks <- as_tibble(transpose(selectedBreaks))
     if (is.null(unlist(selectedBreaks$bins))) {
-        message("No break passed the filter.")
-        return(list(breaks = c(), plots = c()))
+        message("\t\tNo break passed the filter.")
+        return(object)
     }
     selectedBreaks <- selectedBreaks %>%
         mutate(ref = flatten_chr(ref))
@@ -245,10 +260,14 @@ filterBreaks <- function(object) {
     if (! is(object2, "tenxcheckerExp")) {
         stop("Parameter 2 should be a tenxcheckerExp.")
     }
+    if ((nrow(object1@breaks@filteredData) == 0) |
+        (nrow(object2@breaks@filteredData) == 0)) {
+        return(object1)
+    } 
     newData <- object1@breaks@filteredData %>%
-            dplyr::left_join(object2@breaks@data, by = c("ref", "bin")) %>%
-            dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
-            dplyr::select("ref", "bin")
+        dplyr::left_join(object2@breaks@data, by = c("ref", "bin")) %>%
+        dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
+        dplyr::select("ref", "bin")
     object1@breaks@filteredData <- newData
     return(object1)
 }

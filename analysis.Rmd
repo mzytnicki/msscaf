@@ -591,7 +591,7 @@ library("devtools")
 library("magrittr")
 library("tidyverse")
 devtools::load_all(".")
-resolution  <- 10000
+resolution  <- 100000
 hicFileName <- "/Scratch/mazytnicki/Mother_1/inter_30.hic"
 hicData     <- parseHicFile(hicFileName, resolution)
 gc()
@@ -608,13 +608,11 @@ allObject <- addExp(allObject, bamData, "10X")
 allObject <- estimateDistributions(allObject)
 allObject@data[[1]]@parameters@minCount       <- 3
 allObject@data[[1]]@parameters@maxLinkRange   <- 500
-allObject@data[[1]]@parameters@minRowCount    <- 10
 allObject@data[[1]]@parameters@loessSpan      <- 0.5
 allObject@data[[1]]@parameters@maxLinkRange   <- 2
 allObject@data[[1]]@parameters@breakNCells    <- 3
 allObject@data[[1]]@parameters@breakThreshold <- -5
 allObject@data[[2]]@parameters@minCount       <- 2
-allObject@data[[2]]@parameters@minRowCount    <- 10
 allObject@data[[2]]@parameters@breakNCells    <- 30
 allObject <- cleanData(allObject)
 allObject <- findBreaks(allObject, 0.05)

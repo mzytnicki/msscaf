@@ -268,7 +268,7 @@ plot.10X2Ref <- function(object,
 }
 
 
-plot.10X <- function(object, logColor = TRUE, ref = NULL) {
+plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
     if (!is.null(ref)) {
         p <- object@interactionMatrix %>%
             filter(ref1 == ref) %>%
@@ -277,7 +277,7 @@ plot.10X <- function(object, logColor = TRUE, ref = NULL) {
             plot.10XRef()
         return(p)
     }
-    scaleFactor <- computeScaleFactor(object)
+    scaleFactor <- computeScaleFactor(object, sizes)
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
     p <- data %>%
         makeSymmetric() %>%

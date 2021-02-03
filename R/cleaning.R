@@ -71,7 +71,6 @@ cleanData <- function(object) {
         stop("Parameter should be a tenxcheckerClass.")
     }
     object <- removeLowCount(object)
-    object <- removeLowCountRows(object)
     object <- removeSmallScaffolds(object)
     return(invisible(object))
 }
