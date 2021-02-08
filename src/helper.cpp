@@ -136,6 +136,60 @@ DataFrame removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int thre
 
 // [[Rcpp::export]]
 DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
+    IntegerVector   refs1    = data["ref1"];
+    IntegerVector   refs2    = data["ref2"];
+    IntegerVector   bins1    = data["bin1"];
+    IntegerVector   bins2    = data["bin2"];
+    IntegerVector   counts   = data["count"];
+    CharacterVector refNames = refs1.attr("levels");
+    bins1[0] = 3;
+    int             nRefs    = refNames.size();
+    int             nKept    = keptRefs.size();
+    long int        nRowsIn  = refs1.size();
+    long int        nRowsOut = 0;
+    std::vector < bool > keptIds (nRefs + 1, false); // Levels start with 1 in R
+    for (int i = 0; i < nRefs; ++i) {
+        for (int j = 0; j < nKept; ++j) {
+            if (refNames[i] == keptRefs[j]) {
+                keptIds[i+1] = true; // Levels start with 1 in R
+                break;
+            }
+        }
+    }
+    // Recompute factors for the refs
+    std::vector < int > translateRefIds (nRefs + 1);
+    int refId = 1;                     // factors start with 1
+    for (int i = 1; i <= nRefs; ++i) { // factors start with 1
+        if (keptIds[i]) {
+            // CharacterVector start with 0
+            translateRefIds[i] = refId;
+            ++refId;
+        }
+    }
+    // In-place update of the data
+    for (long int i = 0; i < nRowsIn; ++i) {
+        if (keptIds[refs1[i]] && keptIds[refs2[i]]) {
+            if (i != nRowsOut) {
+                refs1[nRowsOut]  = translateRefIds[refs1[i]];
+                refs2[nRowsOut]  = translateRefIds[refs2[i]];
+                bins1[nRowsOut]  = bins1[i];
+                bins2[nRowsOut]  = bins2[i];
+                counts[nRowsOut] = counts[i];
+            }
+            ++nRowsOut;
+        }
+    }
+    refs1.erase(nRowsOut, nRowsIn);
+    refs2.erase(nRowsOut, nRowsIn);
+    bins1.erase(nRowsOut, nRowsIn);
+    bins2.erase(nRowsOut, nRowsIn);
+    counts.erase(nRowsOut, nRowsIn);
+    refs1.attr("levels") = keptRefs;
+    refs2.attr("levels") = keptRefs;
+    return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
+}
+/*
+DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     IntegerVector   tmpRefs1 = data["ref1"];
     CharacterVector refNames = tmpRefs1.attr("levels");
     int             nRefs    = refNames.size();
@@ -197,3 +251,4 @@ DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     DataFrame outputData = Rcpp::DataFrame::create(_["ref1"]= refs1R, _["bin1"]= bins1R, _["ref2"]= refs2R, _["bin2"]= bins2R, _["count"]= countsR);
     return outputData;
 }
+*/

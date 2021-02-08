@@ -219,8 +219,8 @@ filterBreak <- function(parameters) {
         group_split()
     functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
     # parallel seems to need too much RAM
-    selectedBreaks <- bplapply(functionParameters, filterBreak)
-    #selectedBreaks <- lapply(functionParameters, filterBreak)
+    #selectedBreaks <- bplapply(functionParameters, filterBreak)
+    selectedBreaks <- lapply(functionParameters, filterBreak)
     selectedBreaks <- as_tibble(transpose(selectedBreaks))
     if (is.null(unlist(selectedBreaks$bins))) {
         message("\t\tNo break passed the filter.")

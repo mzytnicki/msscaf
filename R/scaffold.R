@@ -38,50 +38,57 @@ orderJoins <- function(object, joins) {
         filter(reference != other)
 }
 
-stitchChromosomePair <- function(object, reference, other, after, collinear) {
-    referenceSize <- object@sizes[[reference]]
-    otherSize     <- object@sizes[[other]]
+.stitchChromosomePair <- function(object, sizes, reference, other, after, collinear) {
+    referenceSize <- sizes[[reference]]
+    otherSize     <- sizes[[other]]
     if (!collinear) {
         object@interactionMatrix %<>%
-            mutate(bin1 = ifelse(ref1 == other, otherSize - bin1 + 1, bin1)) %>%
-            mutate(bin2 = ifelse(ref2 == other, otherSize - bin2 + 1, bin2))
+            mutate(bin1 = if_else(ref1 == other, as.integer(otherSize - bin1 + 1), as.integer(bin1))) %>%
+            mutate(bin2 = if_else(ref2 == other, as.integer(otherSize - bin2 + 1), as.integer(bin2)))
     }
     if (after) {
         object@interactionMatrix %<>%
-            mutate(bin1 = ifelse(ref1 == other, bin1 + referenceSize, bin1)) %>%
-            mutate(bin2 = ifelse(ref2 == other, bin2 + referenceSize, bin2))
+            mutate(bin1 = if_else(ref1 == other, as.integer(bin1 + referenceSize), as.integer(bin1))) %>%
+            mutate(bin2 = if_else(ref2 == other, as.integer(bin2 + referenceSize), as.integer(bin2)))
     } else {
         object@interactionMatrix %<>%
-            mutate(bin1 = ifelse(ref1 == reference, bin1 + otherSize, bin1)) %>%
-            mutate(bin2 = ifelse(ref2 == reference, bin2 + otherSize, bin2))
+            mutate(bin1 = if_else(ref1 == reference, as.integer(bin1 + otherSize), as.integer(bin1))) %>%
+            mutate(bin2 = if_else(ref2 == reference, as.integer(bin2 + otherSize), as.integer(bin2)))
     }
+    referenceFactor <- factor(rep(reference, nrow(object@interactionMatrix)), levels = levels(object@interactionMatrix$ref1))
     object@interactionMatrix %<>%
-        mutate(ref1 = ifelse(ref1 == other, reference, as.character(ref1))) %>%
-        mutate(ref2 = ifelse(ref2 == other, reference, as.character(ref2)))
-    object@sizes <- object@sizes[names(object@sizes) != other]
-    object@chromosomes <- object@chromosomes[object@chromosomes != other]
+        mutate(ref1 = if_else(ref1 == other, referenceFactor, ref1)) %>%
+        mutate(ref2 = if_else(ref2 == other, referenceFactor, ref2))
+    return(object)
+}
+
+stitchChromosomePair <- function(object, reference, other, after, collinear) {
+    object@data                     <- map(object@data, .stitchChromosomePair, sizes = object@sizes, reference = reference, other = other, after = after, collinear = collinear)
+    object@sizes[[reference]]       <- object@sizes[[reference]] + object@sizes[[other]]
+    object@sizes                    <- object@sizes[names(object@sizes) != other]
+    object@chromosomes              <- object@chromosomes[object@chromosomes != other]
     object@mergedChromosomes[other] <- reference
     return(object)
 }
 
 repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin) {
     joins %<>%
-        mutate(after = ifelse((reference == otherRef),
+        mutate(after = if_else((reference == otherRef),
                               (collinearJoin) == (after),
                               after)) %>%
-        mutate(collinear = ifelse((reference == otherRef) | (other == otherRef),
+        mutate(collinear = if_else((reference == otherRef) | (other == otherRef),
                                   (collinearJoin) == (collinear),
                                   collinear)) %>%
-        mutate(reference = ifelse(reference == otherRef,
+        mutate(reference = if_else(reference == otherRef,
                                   referenceRef,
                                   reference)) %>%
-        mutate(other = ifelse(other == otherRef,
+        mutate(other = if_else(other == otherRef,
                               referenceRef,
                               other))
 }
 
-scaffold <- function(object, joins) {
-    selectedJoins <- selectJoins(joins)
+scaffold <- function(object) {
+    selectedJoins <- selectJoins(object@joins)
     orderedJoins <- orderJoins(object, selectedJoins)
     while (nrow(orderedJoins) != 0) {
         firstRow     <- orderedJoins %>% slice(1) %>% as.list()
