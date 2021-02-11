@@ -89,6 +89,9 @@ splitByRef <- function(object, chromosomes, sizes) {
         dplyr::select(-ref2) %>%
         split(.$ref1) %>%
         map(~ dplyr::select(.x, -ref1))
+    # There might be fewer chromosomes than expected.
+    chromosomes <- names(data)
+    sizes <- sizes[chromosomes]
     pmap(list(data, chromosomes, sizes),
          tenxcheckerRefExp,
          parameters = object@parameters)

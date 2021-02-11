@@ -184,6 +184,8 @@ DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     bins1.erase(nRowsOut, nRowsIn);
     bins2.erase(nRowsOut, nRowsIn);
     counts.erase(nRowsOut, nRowsIn);
+    refs1.attr("class") = "factor";
+    refs2.attr("class") = "factor";
     refs1.attr("levels") = keptRefs;
     refs2.attr("levels") = keptRefs;
     return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
