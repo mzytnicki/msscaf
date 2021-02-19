@@ -135,36 +135,34 @@ DataFrame removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int thre
 }
 
 // [[Rcpp::export]]
-DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
+DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     IntegerVector   refs1    = data["ref1"];
     IntegerVector   refs2    = data["ref2"];
     IntegerVector   bins1    = data["bin1"];
     IntegerVector   bins2    = data["bin2"];
     IntegerVector   counts   = data["count"];
     CharacterVector refNames = refs1.attr("levels");
-    bins1[0] = 3;
     int             nRefs    = refNames.size();
     int             nKept    = keptRefs.size();
     long int        nRowsIn  = refs1.size();
     long int        nRowsOut = 0;
     std::vector < bool > keptIds (nRefs + 1, false); // Levels start with 1 in R
+    // Recompute factors for the refs
+    std::vector < int > translateRefIds (nRefs + 1);
+    int refId = 1;                     // factors start with 1
     for (int i = 0; i < nRefs; ++i) {
         for (int j = 0; j < nKept; ++j) {
             if (refNames[i] == keptRefs[j]) {
                 keptIds[i+1] = true; // Levels start with 1 in R
+                translateRefIds[i+1] = refId;
+                ++refId;
                 break;
             }
         }
     }
-    // Recompute factors for the refs
-    std::vector < int > translateRefIds (nRefs + 1);
-    int refId = 1;                     // factors start with 1
-    for (int i = 1; i <= nRefs; ++i) { // factors start with 1
-        if (keptIds[i]) {
-            // CharacterVector start with 0
-            translateRefIds[i] = refId;
-            ++refId;
-        }
+    if (refId - 1 != nKept) {
+        Rcerr << "Problem during transfer: " << refId << " vs " << nKept << ".\n";
+        stop("Stopping here.");
     }
     // In-place update of the data
     for (long int i = 0; i < nRowsIn; ++i) {
@@ -184,6 +182,10 @@ DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     bins1.erase(nRowsOut, nRowsIn);
     bins2.erase(nRowsOut, nRowsIn);
     counts.erase(nRowsOut, nRowsIn);
+    if (refs1.size() != nRowsOut) {
+        Rcerr << "Problem while resizing vectors.\n";
+        stop("Stopping here.");
+    }
     refs1.attr("class") = "factor";
     refs2.attr("class") = "factor";
     refs1.attr("levels") = keptRefs;

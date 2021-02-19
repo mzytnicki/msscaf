@@ -1,23 +1,11 @@
-.removeSmallScaffolds <- function(object, keptRefs) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
-    }
-    message(paste0("\tDataset '", object@name, "' with ", nrow(object@interactionMatrix), " points."))
-    #removeSmallScaffoldsCpp(object@interactionMatrix, keptRefs)
-    object@interactionMatrix <- as_tibble(removeSmallScaffoldsCpp(object@interactionMatrix, keptRefs))
-    message(paste0("\t\tNow ", nrow(object@interactionMatrix), " points."))
-    return(object)
-}
-
 removeSmallScaffolds <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
     message(paste0("Removing small scaffolds (currently: ", length(object@chromosomes), ")."))
-    object@chromosomes       <- names(object@sizes[object@sizes >= object@minNBins])
-    object@sizes             <- object@sizes[object@chromosomes]
-    message(paste0("\tKeeping ", length(object@chromosomes), " scaffolds with at least ", object@minNBins, " bins."))
-    object@data              <- map(object@data, .removeSmallScaffolds, keptRefs = object@chromosomes)
+    chromosomes <- names(object@sizes[object@sizes >= object@minNBins])
+    object      <- keepScaffolds(object, chromosomes)
+    message(paste0("\tKeeping ", length(chromosomes), " scaffolds with at least ", object@minNBins, " bins."))
     return(object)
 }
 

@@ -125,13 +125,17 @@ splitBy2Ref <- function(object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
+    breakNCells <- ifelse(is.null(object@parameters@breakNCells), 0, object@parameters@breakNCells)
+    message(str(object@interactionMatrix))
+    message(str(min(as.numeric(object@interactionMatrix$ref1))))
+    message(str(min(as.numeric(object@interactionMatrix$ref2))))
     pairs <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
         group_by(ref1_ref2) %>%
         summarise(nCounts = n(), maxCounts = max(count)) %>%
         #filter(maxCounts >= object@parameters@maxLinkRange) %>%
-        filter(nCounts >= object@parameters@breakNCells) %>%
+        filter(nCounts >= breakNCells) %>%
         pull(ref1_ref2)
     message(paste0("\tKeeping ", length(pairs), " pairs of references."))
     data <- object@interactionMatrix %>%
@@ -151,6 +155,25 @@ computeRefSizes <- function(object) {
 
 isMatrixEmpty <- function(data) {
     return(nrow(data) == 0)
+}
+
+.keepScaffolds <- function(object, chromosomes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    object@interactionMatrix <- as_tibble(keepScaffoldsCpp(object@interactionMatrix, chromosomes))
+    return(object)
+}
+
+keepScaffolds <- function(object, chromosomes) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    chromosomes        <- mixedsort(unique(chromosomes))
+    object@chromosomes <- chromosomes
+    object@sizes       <- object@sizes[chromosomes]
+    object@data        <- map(object@data, .keepScaffolds, chromosomes = chromosomes)
+    return(object)
 }
 
 makeSymmetric <- function(data) {

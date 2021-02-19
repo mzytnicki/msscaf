@@ -143,6 +143,13 @@ checkBreaks <- function(object) {
         dplyr::filter(value <= pvalue) %>%
         dplyr::slice_tail(n = 1) %>%
         dplyr::pull(fcMeanCount)
+    if (length(object@parameters@breakThreshold) == 0) {
+        message("\t\tCannot estimated break threshold.  Using an arbitrary high threshold.")
+        object@parameters@breakThreshold <- object@breaks@data %>%
+            dplyr::arrange(desc(fcMeanCount)) %>%
+            dplyr::slice_head(n = 1) %>%
+            dplyr::pull(fcMeanCount)
+    }
     return(object)
 }
 
@@ -202,6 +209,7 @@ filterBreak <- function(parameters) {
     object@breaks@mapPlots     <- c()
     message(paste0("\tDataset '", object@name , "': Filtering breaks."))
     if (nrow(object@breaks@data) == 0) {
+        message("\t\tNo break found.")
         return(object)
     }
     selectedRefs <- object@breaks@data %>%

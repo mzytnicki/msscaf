@@ -105,6 +105,19 @@ checkJoin <- function(object, progressBar) {
     objects <- splitBy2Ref(object, sizes)
     pb <- progress_bar$new(total = length(objects))
     joins <- lapply(objects, checkJoin, progressBar = pb)
+    if (length(joins) == 0) {
+        message("\tNo join found.")
+        joinsObject <- new("tenxcheckerJoins")
+        joinsObject@data <- tibble(ref1   = character(),
+                                   ref2   = character(),
+                                   vert   = character(),
+                                   hor    = character(),
+                                   pvalue = numeric())
+        joinsObject@testPlots <- c()
+        joinsObject@mapPlots <- c()
+        object@joins <- joinsObject
+        return(object)
+    }
     joins <- tibble(ref1     = map_chr(joins, "ref1"),
                     ref2     = map_chr(joins, "ref2"),
                     tUL      = map(joins, "tUL"),

@@ -5,6 +5,11 @@
     d <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         dplyr::select(count)
+    if (nrow(d) == 0) {
+        message(paste0("Dataset '", object@name, "': Cannot estimate background count: there is no count outside diagonal matrices.\n\tSetting it as 1."))
+        object@parameters@minCount <- 1
+        return(object)
+    }
     sampleSize <- min(object@parameters@sampleSize, nrow(d))
     d <- d %>%
         sample_n(sampleSize)

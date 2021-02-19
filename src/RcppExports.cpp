@@ -66,15 +66,15 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// removeSmallScaffoldsCpp
-DataFrame removeSmallScaffoldsCpp(DataFrame& data, CharacterVector keptRefs);
-RcppExport SEXP _tenxchecker_removeSmallScaffoldsCpp(SEXP dataSEXP, SEXP keptRefsSEXP) {
+// keepScaffoldsCpp
+DataFrame keepScaffoldsCpp(DataFrame& data, CharacterVector keptRefs);
+RcppExport SEXP _tenxchecker_keepScaffoldsCpp(SEXP dataSEXP, SEXP keptRefsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
     Rcpp::traits::input_parameter< CharacterVector >::type keptRefs(keptRefsSEXP);
-    rcpp_result_gen = Rcpp::wrap(removeSmallScaffoldsCpp(data, keptRefs));
+    rcpp_result_gen = Rcpp::wrap(keepScaffoldsCpp(data, keptRefs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -112,7 +112,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
     {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
-    {"_tenxchecker_removeSmallScaffoldsCpp", (DL_FUNC) &_tenxchecker_removeSmallScaffoldsCpp, 2},
+    {"_tenxchecker_keepScaffoldsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},
     {NULL, NULL, 0}
