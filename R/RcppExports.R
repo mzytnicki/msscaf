@@ -25,6 +25,10 @@ keepScaffoldsCpp <- function(data, keptRefs) {
     .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
 }
 
+computeMeanTrianglesCpp <- function(data) {
+    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data)
+}
+
 parseHicCpp <- function(fname, resolution) {
     .Call('_tenxchecker_parseHicCpp', PACKAGE = 'tenxchecker', fname, resolution)
 }

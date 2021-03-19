@@ -42,11 +42,17 @@ estimateBackgroundCounts <- function(object) {
             mutate(distance = abs(bin1 - bin2)) %>%
             dplyr::select(distance, count) %>%
             sample_n(min(object@parameters@sampleSize, nrow(.))) %>%
-            mutate(loess = predict(loess(count ~ distance, data = ., span = 0.1))) %>%
-            dplyr::select(distance, loess) %>%
-            distinct() %>%
+            group_by(distance) %>%
+            summarise(count = sum(count)) %>%
             arrange(distance) %>%
-            filter(loess > object@parameters@minCount) %>%
+            mutate(cumulated = cumsum(count)) %>%
+            mutate(cumulated = cumulated / sum(.$count)) %>%
+            filter(cumulated <= 0.5) %>%
+#           mutate(loess = predict(loess(count ~ distance, data = ., span = 0.1))) %>%
+#           dplyr::select(distance, loess) %>%
+#           distinct() %>%
+#           arrange(distance) %>%
+#           filter(loess > object@parameters@minCount) %>%
             tail(n = 1) %>%
             pull(distance)
         message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, "."))

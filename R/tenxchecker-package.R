@@ -46,10 +46,12 @@
 #' @import magrittr
 #' @import tidyverse
 #' @import ggplot2
+#' @import ggforce
 #' @import GenomicRanges
 #' @import BiocParallel
 #' @import progress
 #' @import Matrix
+#' @import Biostrings
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
 #' @useDynLib tenxchecker

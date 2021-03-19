@@ -16,7 +16,7 @@ plotTriangles <- function(triangles, bins = NULL) {
 }
 
 randomizeData <- function(data) {
-    data %>% mutate(count = sample(count))
+    data %>% dplyr::mutate(count = sample(count))
 }
 
 computeMeanTriangle <- function(value, data = data) {
@@ -32,15 +32,14 @@ computeMeanTriangles <- function(data) {
     if (n < 0) {
         stop("Error while computing triangles: matrix is empty.")
     }
-    map_df(seq(n), computeMeanTriangle, data = data) %>%
-        rowid_to_column(var = "bin")
+    computeMeanTrianglesCpp(data) %>% as_tibble()
 }
 
 computeMeanTrianglesRandom <- function(i, data = data) {
     dataRandom <- randomizeData(data)
     computeMeanTriangles(data) %>%
-        mutate(randMeanCount = computeMeanTriangles(dataRandom)$meanCount) %>%
-        mutate(fcMeanCount = meanCount - randMeanCount)
+        dplyr::mutate(randMeanCount = computeMeanTriangles(dataRandom)$meanCount) %>%
+        dplyr::mutate(fcMeanCount = meanCount - randMeanCount)
 }
 
 checkBreak <- function(object) {
@@ -48,14 +47,14 @@ checkBreak <- function(object) {
     data <- object@interactionMatrix
     if (nrow(data) == 0) {
        # Matrix is empty, skip
-       return(list(data           = NULL,
+       return(list(data           = tibble(ref = character(), fcMeanCount = numeric(), nCells = integer()),
                    changePlot     = NULL,
                    changeDistPlot = NULL,
                    mapPlot        = NULL))
     }
     triangles <- computeMeanTriangles(data) %>%
-        rename(fcMeanCount = meanCount) %>%
-        mutate(fcMeanCount = fcMeanCount - median(fcMeanCount))
+        dplyr::rename(fcMeanCount = meanCount) %>%
+        dplyr::mutate(fcMeanCount = fcMeanCount - median(fcMeanCount))
     changePlot     <- plotTriangles(triangles)
     changeDistPlot <- triangles %>%
         ggplot(aes(x = fcMeanCount)) +
@@ -70,7 +69,10 @@ checkBreak <- function(object) {
 normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     progressBar$tick()
     if (isMatrixEmpty(object@interactionMatrix)) {
-        return(list(data = NULL, changePlot = NULL, changeDistPlot = NULL, mapPlot = NULL))
+        return(list(data           = tibble(ref = character(), fcMeanCount = numeric(), nCells = integer()),
+                    changePlot     = NULL,
+                    changeDistPlot = NULL,
+                    mapPlot        = NULL))
     }
     #message(paste0("\n  Working on ", object@chromosome, ".\n"))
     if (kr) {
@@ -95,19 +97,17 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     }
     objects <- splitByRef(object, chromosomes, sizes)
     pb <- progress_bar$new(total = length(objects))
-    #breaks <- bplapply(objects, normalizeAndBreak, progressBar = pb)
     message("\t\tComputing stats.")
     breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
-    data   <- map_dfr(breaks, "data", .id = "ref") %>% mutate(ref = factor(ref))
-    if (nrow(data) == 0) {
-        return(list())
-    }
+    # message(str(breaks))
+    data   <- map_dfr(breaks, "data", .id = "ref") %>% dplyr::mutate(ref = factor(ref))
+    message(paste0("\t\t", nrow(data), " breaks found."))
     breaksObject                 <- new("tenxcheckerBreaks")
     breaksObject@data            <- data
     breaksObject@changePlots     <- map(breaks, "changePlot")
     breaksObject@changeDistPlots <- map(breaks, "changeDistPlot")
     breaksObject@mapPlots        <- map(breaks, "mapPlot")
-    object@breaks <- breaksObject
+    object@breaks                <- breaksObject
     return(object)
 }
 
@@ -144,19 +144,19 @@ checkBreaks <- function(object) {
         dplyr::slice_tail(n = 1) %>%
         dplyr::pull(fcMeanCount)
     if (length(object@parameters@breakThreshold) == 0) {
-        message("\t\tCannot estimated break threshold.  Using an arbitrary high threshold.")
+        message("\t\tCannot estimate break threshold.  Using an arbitrary high threshold.")
         object@parameters@breakThreshold <- object@breaks@data %>%
-            dplyr::arrange(desc(fcMeanCount)) %>%
-            dplyr::slice_head(n = 1) %>%
+            dplyr::slice_max(fcMeanCount, n = 1, with_ties = FALSE) %>%
+            dplyr::mutate(fcMeanCount = - fcMeanCount) %>%
             dplyr::pull(fcMeanCount)
     }
     return(object)
 }
 
 estimateBreakThreshold <- function(object, pvalue) {
-    if (! is(object, "tenxcheckerClass")) {                                                                                                                                                                        
-        stop("Parameter should be a tenxcheckerClass.")                                                                                                                                                            
-    }                                                                                                                                                                                                              
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
     message("Estimating break thresholds")
     object@data <- map(object@data, .estimateBreakThreshold, pvalue = pvalue)
     return(invisible(object))
@@ -176,9 +176,9 @@ filterBreak <- function(parameters) {
         dplyr::filter(bin         <= objectRef@size - objectRef@parameters@maxLinkRange)
     repeat {
         breakPointBin <- breaksRef %>%
-            arrange(fcMeanCount, desc(nCells)) %>%
-            slice(1) %>%
-            pull(bin)
+            dplyr::arrange(fcMeanCount, desc(nCells)) %>%
+            dplyr::slice(1) %>%
+            dplyr::pull(bin)
         if (length(breakPointBin) == 0) {
             return(list(ref        = as.character(reference),
                         bins       = bins,
@@ -204,7 +204,7 @@ filterBreak <- function(parameters) {
     if (! is(object, "tenxcheckerExp")) {
         stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
     }
-    object@breaks@filteredData <- tibble(ref = factor(c(), levels = object@breaks@data), bin = integer())
+    object@breaks@filteredData <- tibble(ref = factor(c(), levels = levels(object@breaks@data$ref)), bin = integer())
     object@breaks@changePlots  <- c()
     object@breaks@mapPlots     <- c()
     message(paste0("\tDataset '", object@name , "': Filtering breaks."))
@@ -214,18 +214,18 @@ filterBreak <- function(parameters) {
     }
     selectedRefs <- object@breaks@data %>%
         dplyr::select(ref) %>%
-        distinct() %>%
-        pull() %>%
+        dplyr::distinct() %>%
+        dplyr::pull() %>%
         as.character()
     if (length(selectedRefs) == 0) {
         message("\t\tNo break found.")
         return(object)
     }
-    splitObject <- splitByRef(object, chromosomes, sizes)[selectedRefs]
-    splitBreaks <- object@breaks@data %>%
-        group_by(ref) %>%
-        group_split()
-    functionParameters <- transpose(list(ref = selectedRefs, object = splitObject, breaks = splitBreaks))
+    splitBreaks <- object@breaks@data %>% dplyr::group_by(ref)
+    splitNames  <- splitBreaks %>% dplyr::group_keys() %>% dplyr::pull(ref) %>% as.character()
+    splitBreaks <- splitBreaks %>% dplyr::group_split()
+    splitObject <- splitByRef(object, chromosomes, sizes)[splitNames]
+    functionParameters <- transpose(list(ref = splitNames, object = splitObject, breaks = splitBreaks))
     # parallel seems to need too much RAM
     #selectedBreaks <- bplapply(functionParameters, filterBreak)
     selectedBreaks <- lapply(functionParameters, filterBreak)
@@ -235,20 +235,21 @@ filterBreak <- function(parameters) {
         return(object)
     }
     selectedBreaks <- selectedBreaks %>%
-        mutate(ref = flatten_chr(ref))
+        dplyr::mutate(ref = flatten_chr(ref))
     changePlots <- selectedBreaks %>%
         dplyr::select(ref, changePlot) %>%
-        deframe()
+        tibble::deframe()
     mapPlots <- selectedBreaks %>%
         dplyr::select(ref, mapPlot) %>%
-        deframe()
+        tibble::deframe()
     selectedSplits <- selectedBreaks %>%
         dplyr::select(ref, bins) %>%
-        unnest(bins) %>%
-        rename(bin = bins)
+        tidyr::unnest(bins) %>%
+        dplyr::rename(bin = bins)
     object@breaks@filteredData <- selectedSplits
     object@breaks@changePlots  <- changePlots
     object@breaks@mapPlots     <- mapPlots
+    message(paste0("\t\tDataset '", object@name, "' filtered to ", nrow(object@breaks@filteredData), " breaks."))
     return(object)
 }
 
@@ -277,6 +278,7 @@ filterBreaks <- function(object) {
         dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
         dplyr::select("ref", "bin")
     object1@breaks@filteredData <- newData
+    message(paste0("\t\tDataset '", object1@name, "' filtered down to ", nrow(object1@breaks@filteredData), " breaks."))
     return(object1)
 }
 
@@ -292,7 +294,7 @@ compareBreaks <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    object@data <- map(object@data, .compareBreaks, objects = object@data)
+    object@data <- purrr::map(object@data, .compareBreaks, objects = object@data)
     return(invisible(object))
 }
 

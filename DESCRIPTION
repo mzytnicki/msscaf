@@ -19,8 +19,10 @@ Imports:
     magrittr,
     tidyverse,
     ggplot2,
+    ggforce,
     BiocParallel,
-    progress
+    progress,
+    Biostrings
 LinkingTo:
     RcppArmadillo,
     Rcpp,

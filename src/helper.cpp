@@ -134,6 +134,18 @@ DataFrame removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int thre
     return outputData;
 }
 
+bool caseInsensitiveEqual(std::string &s1, std::string &s2) {
+    if (s1.size() != s2.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < s1.size(); ++i) {
+        if (tolower(s1[i]) != tolower(s2[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // [[Rcpp::export]]
 DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     IntegerVector   refs1    = data["ref1"];
@@ -152,7 +164,9 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     int refId = 1;                     // factors start with 1
     for (int i = 0; i < nRefs; ++i) {
         for (int j = 0; j < nKept; ++j) {
-            if (refNames[i] == keptRefs[j]) {
+            std::string refName = as< std::string >(refNames[i]);
+            std::string keptRef = as< std::string >(keptRefs[j]);
+            if (caseInsensitiveEqual(refName, keptRef)) { // HiC data may change refs to upper case
                 keptIds[i+1] = true; // Levels start with 1 in R
                 translateRefIds[i+1] = refId;
                 ++refId;
@@ -161,15 +175,16 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
         }
     }
     if (refId - 1 != nKept) {
-        Rcerr << "Problem during transfer: " << refId << " vs " << nKept << ".\n";
+        Rcerr << "Problem during transfer: I found " << (refId-1) << " refs, but was told to keep " << nKept << ".\n";
         stop("Stopping here.");
     }
     // In-place update of the data
     for (long int i = 0; i < nRowsIn; ++i) {
         if (keptIds[refs1[i]] && keptIds[refs2[i]]) {
-            if (i != nRowsOut) {
-                refs1[nRowsOut]  = translateRefIds[refs1[i]];
-                refs2[nRowsOut]  = translateRefIds[refs2[i]];
+            //Rcerr << i << ", " << refs1[i] << " is now " << nRowsOut << ", " << translateRefIds[refs1[i]] << ".\n";
+            refs1[nRowsOut]  = translateRefIds[refs1[i]];
+            refs2[nRowsOut]  = translateRefIds[refs2[i]];
+            if (nRowsOut != i) {
                 bins1[nRowsOut]  = bins1[i];
                 bins2[nRowsOut]  = bins2[i];
                 counts[nRowsOut] = counts[i];
@@ -192,67 +207,39 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     refs2.attr("levels") = keptRefs;
     return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
 }
-/*
-DataFrame removeSmallScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
-    IntegerVector   tmpRefs1 = data["ref1"];
-    CharacterVector refNames = tmpRefs1.attr("levels");
-    int             nRefs    = refNames.size();
-    int             nKept    = keptRefs.size();
-    std::vector < int > refs1  = as < std::vector < int > > (data["ref1"]);
-    std::vector < int > refs2  = as < std::vector < int > > (data["ref2"]);
-    std::vector < int > bins1  = as < std::vector < int > > (data["bin1"]);
-    std::vector < int > bins2  = as < std::vector < int > > (data["bin2"]);
-    std::vector < int > counts = as < std::vector < int > > (data["count"]);
-    std::vector < bool > keptIds (nRefs + 1, false); // Levels start with 1 in R
-    int nElements = 0;
-    for (int i = 0; i < nRefs; ++i) {
-        for (int j = 0; j < nKept; ++j) {
-            if (refNames[i] == keptRefs[j]) {
-                keptIds[i+1] = true; // Levels start with 1 in R
-                break;
-            }
+
+
+// [[Rcpp::export]]
+DataFrame computeMeanTrianglesCpp (DataFrame &data) {
+    IntegerVector bins1  = data["bin1"];
+    IntegerVector bins2  = data["bin2"];
+    IntegerVector counts = data["count"];
+    long int      size   = std::max < int > (max(bins1), max(bins2)) + 1;
+    long int      n      = bins1.size();
+    std::vector < int > sumBin1 (size);
+    std::vector < int > sumBin2 (size);
+    std::vector < int > nBin1   (size);
+    std::vector < int > nBin2   (size);
+    IntegerVector bin           (size);
+    NumericVector meanCount     (size);
+    IntegerVector nCells        (size);
+    for (long int i = 0; i < n; ++i) {
+        sumBin1[bins1[i]] += counts[i];
+        sumBin2[bins2[i]] += counts[i];
+        ++nBin1[bins1[i]];
+        ++nBin2[bins2[i]];
+    }
+    meanCount[0] = sumBin2[0];
+    nCells[0]    = nBin2[0];
+    for (long int i = 1; i < size; ++i) {
+        meanCount[i] = meanCount[i-1] + sumBin2[i] - sumBin1[i-1];
+        nCells[i]     = nCells[i-1]   + nBin2[i]   - nBin1[i-1];
+    }
+    for (long int i = 0; i < size; ++i) {
+        bin[i] = i;
+        if (nCells[i] > 0) {
+            meanCount[i] /= nCells[i];
         }
     }
-    // In-place update of the data
-    for (size_t i = 0; i < refs1.size(); ++i) {
-        if (keptIds[refs1[i]] && keptIds[refs2[i]]) {
-            refs1[nElements]  = refs1[i];
-            refs2[nElements]  = refs2[i];
-            bins1[nElements]  = bins1[i];
-            bins2[nElements]  = bins2[i];
-            counts[nElements] = counts[i];
-            ++nElements;
-        }
-    }
-    refs1.resize(nElements);
-    refs2.resize(nElements);
-    bins1.resize(nElements);
-    bins2.resize(nElements);
-    counts.resize(nElements);
-    // Recompute factors for the refs
-    std::vector < int > translateRefIds (nRefs + 1);
-    int refId = 1;                     // factors start with 1
-    for (int i = 1; i <= nRefs; ++i) { // factors start with 1
-        if (keptIds[i]) {
-            // CharacterVector start with 0
-            translateRefIds[i] = refId;
-            ++refId;
-        }
-    }
-    for (size_t i = 0; i < refs1.size(); ++i) {
-        refs1[i] = translateRefIds[refs1[i]];
-        refs2[i] = translateRefIds[refs2[i]];
-    }
-    IntegerVector refs1R  = wrap(refs1);
-    IntegerVector refs2R  = wrap(refs2);
-    IntegerVector bins1R  = wrap(bins1);
-    IntegerVector bins2R  = wrap(bins2);
-    IntegerVector countsR = wrap(counts);
-    refs1R.attr("class") = "factor";
-    refs2R.attr("class") = "factor";
-    refs1R.attr("levels") = keptRefs;
-    refs2R.attr("levels") = keptRefs;
-    DataFrame outputData = Rcpp::DataFrame::create(_["ref1"]= refs1R, _["bin1"]= bins1R, _["ref2"]= refs2R, _["bin2"]= bins2R, _["count"]= countsR);
-    return outputData;
+    return Rcpp::DataFrame::create(_["bin"] = bin, _["meanCount"] = meanCount, _["nCells"] = nCells);
 }
-*/

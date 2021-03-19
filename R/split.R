@@ -38,13 +38,18 @@ splitChromosome <- function(object, parameters) {
         comparator <- function(x) { (x > splitPoint) }
     }
     object@data <- map(object@data, .splitChromosome, object@chromosomes, prevRef = prevRef, newRef = newRef, shiftedRef = shiftedRef, splitPoint = splitPoint, comparator = comparator)
+    currentRef <- object@sequences[[prevRef]]
     if (firstPart) {
-        object@sizes[[prevRef]] <- splitPoint
-        object@sizes[[newRef]]  <- newSize
+        object@sizes[[prevRef]]     <- splitPoint
+        object@sizes[[newRef]]      <- newSize
+        object@sequences[[prevRef]] <- subseq(currentRef, 1, splitPoint * object@binSize)
+        object@sequences[[newRef]]  <- subseq(currentRef, (splitPoint+1) * object@binSize, length(currentRef))
     }
     else {
-        object@sizes[[newRef]]  <- splitPoint
-        object@sizes[[prevRef]] <- newSize
+        object@sizes[[newRef]]      <- splitPoint
+        object@sizes[[prevRef]]     <- newSize
+        object@sequences[[newRef]]  <- subseq(currentRef, 1, splitPoint * object@binSize)
+        object@sequences[[prevRef]] <- subseq(currentRef, (splitPoint+1) * object@binSize, length(currentRef))
     }
     return(object)
 }

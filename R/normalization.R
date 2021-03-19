@@ -1,3 +1,49 @@
+.notSquareICE <- function(A) {
+    #message(str(summary(A)))
+    s               <- rowSums(A)
+    sm              <- mean(s)
+    bias            <- s / sm
+    bias[bias == 0] <- 1.0
+    A               <- A / bias
+    #message(str(bias))
+    #message(str(summary(A)))
+    return(A)
+}
+
+notSquareICE <- function(A, nIter = 1000, maxDelta = 0.1) {
+    Asav <- A
+    for (iter in seq.int(nIter)) {
+        A     <- .notSquareICE(A)
+        A     <- t(.notSquareICE(t(A)))
+        s     <- colSums(A)
+        sm    <- mean(s)
+        delta <- max(abs(s / sm - 1))
+        if (any(is.na(delta))) {
+          message("Warning, algorithm diverges")
+          return(Asav)
+        }
+        if (delta < maxDelta) {
+            return(A)
+        }
+    }
+    message(paste0("Warning, algorithm did not converge in ", nIter, " iterations."))
+    return(Asav)
+}
+
+normalizeNotSquareICE <- function(object) {
+    data <- object@interactionMatrix
+    if (nrow(data) == 0) {
+        # Matrix is empty, do not normalize it
+        return(object)
+    }
+    mat <- sparseMatrix(data$bin1 + 1, data$bin2 + 1, x = data$count)
+    mat <- summary(notSquareICE(mat))
+    object@interactionMatrix <- tibble(bin1  = mat$i - 1,
+                                       bin2  = mat$j - 1,
+                                       count = mat$x)
+    return(object)
+}
+
 ICE <- function(A, nIter = 10000, maxDelta = 0.1) {
     for (iter in seq.int(nIter)) {
         s       <- colSums(A)
@@ -144,7 +190,8 @@ normalizeKR <- function(object) {
     s <- summary(mat)
     object@interactionMatrix <- tibble(bin1  = s$i - 1,
                                        bin2  = s$j - 1,
-                                       count = s$x)
+                                       count = s$x) %>%
+        filter(bin1 >= bin2)
     return(object)
 }
 

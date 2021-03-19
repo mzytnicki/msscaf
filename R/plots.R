@@ -97,8 +97,8 @@ plotDiagonalStrength <- function(object) {
         mutate(diagPc = diagonalSum / countSum) %>%
         filter(distance <= 2 * object@parameters@maxLinkRange) %>%
         dplyr::select(ref1, bin1, distance, diagPc) %>%
-        rename(ref = ref1) %>%
-        rename(bin = bin1) %>%
+        dplyr::rename(ref = ref1) %>%
+        dplyr::rename(bin = bin1) %>%
         group_by(ref)
     n <- p %>% group_keys()
     p <- p %>%
@@ -219,6 +219,7 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
         p <- p + scale_fill_gradient2()
         #p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
+    #message(str(bins))
     if ((length(bins) == 1) & (!is.na(bins))) {
         for (bin in bins) {
             p <- p +
@@ -231,33 +232,58 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
 
 plot.10X2Ref <- function(object,
                          logColor = TRUE,
-                         x1 = NULL,
-                         x2 = NULL,
-                         y1 = NULL,
-                         y2 = NULL) {
+                         circles = FALSE) {
     scaleFactor <- computeScaleFactor(object)
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
     p <- data %>%
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) + 
-            scale_x_continuous(expand = c(0, 0)) +
-            scale_y_reverse(expand = c(0, 0)) +
+           #scale_x_continuous(expand = c(0, 0)) +
+           #scale_y_reverse(expand = c(0, 0)) + 
+            scale_x_continuous(lim = c(0, object@size1), expand = c(0, 0)) +
+            scale_y_reverse(lim = c(object@size2, 0), expand = c(0, 0)) +
             xlab(object@chromosome1) +
             ylab(object@chromosome2) +
             theme_bw() +
-            theme(panel.spacing = unit(0, "lines"))
-    if (!is.null(x1)) {
-        p <- p + geom_vline(xintercept = x1, linetype = "dotted", color = "red")
+            theme(panel.spacing = unit(0, "lines")) +
+            coord_fixed()
+    if (circles) {
+        circles <- tibble(
+            x      = c(1, 1, object@size1, object@size1),
+            y      = c(1, object@size2, 1, object@size2),
+            radius = rep.int(object@parameters@maxLinkRange, 4)) %>%
+            transpose()
+        addCircle <- function (plot, parameters) {
+            nPoints <- 1000
+            lim1 <- object@size1 / 2
+            lim2 <- object@size2 / 2
+            circle <- bind_rows(tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+                                       y = parameters$y + seq(0, parameters$radius)),
+                                tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+                                       y = parameters$y - seq(0, parameters$radius)),
+                                tibble(x = parameters$x + seq(0, parameters$radius),
+                                       y = parameters$y + parameters$radius - seq(0, parameters$radius)),
+                                tibble(x = parameters$x + seq(0, parameters$radius),
+                                       y = parameters$y - parameters$radius + seq(0, parameters$radius))) %>%
+                mutate(x = if_else((parameters$x < lim1) == (x < lim1), x, lim1)) %>%
+                mutate(y = if_else((parameters$y < lim2) == (y < lim2), y, lim2)) %>%
+                filter(x >= 0) %>%
+                filter(y >= 0) %>%
+                filter(x <= object@size1) %>%
+                filter(y <= object@size2)
+            plot + annotate(geom = "point", x = circle$x, y = circle$y, size = 0.1, colour = "grey", alpha = 0.5)
+        }
+        p <- purrr::reduce(circles, addCircle, .init = p)
     }
-    if (!is.null(x2)) {
-        p <- p + geom_vline(xintercept = x2, linetype = "dashed", color = "red")
-    }
-    if (!is.null(y1)) {
-        p <- p + geom_hline(yintercept = y1, linetype = "dotted", color = "red")
-    }
-    if (!is.null(y2)) {
-        p <- p + geom_hline(yintercept = y2, linetype = "dashed", color = "red")
-    }
+#   if (!is.null(x2)) {
+#       p <- p + geom_vline(xintercept = x2, linetype = "dashed", color = "red")
+#   }
+#   if (!is.null(y1)) {
+#       p <- p + geom_hline(yintercept = y1, linetype = "dotted", color = "red")
+#   }
+#   if (!is.null(y2)) {
+#       p <- p + geom_hline(yintercept = y2, linetype = "dashed", color = "red")
+#   }
     if (logColor) {
         p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     }
@@ -278,6 +304,7 @@ plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
         return(p)
     }
     scaleFactor <- computeScaleFactor(object, sizes)
+    message(paste0("Scale factor: ", scaleFactor))
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
     p <- data %>%
         makeSymmetric() %>%

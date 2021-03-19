@@ -1,8 +1,7 @@
 # Add the new references to the previously seen references
 # Potentially change case
-# Return a tibble, where the r1 is the set of the previous refs,
+# Return a tibble, where the r1 is the set of the seen refs,
 #    r2, the set of new refs
-#    all, the merged set
 mergeRefs <- function(refs1, refs2) {
     # If one set is contained in the other one, get the biggest
     # Or if the two sets are nearly the same, get the union
@@ -42,37 +41,29 @@ mergeSizes <- function(sizes1, sizes2, refs) {
     return(sizes)
 }
 
-updateRefsMatrices <- function(object, translationTable) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
-    }
-    oldLevels <- tibble(old = levels(object@interactionMatrix$ref1))
-    newLevels <- oldLevels %>%
-        left_join(translationTable, by = "old") %>%
-        pull(new)
-    addLevels <- translationTable %>%
-        anti_join(oldLevels, by = "old") %>%
-        pull(new)
-    orderedLevels <- mixedsort(translationTable$new)
-    levels(object@interactionMatrix$ref1) <- newLevels
-    object@interactionMatrix$ref1 <- fct_expand(object@interactionMatrix$ref1, addLevels)
-    levels(object@interactionMatrix$ref1) <- orderedLevels
-    levels(object@interactionMatrix$ref2) <- newLevels
-    object@interactionMatrix$ref2 <- fct_expand(object@interactionMatrix$ref2, addLevels)
-    levels(object@interactionMatrix$ref2) <- orderedLevels
-    return(object)
-}
-
-updateRefs <- function(object, translationTable) {
+updateRefs <- function(object, data) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Object should be a 'tenxcheckerClass'.")
     }
-    translationTable <- translationTable %>%
-        dplyr::select(all, name1) %>%
-        dplyr::rename(new = all) %>%
-        dplyr::rename(old = name1)
-    object@data <- map(object@data, updateRefsMatrices, translationTable = translationTable)
-    return(object)
+    if (! is(data, "tenxcheckerData")) {
+        stop("Object should be a 'tenxcheckerData'.")
+    }
+    oldLevels <- levels(data@inputMatrix$ref1)
+    oldLevels <- tibble(old = oldLevels, key = str_to_lower(oldLevels))
+    newLevels <- object@chromosomes
+    newLevels <- tibble(new = newLevels, key = str_to_lower(newLevels))
+    if (! all(unlist(map(oldLevels$key, ~ .x %in% newLevels$key)))) {
+        stop("Not all references are known references.")
+    }
+    transLevels <- left_join(oldLevels, newLevels, by = "key") %>% pull(new)
+    addLevels   <- anti_join(newLevels, oldLevels, by = "key") %>% pull(new)
+    levels(data@inputMatrix$ref1)         <- transLevels
+    data@inputMatrix$ref1                 <- fct_expand(data@inputMatrix$ref1, addLevels)
+    data@inputMatrix$ref1                 <- fct_relevel(data@inputMatrix$ref1, object@chromosomes)
+    levels(data@inputMatrix$ref2)         <- transLevels
+    data@inputMatrix$ref2                 <- fct_expand(data@inputMatrix$ref2, addLevels)
+    data@inputMatrix$ref2                 <- fct_relevel(data@inputMatrix$ref2, object@chromosomes)
+    return(data)
 }
 
 normalizeRefs <- function(object) {
@@ -105,6 +96,13 @@ extractRef <- function(object, ref) {
     return(tenxcheckerRefExp(data, ref, object@sizes[[ref]], object@parameters))
 }
 
+extract2Ref <- function(object, r1, r2, size1, size2) {
+    data <- object@interactionMatrix %>%
+        filter(ref1 == r1, ref2 == r2) %>%
+        dplyr::select(-c(ref1, ref2))
+    return(tenxchecker2RefExp(data, r1, r2, size1, size2, object@parameters))
+}
+
 create2Ref <- function(data, object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
@@ -126,9 +124,6 @@ splitBy2Ref <- function(object, sizes) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
     breakNCells <- ifelse(is.null(object@parameters@breakNCells), 0, object@parameters@breakNCells)
-    message(str(object@interactionMatrix))
-    message(str(min(as.numeric(object@interactionMatrix$ref1))))
-    message(str(min(as.numeric(object@interactionMatrix$ref2))))
     pairs <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
@@ -179,20 +174,20 @@ keepScaffolds <- function(object, chromosomes) {
 makeSymmetric <- function(data) {
     if ("ref1" %in% colnames(data)) {
         data %<>%
-            bind_rows(data %>%
-                          rename(tmp = ref1) %>%
-                          rename(ref1 = ref2) %>%
-                          rename(ref2 = tmp) %>%
-                          rename(tmp = bin1) %>%
-                          rename(bin1 = bin2) %>%
-                          rename(bin2 = tmp))
+            dplyr::bind_rows(data %>%
+                          dplyr::rename(tmp = ref1) %>%
+                          dplyr::rename(ref1 = ref2) %>%
+                          dplyr::rename(ref2 = tmp) %>%
+                          dplyr::rename(tmp = bin1) %>%
+                          dplyr::rename(bin1 = bin2) %>%
+                          dplyr::rename(bin2 = tmp))
         return(data)
     }
     data %<>%
-        bind_rows(data %>%
-                      rename(tmp = bin1) %>%
-                      rename(bin1 = bin2) %>%
-                      rename(bin2 = tmp))
+        dplyr::bind_rows(data %>%
+                      dplyr::rename(tmp = bin1) %>%
+                      dplyr::rename(bin1 = bin2) %>%
+                      dplyr::rename(bin2 = tmp))
     return(data)
 }
 
@@ -209,6 +204,13 @@ makeFullTibble <- function(data) {
     data %>%
         makeSymmetric() %>%
         complete(bin1, bin2, fill = list(count = 0))
+}
+
+makeFullTibbleNotSquare <- function(data, size1, size2) {
+    list(bin1 = seq.int(size1), bin2 = seq.int(size2)) %>%
+        cross_df() %>%
+        left_join(data, by = c("bin1", "bin2")) %>%
+        mutate(count = replace_na(count, 0))
 }
 
 makeTibbleFromList <- function(data, n) {

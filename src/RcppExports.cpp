@@ -78,6 +78,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// computeMeanTrianglesCpp
+DataFrame computeMeanTrianglesCpp(DataFrame& data);
+RcppExport SEXP _tenxchecker_computeMeanTrianglesCpp(SEXP dataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeMeanTrianglesCpp(data));
+    return rcpp_result_gen;
+END_RCPP
+}
 // parseHicCpp
 List parseHicCpp(std::string& fname, int resolution);
 RcppExport SEXP _tenxchecker_parseHicCpp(SEXP fnameSEXP, SEXP resolutionSEXP) {
@@ -113,6 +124,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
     {"_tenxchecker_keepScaffoldsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsCpp, 2},
+    {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 1},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},
     {NULL, NULL, 0}
