@@ -66,5 +66,6 @@ cleanData <- function(object) {
     }
     object <- removeLowCount(object)
     object <- removeSmallScaffolds(object)
+    normalizeHighCountRows(object)
     return(invisible(object))
 }

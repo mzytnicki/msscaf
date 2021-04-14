@@ -22,7 +22,10 @@ computeTest <- function(background, nBackground, data, nData) {
 #   message(paste0("max data: ", max(data)))
 #   message(paste0("med back: ", median(background)))
 #   message(paste0("med data: ", median(data)))
-    if ((length(background) == 0) & (length(data) == 0)) {
+    if (length(data) == 0) {
+        return(1.0)
+    }
+    if (max(data) <= 1) {
         return(1.0)
     }
 #   message("check 1")
@@ -47,8 +50,10 @@ computeTest <- function(background, nBackground, data, nData) {
 #   if (median(background) > (median(data) / 2)) {
 #       return(1.0)
 #   }
-#   message(paste0("back: ", background))
-#   message(paste0("data: ", data))
+#   message("back: ")
+#   message(str(table(background)))
+#   message("data: ")
+#   message(str(table(data)))
 #   message(str(wilcox.test(background,                                                                                                                                                                        
 #                               data,                                                                                                                                                                              
 #                               paired      = FALSE,                                                                                                                                                               
@@ -64,6 +69,7 @@ computeTest <- function(background, nBackground, data, nData) {
 }
 
 compareRegions <- function(object, rest, pointX, pointY, cornerSize, name) {
+    # message(str(name))
     f <- function (x, y) {
         #return(((sqrt((x - pointX)^2 + (y - pointY)^2)) < object@parameters@maxLinkRange) &
         return(((abs(x - pointX) + abs(y - pointY)) < object@parameters@maxLinkRange) &
@@ -82,6 +88,7 @@ compareRegions <- function(object, rest, pointX, pointY, cornerSize, name) {
 #   message(paste0("size 1: ", object@size1))
 #   message(paste0("size 2: ", object@size2))
     test <- computeTest(interior$count, as.numeric(object@size1) * as.numeric(object@size2) - cornerSize, corner$count, cornerSize)
+#   message(str(test))
     return(list(data = corner, test = test, rest = rest))
 }
 
@@ -169,7 +176,57 @@ checkJoin <- function(object, progressBar) {
                 tBR      = dataBR$test))
 }
 
-.checkJoins <- function(object, sizes) {
+cornerEuclideanDistance <- function(observedDistribution, backgroundDistribution) {
+# message(str(observedDistribution))
+# message(str(backgroundDistribution))
+    n <- nrow(observedDistribution)
+    #if (n == 0) return(0)
+    v <- observedDistribution %>%
+        dplyr::left_join(backgroundDistribution, by = "distance") %>%
+        dplyr::mutate(d = (count - meanCount) ^ 2) %>%
+        dplyr::pull(d) %>%
+        sum() %>%
+        sqrt()
+    return(v / n)
+}
+
+computeCornerDistanceOffset <- function(offset, backgroundDistribution, corner, maxDistance) {
+# message(str(offset))
+    backgroundDistribution <- backgroundDistribution %>%
+        dplyr::mutate(distance = distance - offset) %>%
+        dplyr::filter(distance >= 0)
+    corner <- corner %>%
+        dplyr::filter(distance <= maxDistance - offset)
+    cornerEuclideanDistance(corner, backgroundDistribution)
+}
+
+# Extract the rignt corner, fill missing values with 0, and summarize as distance/count tibble.
+extractCorner <- function(object, vert, hor) {
+# message(str(object@interactionMatrix))
+# message(str(vert))
+# message(str(hor))
+    interactionMatrix <- object@interactionMatrix
+    if (vert == "B") {
+        interactionMatrix <- interactionMatrix %>%
+            dplyr::mutate(bin1 = object@size1 - bin1)
+    }
+    if (hor == "R") {
+        interactionMatrix <- interactionMatrix %>%
+            dplyr::mutate(bin2 = object@size2 - bin2)
+    }
+# message(str(interactionMatrix))
+    interactionMatrix <- interactionMatrix %>%
+        dplyr::mutate(binMin = pmin(bin1, bin2)) %>%
+        dplyr::mutate(binMax = pmax(bin1, bin2)) %>%
+        dplyr::select(-c(bin1, bin2)) %>%
+        dplyr::rename(bin1 = binMax, bin2 = binMin)
+# message(str(interactionMatrix))
+# message(str(computeDistanceCount(interactionMatrix, object@parameters@maxLinkRange)))
+# message(str(computeDistanceCount(interactionMatrix, object@parameters@maxLinkRange) %>% filter(count > 0)))
+    computeDistanceCount(interactionMatrix, object@parameters@maxLinkRange)
+}
+
+.checkJoins <- function(object, sizes, pvalueThreshold) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
@@ -199,13 +256,14 @@ checkJoin <- function(object, progressBar) {
                     tBR      = map(joins, "tBR"),
                     testPlot = map(joins, "testPlot"),
                     mapPlot  = map(joins, "mapPlot")) %>%
-        gather(key = "key", value = "test", tUL, tUR, tBL, tBR) %>%
-        filter(!unlist(map(test, is_null))) %>%
-        mutate(pvalue = unlist(test)) %>%
-        separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
-        mutate(vert = factor(vert)) %>%
-        mutate(hor = factor(hor)) %>%
-        arrange(pvalue)
+        tidyr::gather(key = "key", value = "test", tUL, tUR, tBL, tBR) %>%
+        dplyr::filter(!unlist(map(test, is_null))) %>%
+        dplyr::mutate(pvalue = unlist(test)) %>%
+        tidyr::separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
+        dplyr::mutate(vert = factor(vert)) %>%
+        dplyr::mutate(hor = factor(hor)) %>%
+        dplyr::filter(pvalue <= pvalueThreshold) %>%
+        dplyr::arrange(pvalue)
     joinsObject <- new("tenxcheckerJoins")
     joinsObject@data <- joins %>%
         dplyr::select(-c(test, testPlot, mapPlot))
@@ -221,11 +279,104 @@ checkJoin <- function(object, progressBar) {
     return(object)
 }
 
-checkJoins <- function(object) {
+checkJoins <- function(object, pvalueThreshold) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    object@data <- map(object@data, .checkJoins, sizes = object@sizes)
+    object@data <- map(object@data, .checkJoins, sizes = object@sizes, pvalueThreshold)
+    return(invisible(object))
+}
+
+.removeDuplicateJoins <- function(object) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    message(paste0("\t\tDataset '", object@name, "'."))
+    # Transform joins to before/after
+    tmp <- object@joins@data %>%
+        dplyr::mutate(hor = as.character(hor)) %>%
+        dplyr::mutate(vert = as.character(vert)) %>%
+        dplyr::mutate(after1 = (hor == "R")) %>%
+        dplyr::mutate(after2 = (vert == "B"))
+    ambiguousJoins <- dplyr::bind_rows(tmp %>%
+                                           dplyr::select(ref1, after1, pvalue) %>%
+                                           dplyr::rename(ref = ref1, after = after1),
+                                       tmp %>%
+                                           dplyr::select(ref2, after2, pvalue) %>%
+                                           dplyr::rename(ref = ref2, after = after2)) %>%
+    # Find duplicates
+        dplyr::group_by(ref, after) %>%
+        dplyr::slice_min(order_by = pvalue, n = 2, with_ties = FALSE) %>%
+        dplyr::mutate(logPvalue = -log10(pvalue)) %>%
+        dplyr::summarize(pvalueDiff = max(logPvalue) - min(logPvalue), n = n(), .groups = "drop") %>%
+    # Select duplicates
+        dplyr::filter(n > 1, pvalueDiff <= 2) %>%
+        dplyr::select(ref, after)
+    # Transfor to ref1/bin1
+    refBin1 <- ambiguousJoins %>%
+        dplyr::rename(ref1 = ref) %>%
+        dplyr::mutate(hor = dplyr::if_else(after, "R", "L")) %>%
+        dplyr::select(ref1, hor)
+    # Transfor to ref2/bin2
+    refBin2 <- ambiguousJoins %>%
+        dplyr::rename(ref2 = ref) %>%
+        dplyr::mutate(vert = dplyr::if_else(after, "B", "U")) %>%
+        dplyr::select(ref2, vert)
+    object@joins@data <- object@joins@data %>%
+        dplyr::anti_join(refBin1, by = c("ref1", "hor")) %>%
+        dplyr::anti_join(refBin2, by = c("ref2", "vert"))
+    return(object)
+}
+
+removeDuplicateJoins <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("\tRemoving ambiguous joins")
+    object@data <- map(object@data, .removeDuplicateJoins)
+    return(invisible(object))
+}
+
+..checkCorners <- function(parameters, object, sizes, pb) {
+    objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
+    corner    <- extractCorner(objectRef, parameters$vert, parameters$hor)
+    values    <- purrr::map(seq.int(from = 0, to = objectRef@parameters@maxLinkRange, by = 1), computeCornerDistanceOffset, object@parameters@distanceCount, corner, object@parameters@maxLinkRange) %>% unlist()
+    distance  <- object@parameters@cornerScores %>%
+        dplyr::mutate(observed = values) %>%
+        dplyr::mutate(difference = observed - score) %>%
+        dplyr::filter(difference < 0.0) %>%
+        dplyr::filter(distance <= object@parameters@cornerLimit) %>%
+        dplyr::slice_min(difference) %>%
+        dplyr::pull(distance)
+    pb$tick()
+    if (length(distance) == 0) return(-1)
+    return(distance)
+#message(str(values))
+}
+
+.checkCorners <- function(object, sizes, pvalueThreshold) {
+    message(paste0("\t\tDataset '", object@name, "'."))
+    nJoins <- nrow(object@joins@data)
+    pb     <- progress_bar$new(total = nrow(object@joins@data))
+    values <- object@joins@data %>%
+        dplyr::mutate(hor = as.character(hor)) %>%
+        dplyr::mutate(vert = as.character(vert)) %>%
+        purrr::transpose() %>%
+        purrr::map(..checkCorners, object, sizes, pb) %>%
+        unlist()
+    object@joins@data <- object@joins@data %>%
+        dplyr::mutate(offset = values) %>%
+        dplyr::filter(offset >= 0)
+    message(paste0("\t\t\tKept ", nJoins, "/", nrow(object@joins@data), "."))
+    return(object)
+}
+
+checkCorners <- function(object, pvalueThreshold) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("\tChecking corner shape.")
+    object@data <- map(object@data, .checkCorners, object@sizes, pvalueThreshold)
     return(invisible(object))
 }
 
@@ -242,16 +393,18 @@ mergeJoins <- function(object, pvalueThreshold) {
     return(invisible(object))                                                                                                                                                                                      
 }
 
-..addJoinPlots <- function(object, ref1, ref2, size1, size2) {
+..addJoinPlots <- function(object, ref1, ref2, size1, size2, left, up) {
+    x <- ifelse(left, 0, size1)
+    y <- ifelse(up, 0, size2)
     object2Ref <- extract2Ref(object, ref1, ref2, size1, size2)
-    return(plot.10X2Ref(object2Ref))
-}
+    return(plot.10X2Ref(object2Ref, logColor = TRUE, circles = TRUE, center = list(x, y), radius = 100))
 
+}
 
 .addJoinPlots <- function(parameters, object, pb) {
     ref1             <- parameters$ref1
     ref2             <- parameters$ref2
-    joinPlots        <- map(object@data, ..addJoinPlots, ref1 = ref1, ref2 = ref2, size1 = object@sizes[[ref1]], size2 = object@sizes[[ref2]])
+    joinPlots        <- map(object@data, ..addJoinPlots, ref1 = ref1, ref2 = ref2, size1 = object@sizes[[ref1]], size2 = object@sizes[[ref2]], left = parameters$left, up = parameters$up)
     names(joinPlots) <- map(object@data, "name")
     pb$tick()
     return(joinPlots)
@@ -261,9 +414,14 @@ addJoinPlots <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    message(paste0("Computing plots."))
+    message(paste0("\tComputing plots."))
     pb                      <- progress_bar$new(total = nrow(object@joins))
-    object@joinPlots        <- map(object@joins %>% select(ref1, ref2) %>% transpose(), .addJoinPlots, object = object, pb = pb)
+    object@joinPlots        <- purrr::map(object@joins %>%
+                                       dplyr::select(ref1, ref2, hor, vert) %>%
+                                       dplyr::mutate(left = hor  == "L") %>%
+                                       dplyr::mutate(up   = vert == "U") %>%
+                                       purrr::transpose(),
+                                   .addJoinPlots, object = object, pb = pb)
     names(object@joinPlots) <- object@joins %>% unite("name", c(ref1, ref2, vert), sep = "_") %>% unite("name", c(name, hor), sep = "") %>% pull(name)
     return(object)                                                                                                                                                                                      
 }
@@ -272,7 +430,10 @@ findJoins <- function(object, pvalue = 0.05) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    object <- checkJoins(object)
+    object <- estimateCornerDistanceThreshold(object, pvalue)
+    object <- checkJoins(object, pvalue)
+    object <- removeDuplicateJoins(object)
+    object <- checkCorners(object, pvalue)
     object <- mergeJoins(object, pvalue)
     object <- addJoinPlots(object)
     return(invisible(object))                                                                                                                                                                                      

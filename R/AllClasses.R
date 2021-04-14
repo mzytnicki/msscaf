@@ -25,6 +25,9 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             binSize         = "ANY",
                                             sampleSize      = "ANY",
                                             loessSpan       = "ANY",
+                                            distanceCount   = "ANY",
+                                            cornerScores    = "ANY",
+                                            cornerLimit     = "ANY",
                                             breakThreshold  = "ANY", 
                                             breakNCells     = "ANY", 
                                             maxLinkRange    = "ANY", 
@@ -92,8 +95,9 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     if (ncol(inputMatrix) != 5) {
         stop("'inputMatrix' should have 5 columns", call. = FALSE)
     }
-    if (any(colnames(inputMatrix) != c("ref1", "bin1", "ref2", "bin2", "count"))) {
-        stop("'inputMatrix' names are incorrect", call. = FALSE)
+    correctMatrixColNames <- c("ref1", "bin1", "ref2", "bin2", "count")
+    if (any(colnames(inputMatrix) != correctMatrixColNames)) {
+        stop(paste0("'inputMatrix' names are incorrect.  Should be ", paste0(correctMatrixColNames, collapse = ", "), ", found ", paste0(colnames(inputMatrix), collapse = ", "), "."), call. = FALSE)
     }
     if ((! is.factor(inputMatrix$ref1)) | (! is.factor(inputMatrix$ref2))) {
         stop("References should be factors.", call. = FALSE)
@@ -215,6 +219,7 @@ setClass("tenxcheckerClass", slots = c(data               = "ANY",
                                        chromosomes        = "ANY",
                                        sizes              = "ANY",
                                        breaks             = "ANY",
+                                       breakPlots         = "ANY",
                                        joins              = "ANY",
                                        joinPlots          = "ANY",
                                        newChromosomes     = "ANY",
@@ -253,6 +258,7 @@ tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
     object@minNBins          <- minNBins
     object@data              <- c()
     object@breaks            <- NULL
+    object@breakPlots        <- NULL
     object@joins             <- NULL
     object@joinPlots         <- NULL
     object@newChromosomes    <- c()
@@ -308,6 +314,9 @@ addExp <- function(object, data, expName) {
     parameters@minRowCount     <- 100
     parameters@breakThreshold  <- NULL
     parameters@breakNCells     <- NULL
+    parameters@distanceCount   <- NULL
+    parameters@cornerScores    <- NULL
+    parameters@cornerLimit     <- NULL
     parameters@nRandomizations <- 10
     parameters@nBinZoom        <- 100
 

@@ -49,8 +49,7 @@ ICE <- function(A, nIter = 10000, maxDelta = 0.1) {
         s       <- colSums(A)
         sm      <- mean(s)
         if (log10(sm) > 300) {
-          message("Warning, algorithm diverges")
-          return(A)
+          stop("Warning, algorithm diverges")
         }
         bias    <- s / sm
         A       <- A / bias
@@ -154,44 +153,59 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
     return(result)
 }
 
-normalizeKR <- function(object) {
+normalizeKR <- function(object, sizes = NULL) {
+    if (is(object, "tenxcheckerExp")) {
+        chromosome <- FALSE
+    }
+    else if (is(object, "tenxcheckerRefExp")) {
+        chromosome <- TRUE
+    }
+    else {
+        stop(paste0("Function 'normalizeKR' does not know what to do with parameter of type '", is(object), "'."))
+    }
     #message("    KR normalization.")
     data <- object@interactionMatrix
     if (nrow(data) == 0) {
         # Matrix is empty, do not normalize it
         return(object)
     }
-    nCellsNotDiag <- data %>%
-        filter(bin1 != bin2) %>%
-        nrow()
-    if (nCellsNotDiag <= 2 * object@size) {
-        # There is almost nothing except the diagonal.  The algorithm will diverge anyway.
-        return(object)
+    if (chromosome) {
+        mat <- makeFullMatrix(data)
     }
-    mat <- makeFullMatrix(data)
+    else {
+        mat <- makeFullMatrixGenome(data, sizes)
+    }
     n   <- nrow(mat)
     nullRows <- which((colSums(mat) == 0) | (rowSums(mat) == 0))
     if (length(nullRows) > 0) {
         # message(paste0("      ", length(nullRows), " rows/columns are empty."))
         diag(mat)[nullRows] <- 1
     }
-    matKR <- tryCatch(
+    mat <- tryCatch(
         expr = {
              KR(mat)
         },
-        error = function(e){
+        error = function(e) {
             # message("KR did not converge, resorting to ICE normalization.")
-            ICE(mat)
+            mat <- tryCatch(
+                expr = {
+                     ICE(mat)
+                },
+                error = function(e) {
+                    message("Neither KR nor ICE converged.")
+                    return(object)
+                })
         })
     if (length(nullRows) > 0) {
-        matKR[nullRows, ] <- 0
-        matKR[, nullRows] <- 0
+        mat[nullRows, ] <- 0
+        mat[, nullRows] <- 0
     }
-    s <- summary(mat)
-    object@interactionMatrix <- tibble(bin1  = s$i - 1,
-                                       bin2  = s$j - 1,
-                                       count = s$x) %>%
-        filter(bin1 >= bin2)
+    if (chromosome) {
+        object@interactionMatrix <- makeSparseMatrix(mat)
+    }
+    else {
+        object@interactionMatrix <- makeSparseMatrixGenome(mat, sizes)
+    }
     return(object)
 }
 
@@ -269,6 +283,23 @@ normalizeMD <- function(object) {
     object@interactionMatrix <- data
     return(object)
 }
+
+.normalizeHighCountRows <- function(object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    message(paste0("\tDataset ", object@name))
+    normalizeHighCountRowsCpp(object@interactionMatrix, sizes)
+}
+
+normalizeHighCountRows <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("Trimming high count lines.")
+    purrr::walk(object@data, .normalizeHighCountRows, sizes = object@sizes)
+}
+
 
 normalize <- function(object) {
     object <- normalizeKR(object)

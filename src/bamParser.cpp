@@ -57,6 +57,10 @@ bool operator==(const position_t &lhs, const position_t &rhs) {
     return ((lhs.chrId == rhs.chrId) && (lhs.pos == rhs.pos));
 }
 
+bool operator!=(const position_t &lhs, const position_t &rhs) {
+    return ((lhs.chrId != rhs.chrId) || (lhs.pos != rhs.pos));
+}
+
 std::ostream& operator<<(std::ostream& os, position_t const &position) {
     return os << "(" << &position << ") " << position.chrId << ":" << position.pos;
 }
@@ -68,15 +72,46 @@ using matrixCounts_t   = std::vector < unsigned long >;
 using validMatrices_t  = std::vector < bool >;
 using validMatrixIds_t = std::vector < size_t >;
 using matrix_t         = std::unordered_map < uint64_t, unsigned long >;
-using matrices_t       = std::unordered_map < uint64_t, matrix_t >;
+//using matrices_t       = std::unordered_map < uint64_t, matrix_t >;
+using matrices_t       = std::vector < matrix_t >;
 using chrIndices_t     = std::vector < std::pair < size_t, size_t > >;
 using indicesChr_t     = std::vector < std::vector < size_t > >;
 
+/*
 int getMoleculeSize (std::vector < positions_t > &positionss) {
     std::vector < int > sizes;
     Rcout << "Computing molecule sizes.\n";
     Progress progress(positionss.size(), true);
     for (auto &positions: positionss) {
+        int maxSize = 0;
+        int chrId   = -1;
+        int start   = 0;
+        int end     = 0;
+        for (auto &position: positions) {
+            if (position.chrId == chrId) {
+                end = position.pos;
+            }
+            else {
+                maxSize = std::max < int > (maxSize, end - start + 1);
+                chrId   = position.chrId;
+                start   = position.pos;
+                end     = position.pos;
+            }
+        }
+        maxSize = std::max < int > (maxSize, end - start + 1);
+        sizes.push_back(maxSize);
+        progress.increment();
+    }
+    return getMedian(sizes);
+}
+*/
+
+int getMoleculeSize (umiMap_t &umiMap) {
+    std::vector < int > sizes;
+    Rcout << "Computing molecule sizes.\n";
+    Progress progress(umiMap.size(), true);
+    for (auto &it: umiMap) {
+        auto &positions = it.second;
         int maxSize = 0;
         int chrId   = -1;
         int start   = 0;
@@ -126,6 +161,7 @@ void updateMatrices(matrices_t &matrices, validMatrices_t &validMatrices, validM
     }
 }
 
+/*
 void dump(matrices_t          &matrices,
           chrIndices_t        &chrIndices,
           std::vector < int > &stdChrs1,
@@ -170,7 +206,48 @@ void dump(matrices_t          &matrices,
     }
     matrices.clear();
 }
+*/
 
+void dump(matrices_t          &matrices,
+          int                  chrId1, 
+          std::vector < int > &stdChrs1,
+          std::vector < int > &stdChrs2,
+          std::vector < int > &stdBins1,
+          std::vector < int > &stdBins2,
+          std::vector < int > &stdCounts,
+          unsigned int         minCount) {
+    for (size_t chrId2 = 0; chrId2 < matrices.size(); ++chrId2) {
+        matrix_t &matrix = matrices[chrId2];
+        for (auto it = matrix.begin(); it != matrix.end(); ) {
+            if (it->second < minCount) {
+                it = matrix.erase(it);
+            }
+            else {
+                it++;
+            }
+        }
+        size_t nElements = matrix.size();
+        std::vector < int > tmpChrs1(nElements, chrId1);
+        std::vector < int > tmpChrs2(nElements, chrId2);
+        std::vector < int > tmpBins1, tmpBins2, tmpCounts;
+        tmpBins1.reserve(nElements);
+        tmpBins2.reserve(nElements);
+        tmpCounts.reserve(nElements);
+        for (auto it = matrix.begin(); it != matrix.end(); ++it) {
+            tmpBins1.push_back(getFirstKey(it->first));
+            tmpBins2.push_back(getSecondKey(it->first));
+            tmpCounts.push_back(it->second);
+        }
+        stdChrs1.insert(stdChrs1.end(), tmpChrs1.begin(), tmpChrs1.end());
+        stdChrs2.insert(stdChrs2.end(), tmpChrs2.begin(), tmpChrs2.end());
+        stdBins1.insert(stdBins1.end(), tmpBins1.begin(), tmpBins1.end());
+        stdBins2.insert(stdBins2.end(), tmpBins2.begin(), tmpBins2.end());
+        stdCounts.insert(stdCounts.end(), tmpCounts.begin(), tmpCounts.end());
+    }
+    matrices.clear();
+}
+
+/*
 // [[Rcpp::export]]
 List parseBamFileCpp(String fileName, int32_t binSize) {
     unsigned int minCount = 2;
@@ -200,7 +277,7 @@ List parseBamFileCpp(String fileName, int32_t binSize) {
     for (nAlignments = 0; sam_read1(inputFile, header, alignment) > 0; ++nAlignments) {
         uint32_t pos    = alignment->core.pos + 1;
         uint32_t posBin = pos / binSize;
-        int chrId    = alignment->core.tid;
+        int chrId       = alignment->core.tid;
         if (chrId > nChrs) Rcerr << "Found an out-of-bound chr ID.\n";
         uint8_t *umi = bam_aux_get(alignment, "BX");
         if ((chrId != -1) && (umi != NULL)) {
@@ -282,29 +359,108 @@ List parseBamFileCpp(String fileName, int32_t binSize) {
         dump(matrices, chrIndices, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount);
     }
     positionss.clear();
-    /*
+    IntegerVector chrs1, chrs2;
+    IntegerVector bins1, bins2, counts;
+    Rcout << "Exported " << stdChrs1.size() << " points.\n";
+    chrs1 = stdChrs1;
+    chrs2 = stdChrs2;
+    bins1 = stdBins1;
+    bins2 = stdBins2;
+    counts = stdCounts;
+    chrs1 = chrs1 + 1; // factors in R start with 1
+    chrs2 = chrs2 + 1;
+    chrs1.attr("class") = "factor";
+    chrs2.attr("class") = "factor";
+    chrs1.attr("levels") = chrs;
+    chrs2.attr("levels") = chrs;
+    IntegerVector chrSizes;
+    for (size_t i = 0; i < sizes.size(); ++i) {
+        chrSizes.push_back(sizes[i], as<std::string>(chrs[i]));
+    }
+    DataFrame outputDataFrame = DataFrame::create(_["ref1"]  = chrs1,
+                                                  _["bin1"]  = bins1,
+                                                  _["ref2"]  = chrs2,
+                                                  _["bin2"]  = bins2,
+                                                  _["count"] = counts);
+    return List::create(_["data"]  = outputDataFrame,
+                        _["size"]  = moleculeSize,
+                        _["sizes"] = chrSizes);
+}
+*/
 
-    if (nValidMatrices < 10000) { 
-        Progress progress2(positionss.size(), true);
-        matrices_t matrices (nMatrices);
-        for (auto &positions: positionss) {
-            updateMatrices(matrices, validMatrices, positions, 0, nMatrices, indicesChr);
-            progress2.increment();
-        }
-        dump(matrices, 0, chrIndices, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount, true);
+
+// [[Rcpp::export]]
+List parseBamFileCpp(String fileName, int32_t binSize) {
+    unsigned int minCount = 2;
+    //ProfilerStart("/tmp/profile.out");
+    Rcout << "Reading " << fileName.get_cstring() << "\n";
+    samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
+    DataFrame emptyDataFrame;
+    if (inputFile == NULL) {
+        Rcerr << "File does not exist.  Exiting.\n";
+        return emptyDataFrame;
     }
-    else {
-        Progress progress2(ceil(nMatrices / nMatricesPerBatch), true);
-        for (size_t matrixId = 0; matrixId < nMatrices; matrixId += nMatricesPerBatch) {
-            matrices_t matrices (nMatricesPerBatch);
-            for (auto &positions: positionss) {
-                updateMatrices(matrices, validMatrices, positions, matrixId, matrixId + nMatricesPerBatch, indicesChr);
+    bam_hdr_t *header     = sam_hdr_read(inputFile);
+    bam1_t    *alignment  = bam_init1();
+    int        nChrs      = header->n_targets;
+    Rcout << "Found " << nChrs << " references\n";
+    std::vector <int> sizes(header->n_targets);
+    CharacterVector chrs(header->n_targets);
+    for (int i = 0; i < header->n_targets; ++i) {
+        chrs[i] = header->target_name[i];
+        sizes[i] = header->target_len[i] / binSize + 1;
+    }
+    umiMap_t umiMap;
+    Rcout << "Reading BAM file.\n";
+    unsigned int nAlignments;
+    int previousChrId = nChrs;
+    std::vector < int > stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts;
+    matrices_t matrices;
+    for (nAlignments = 0; sam_read1(inputFile, header, alignment) > 0; ++nAlignments) {
+        uint32_t pos    = alignment->core.pos + 1;
+        uint32_t posBin = pos / binSize;
+        int chrId       = alignment->core.tid;
+        if (chrId > nChrs) Rcerr << "Found an out-of-bound chr ID.\n";
+        uint8_t *umi = bam_aux_get(alignment, "BX");
+        if (chrId != previousChrId) {
+            dump(matrices, previousChrId, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount);
+            matrices.resize(chrId + 1);
+            previousChrId = chrId;
+        }
+        if ((chrId != -1) && (umi != NULL)) {
+            std::string umiString((char *) ++umi);
+            position_t position(chrId, posBin);
+            if ((umiMap[umiString].empty()) || (umiMap[umiString].back() != position)) {
+                for (position_t &previousPosition: umiMap[umiString]) {
+                    if (previousPosition.chrId > chrId) {
+                        Rcpp::stop("Input BAM file is not sorted.");
+                    }
+                    ++matrices[previousPosition.chrId][getKey(posBin, previousPosition.pos)];
+                }
+                umiMap[umiString].push_back(position);
             }
-            dump(matrices, matrixId, chrIndices, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount, false);
-            progress2.increment();
+        }
+        if ((nAlignments > 0) && (nAlignments % 10000000 == 0)) {
+            Rcout << "\tRead " << nAlignments << " reads.\n";
         }
     }
-    */
+    dump(matrices, previousChrId, stdChrs1, stdChrs2, stdBins1, stdBins2, stdCounts, minCount);
+    bam_destroy1(alignment);
+    sam_close(inputFile);
+    Rcout << "Read parsing done with " << sizes.size() << " references and " << nAlignments << " alignments.  Placing to buckets.\n";
+    chrIndices_t chrIndices (nChrs * (nChrs + 1) / 2);
+    indicesChr_t indicesChr (nChrs);
+    size_t nMatrices = 0;
+    for (int i = 0; i < nChrs; ++i) {
+        indicesChr[i] = std::vector < size_t > (i+1);
+        for (int j = 0; j <= i; ++j) {
+            chrIndices[nMatrices] = {i, j};
+            indicesChr[i][j] = nMatrices;
+            ++nMatrices;
+        }
+    }
+    int moleculeSize = getMoleculeSize(umiMap);
+    umiMap.clear();
     IntegerVector chrs1, chrs2;
     IntegerVector bins1, bins2, counts;
     Rcout << "Exported " << stdChrs1.size() << " points.\n";

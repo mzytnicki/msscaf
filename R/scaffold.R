@@ -111,6 +111,7 @@ repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin)
 scaffold <- function(object) {
     selectedJoins <- selectJoins(object@joins)
     orderedJoins  <- orderJoins(object, selectedJoins)
+    pb <- progress_bar$new(total = nrow(orderedJoins))
     while (nrow(orderedJoins) != 0) {
         firstRow     <- orderedJoins %>% dplyr::slice(1) %>% as.list()
         orderedJoins <- orderedJoins %>% dplyr::slice(-1)
@@ -118,13 +119,14 @@ scaffold <- function(object) {
         other        <- firstRow$other
         after        <- firstRow$after
         collinear    <- firstRow$collinear
-        message(paste0("  Stitching ", reference, " with ", other, ", ", nrow(orderedJoins), " remaining."))
+        # message(paste0("  Stitching ", reference, " with ", other, ", ", nrow(orderedJoins), " remaining."))
         object       <- stitchChromosomePair(object, reference, other, after, collinear)
         if (nrow(orderedJoins) != 0) {
             orderedJoins <- repairJoins(orderedJoins, reference, other, after, collinear) %>%
                 dplyr::rename(ref1 = reference, ref2 = other)
             orderedJoins <- orderJoins(object, orderedJoins)
         }
+        pb$tick()
     }
     return(object)
 }

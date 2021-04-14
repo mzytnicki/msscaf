@@ -21,12 +21,16 @@ removeLowCountRowsCpp <- function(data, sizes, threshold) {
     .Call('_tenxchecker_removeLowCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes, threshold)
 }
 
+normalizeHighCountRowsCpp <- function(data, sizes) {
+    invisible(.Call('_tenxchecker_normalizeHighCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes))
+}
+
 keepScaffoldsCpp <- function(data, keptRefs) {
     .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
 }
 
-computeMeanTrianglesCpp <- function(data) {
-    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data)
+computeMeanTrianglesCpp <- function(data, distance) {
+    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance)
 }
 
 parseHicCpp <- function(fname, resolution) {

@@ -177,24 +177,35 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
+plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
     minLim <- 1
     maxLim <- object@size
     if (length(bins) == 0) {
         bins <- NA
     }
-    scaleFactor <- computeScaleFactor(object)
-    data        <- object@interactionMatrix %>% rescale(scaleFactor)
-    minCount    <- data %>% pull(count) %>% min()
+    if (length(lim) == 2) {
+        scaleFactor <- computeScaleFactor(NULL, lim)
+    }
+    else {
+        scaleFactor <- computeScaleFactor(object)
+    }
+    if (length(lim) == 2) {
+        minLim <- max(lim[[1]], minLim)
+        maxLim <- min(lim[[2]], maxLim)
+    }
+    else if ((length(lim) != 1) & (! is_null(lim))) {
+        stop("'lim' should be a vector of size 2, or NULL.")
+    }
+    data     <- object@interactionMatrix %>%
+                    dplyr::filter(bin1 >= minLim, bin1 <= maxLim) %>%
+                    dplyr::filter(bin2 >= minLim, bin2 <= maxLim) %>%
+                    rescale(scaleFactor)
+    minCount <- data %>% pull(count) %>% min()
     if ((minCount < 0) & (logColor)) {
         stop("Trying to plot a map with negative count in log scale.")
     }
-    if (length(lim) == 2) {
-        minLim <- lim[1]
-        maxLim <- lim[2]
-    }
-    else if ((length(lim) != 1) | (! is.na(lim))) {
-        stop("'lim' should be a vector of size 2, or NA.")
+    if (logColor) {
+        data %<>% dplyr::filter(count > 0)
     }
     data %<>% makeSymmetric()
     # if (!is.na(bin)) {
@@ -208,8 +219,8 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
     p <- data %>% 
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) +
-            scale_x_continuous(expand = c(0, 0), limits = c(minLim, maxLim)) +
-            scale_y_continuous(expand = c(0, 0), limits = c(minLim, maxLim)) +
+	    scale_x_continuous(lim = c(minLim, maxLim), expand = c(0, 0)) +
+	    scale_y_reverse(lim = c(maxLim, minLim), expand = c(0, 0)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
             ggtitle(object@chromosome)
@@ -219,61 +230,81 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NA, lim = NA) {
         p <- p + scale_fill_gradient2()
         #p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
-    #message(str(bins))
-    if ((length(bins) == 1) & (!is.na(bins))) {
+    if (length(bins) > 100) {
+        bins <- NULL
+    }
+    if (! is_null(bins)) {
         for (bin in bins) {
             p <- p +
                 geom_hline(yintercept = bin, linetype = "dotted") +
                 geom_vline(xintercept = bin, linetype = "dotted")
         }
-    }
+    }    
     return(p)
 }
 
 plot.10X2Ref <- function(object,
-                         logColor = TRUE,
-                         circles = FALSE) {
-    scaleFactor <- computeScaleFactor(object)
+			 logColor = TRUE,
+			 circles = FALSE,
+			 center  = NULL,
+			 radius  = NULL) {
+    if (is.null(radius)) {
+        scaleFactor <- computeScaleFactor(object)
+    }
+    else {
+        scaleFactor <- computeScaleFactor(NULL, c(2 * radius, 2 * radius))
+    }
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
+    x1          <- 0
+    x2          <- rescaleValue(object@size1, scaleFactor)
+    y1          <- 0
+    y2          <- rescaleValue(object@size2, scaleFactor)
+    if (! is.null(center)) {
+	if (length(center) != 2) {
+	    stop(paste0("'center' parameter should have size 2 (size ", length(center), " found)."))
+	}
+	x1 <- max(x1, rescaleValue(center[[1]] - radius, scaleFactor))
+	x2 <- min(x2, rescaleValue(center[[1]] + radius, scaleFactor))
+	y1 <- max(y1, rescaleValue(center[[2]] - radius, scaleFactor))
+	y2 <- min(y2, rescaleValue(center[[2]] + radius, scaleFactor))
+    }
     p <- data %>%
-        ggplot(aes(x = bin1, y = bin2)) + 
-            geom_raster(aes(fill = count)) + 
-           #scale_x_continuous(expand = c(0, 0)) +
-           #scale_y_reverse(expand = c(0, 0)) + 
-            scale_x_continuous(lim = c(0, object@size1), expand = c(0, 0)) +
-            scale_y_reverse(lim = c(object@size2, 0), expand = c(0, 0)) +
-            xlab(object@chromosome1) +
-            ylab(object@chromosome2) +
-            theme_bw() +
-            theme(panel.spacing = unit(0, "lines")) +
-            coord_fixed()
+	ggplot(aes(x = bin1, y = bin2)) + 
+	    geom_raster(aes(fill = count)) + 
+	    scale_x_continuous(lim = c(x1, x2), expand = c(0, 0)) +
+	    scale_y_reverse(lim = c(y2, y1), expand = c(0, 0)) +
+	    xlab(object@chromosome1) +
+	    ylab(object@chromosome2) +
+	    theme_bw() +
+	    theme(panel.spacing = unit(0, "lines")) +
+	    coord_fixed()
     if (circles) {
-        circles <- tibble(
-            x      = c(1, 1, object@size1, object@size1),
-            y      = c(1, object@size2, 1, object@size2),
-            radius = rep.int(object@parameters@maxLinkRange, 4)) %>%
-            transpose()
-        addCircle <- function (plot, parameters) {
-            nPoints <- 1000
-            lim1 <- object@size1 / 2
-            lim2 <- object@size2 / 2
-            circle <- bind_rows(tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
-                                       y = parameters$y + seq(0, parameters$radius)),
-                                tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
-                                       y = parameters$y - seq(0, parameters$radius)),
-                                tibble(x = parameters$x + seq(0, parameters$radius),
-                                       y = parameters$y + parameters$radius - seq(0, parameters$radius)),
-                                tibble(x = parameters$x + seq(0, parameters$radius),
-                                       y = parameters$y - parameters$radius + seq(0, parameters$radius))) %>%
-                mutate(x = if_else((parameters$x < lim1) == (x < lim1), x, lim1)) %>%
-                mutate(y = if_else((parameters$y < lim2) == (y < lim2), y, lim2)) %>%
-                filter(x >= 0) %>%
-                filter(y >= 0) %>%
-                filter(x <= object@size1) %>%
-                filter(y <= object@size2)
-            plot + annotate(geom = "point", x = circle$x, y = circle$y, size = 0.1, colour = "grey", alpha = 0.5)
-        }
-        p <- purrr::reduce(circles, addCircle, .init = p)
+	circles <- tibble(
+	    x      = c(1, 1, object@size1, object@size1),
+	    y      = c(1, object@size2, 1, object@size2),
+	    radius = rep.int(object@parameters@maxLinkRange, 4)) %>%
+	    transpose()
+	addCircle <- function (plot, parameters) {
+	    nPoints <- 1000
+	    lim1 <- object@size1 / 2
+	    lim2 <- object@size2 / 2
+	    circle <- bind_rows(tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+				       y = parameters$y + seq(0, parameters$radius)),
+				tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+				       y = parameters$y - seq(0, parameters$radius)),
+				tibble(x = parameters$x + seq(0, parameters$radius),
+				       y = parameters$y + parameters$radius - seq(0, parameters$radius)),
+				tibble(x = parameters$x + seq(0, parameters$radius),
+				       y = parameters$y - parameters$radius + seq(0, parameters$radius))) %>%
+		mutate(x = if_else((parameters$x < lim1) == (x < lim1), x, lim1)) %>%
+		mutate(y = if_else((parameters$y < lim2) == (y < lim2), y, lim2)) %>%
+		filter(x >= x1) %>%
+		filter(y >= y1) %>%
+		filter(x <= x2) %>%
+		filter(y <= y2)
+	    plot + annotate(geom = "point", x = circle$x, y = circle$y, size = 0.1, colour = "grey", alpha = 0.5)
+	}
+	p <- purrr::reduce(circles, addCircle, .init = p)
     }
 #   if (!is.null(x2)) {
 #       p <- p + geom_vline(xintercept = x2, linetype = "dashed", color = "red")
@@ -285,41 +316,40 @@ plot.10X2Ref <- function(object,
 #       p <- p + geom_hline(yintercept = y2, linetype = "dashed", color = "red")
 #   }
     if (logColor) {
-        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+	p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     }
     else {
-        p <- p + scale_fill_gradient(low = "blue", high = "red")
+	p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
     return(p)
 }
 
-
 plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
     if (!is.null(ref)) {
-        p <- object@interactionMatrix %>%
-            filter(ref1 == ref) %>%
-            filter(ref2 == ref) %>%
-            tenxcheckerRefExp(ref, object@parameters) %>%
-            plot.10XRef()
-        return(p)
+	p <- object@interactionMatrix %>%
+	    filter(ref1 == ref) %>%
+	    filter(ref2 == ref) %>%
+	    tenxcheckerRefExp(ref, object@parameters) %>%
+	    plot.10XRef()
+	return(p)
     }
     scaleFactor <- computeScaleFactor(object, sizes)
     message(paste0("Scale factor: ", scaleFactor))
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
     p <- data %>%
-        makeSymmetric() %>%
-        ggplot(aes(x = bin1, y = bin2)) + 
-        geom_raster(aes(fill = count)) + 
-        facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
-        scale_x_continuous(expand = c(0, 0)) +
-        scale_y_reverse(expand = c(0, 0)) +
-        theme_bw() +
-        theme(panel.spacing = unit(0, "lines"))
+	makeSymmetric() %>%
+	ggplot(aes(x = bin1, y = bin2)) + 
+	geom_raster(aes(fill = count)) + 
+	facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
+	scale_x_continuous(expand = c(0, 0)) +
+	scale_y_reverse(expand = c(0, 0)) +
+	theme_bw() +
+	theme(panel.spacing = unit(0, "lines"))
     if (logColor) {
-        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+	p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     }
     else {
-        p <- p + scale_fill_gradient(low = "blue", high = "red")
+	p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
     return(p)
 }

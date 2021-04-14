@@ -41,6 +41,7 @@ mergeSizes <- function(sizes1, sizes2, refs) {
     return(sizes)
 }
 
+# Update refs in experiments, so that it matches the genome.
 updateRefs <- function(object, data) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Object should be a 'tenxcheckerClass'.")
@@ -63,6 +64,13 @@ updateRefs <- function(object, data) {
     levels(data@inputMatrix$ref2)         <- transLevels
     data@inputMatrix$ref2                 <- fct_expand(data@inputMatrix$ref2, addLevels)
     data@inputMatrix$ref2                 <- fct_relevel(data@inputMatrix$ref2, object@chromosomes)
+    # Modify the data, so that ref1 >= ref2
+    inverted <- data@inputMatrix %>%
+        dplyr::filter(as.integer(ref1) < as.integer(ref2)) %>%
+        dplyr::rename(ref1 = ref2, ref2 = ref1, bin1 = bin2, bin2 = bin1)
+    data@inputMatrix <- data@inputMatrix %>%
+        dplyr::filter(as.integer(ref1) >= as.integer(ref2)) %>%
+        dplyr::bind_rows(inverted)
     return(data)
 }
 
@@ -88,12 +96,12 @@ splitByRef <- function(object, chromosomes, sizes) {
          parameters = object@parameters)
 }
 
-extractRef <- function(object, ref) {
+extractRef <- function(object, ref, size) {
     data <- object@interactionMatrix %>%
-        filter(ref1 == ref2) %>%
-        filter(ref1 == ref) %>%
+        dplyr::filter(ref1 == ref2) %>%
+        dplyr::filter(ref1 == ref) %>%
         dplyr::select(-c(ref1, ref2))
-    return(tenxcheckerRefExp(data, ref, object@sizes[[ref]], object@parameters))
+    return(tenxcheckerRefExp(data, ref, size, object@parameters))
 }
 
 extract2Ref <- function(object, r1, r2, size1, size2) {
@@ -192,13 +200,64 @@ makeSymmetric <- function(data) {
 }
 
 makeFullMatrix <- function(data) {
-    n <- max(data$bin1, data$bin2)
-    if (n == -Inf) {
+    if (nrow(data) == 0) {
         stop("Matrix is empty.")
     }
     mat <- sparseMatrix(data$bin1 + 1, data$bin2 + 1, x = data$count, symmetric = TRUE)
     return(mat)
 }
+
+makeFullMatrixGenome <- function(data, sizes) {
+    message(str(data %>% dplyr::filter(ref1 != ref2)))
+    message(str(data %>% dplyr::filter(as.integer(ref1) > as.integer(ref2))))
+    if (data %>% dplyr::filter(as.integer(ref1) < as.integer(ref2)) %>% nrow() > 0) stop("Input matrix is not upper: problem with references.")
+    if (data %>% dplyr::filter(ref1 == ref2, bin1 < bin2) %>% nrow() > 0) stop("Input matrix is not upper: problem with bins.")
+    if (data %>% dplyr::mutate(size1 = sizes[ref1], size2 = sizes[ref2]) %>% dplyr::filter(bin1 > size1 | bin2 > size2) %>% nrow() > 0) stop("Problem with ref sizes.")
+    cumulatedSizes <- cumsum(sizes)
+    names(cumulatedSizes) <- NULL
+    cumulatedSizes <- c(1, cumulatedSizes)
+    message(str(cumulatedSizes))
+    data <- data %>%
+        dplyr::mutate(bin1 = bin1 + cumulatedSizes[ref1]) %>%
+        dplyr::mutate(bin2 = bin2 + cumulatedSizes[ref2]) %>%
+        dplyr::select(-c(ref1, ref2))
+    message(str(data %>% dplyr::filter(bin1 < bin2)))
+    if (data %>% dplyr::filter(bin1 < bin2) %>% nrow() > 0) stop("Matrix is not upper.")
+    mat <- sparseMatrix(data$bin1, data$bin2, x = data$count, symmetric = TRUE)
+    return(mat)
+}
+
+
+makeSparseMatrix <- function(data) {
+    data <- summary(data)
+    tibble(bin1  = data$i - 1, bin2  = data$j - 1, count = data$x) %>% filter(bin1 >= bin2)
+}
+
+
+makeSparseMatrixGenome <- function(data, sizes) {
+    refs           <- names(sizes)
+    cumulatedSizes <- cumsum(sizes)
+    names(cumulatedSizes) <- NULL
+    cumulatedSizes <- c(1, cumulatedSizes)
+    sumSizes       <- sum(sizes)
+    refSizes       <- enframe(cumulatedSizes, name = "ref", value = "bin") %>%
+        right_join(tibble(bin = seq.int(sumSizes)), by = "bin") %>%
+        dplyr::mutate(ref = factor(refs[ref], levels = refs)) %>%
+        dplyr::arrange(bin) %>%
+        tidyr::fill(ref)
+    data           <- summary(data)
+    tibble(bin1  = data$i, bin2  = data$j, count = data$x) %>%
+        dplyr::left_join(refSizes, by = c("bin1" = "bin")) %>%
+        dplyr::rename(ref1 = ref) %>%
+        dplyr::left_join(refSizes, by = c("bin2" = "bin")) %>%
+        dplyr::rename(ref2 = ref) %>%
+        dplyr::mutate(bin1 = bin1 - cumulatedSizes[ref1]) %>%
+        dplyr::mutate(bin2 = bin2 - cumulatedSizes[ref2]) %>%
+        dplyr::filter(as.integer(ref1) >= as.integer(ref2)) %>%
+        dplyr::filter((as.integer(ref1) != as.integer(ref2)) || (bin1 >= bin2)) %>%
+        dplyr::select(ref1, bin1, ref2, bin2, count)
+}
+
 
 makeFullTibble <- function(data) {
     data %>%
@@ -222,11 +281,14 @@ makeTibbleFromList <- function(data, n) {
 }
 
 computeScaleFactor <- function(object, sizes) {
-    if (is(object, "tenxcheckerExp")) {
+    if (is.null(object)) {
+        length <- sizes[[2]] - sizes[[1]]
+    }
+    else if (is(object, "tenxcheckerExp")) {
         length <- sum(sizes)
     }
     else if (is(object, "tenxchecker2RefExp")) {
-        length <- max(object@size1, object@size2)
+        length <- min(object@size1, object@size2)
     }
     else if (is(object, "tenxcheckerRefExp")) {
         length <- object@size
@@ -246,8 +308,8 @@ rescale <- function(data, scale) {
         return(data)
     }
     data %<>%
-        dplyr::mutate(bin1 = round(bin1 / scale) * scale) %>%
-        dplyr::mutate(bin2 = round(bin2 / scale) * scale)
+        dplyr::mutate(bin1 = as.integer(round(bin1 / scale) * scale)) %>%
+        dplyr::mutate(bin2 = as.integer(round(bin2 / scale) * scale))
     if ("ref1" %in% colnames(data)) {
         data %<>%
             dplyr::group_by(ref1, ref2, bin1, bin2) %>%
@@ -261,4 +323,21 @@ rescale <- function(data, scale) {
             dplyr::ungroup()
     }
     data
+}
+
+rescaleValue <- function(value, scale) {
+    as.integer(round(value / scale) * scale)
+}
+
+computeDistanceCount <- function(interactionMatrix, distance) {
+    bins <- seq.int(from = 0, to = distance, by = 1)
+    emptyMatrix <- tibble(bin1 = bins, bin2 = bins) %>%
+        tidyr::expand(bin1, bin2) %>%
+        dplyr::filter(bin1 >= bin2) %>%
+        dplyr::filter(bin1 - bin2 <= distance)
+    emptyMatrix %>%
+        dplyr::left_join(interactionMatrix, by = c("bin1", "bin2")) %>%
+        tidyr::replace_na(list(count = 0)) %>%
+        dplyr::mutate(distance = abs(bin1 - bin2)) %>%
+        dplyr::select(distance, count)
 }
