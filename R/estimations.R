@@ -101,7 +101,7 @@ estimateDistanceCount <- function(object) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    message("\t\tEstimating distance/count distributions.")
+    message("\t\tEstimating distance/count distribution.")
     # Do not forget to add empty cells: zero count
     diagonal <- object@interactionMatrix %>%
         dplyr::filter(ref1 == ref2) %>%
@@ -189,14 +189,14 @@ message(str(values))
         stop("Parameter should be a tenxcheckerExp.")
     }
     nSamples <- 10 / pvalueThreshold
-    message(paste0("\t\tDataset '", object@name, "':"))
+    message(paste0("\tDataset '", object@name, "':"))
     object   <- estimateDistanceCount(object)
     points   <- findRandomCornerPoints(object, sizes, nSamples) %>%
         purrr::transpose()
-    message("\t\t\tExtracting random matrices.")
+    message("\t\tExtracting random matrices.")
     pb       <- progress_bar$new(total = length(points))
     corners  <- purrr::map(points, extractCornerFromPoint, object, pb)
-    message("\t\t\tComputing stats.")
+    message("\t\tComputing stats.")
     pb       <- progress_bar$new(total = length(points))
     object@parameters@cornerScores <- purrr::map(corners, compareCorner, object@parameters@distanceCount, object@parameters@maxLinkRange, pb) %>%
         purrr::transpose() %>%
@@ -214,7 +214,7 @@ estimateCornerDistanceThreshold <- function(object, pvalueThreshold) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    message("\tJoin shape estimations.")
+    message("Join shape estimations.")
     object@data <- purrr::map(object@data, .estimateCornerDistanceThreshold, object@sizes, pvalueThreshold, object@minNBins)
     return(object)
 }

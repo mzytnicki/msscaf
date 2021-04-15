@@ -293,6 +293,7 @@ checkJoins <- function(object, pvalueThreshold) {
     }
     message(paste0("\t\tDataset '", object@name, "'."))
     # Transform joins to before/after
+    nJoins <- nrow(object@joins@data)
     tmp <- object@joins@data %>%
         dplyr::mutate(hor = as.character(hor)) %>%
         dplyr::mutate(vert = as.character(vert)) %>%
@@ -325,6 +326,7 @@ checkJoins <- function(object, pvalueThreshold) {
     object@joins@data <- object@joins@data %>%
         dplyr::anti_join(refBin1, by = c("ref1", "hor")) %>%
         dplyr::anti_join(refBin2, by = c("ref2", "vert"))
+    message(paste0("\t\t\tKept ", nrow(object@joins@data), "/", nJoins, "."))
     return(object)
 }
 
@@ -367,7 +369,7 @@ removeDuplicateJoins <- function(object) {
     object@joins@data <- object@joins@data %>%
         dplyr::mutate(offset = values) %>%
         dplyr::filter(offset >= 0)
-    message(paste0("\t\t\tKept ", nJoins, "/", nrow(object@joins@data), "."))
+    message(paste0("\t\t\tKept ", nrow(object@joins@data), "/", nJoins, "."))
     return(object)
 }
 
@@ -389,7 +391,7 @@ mergeJoins <- function(object, pvalueThreshold) {
         dplyr::arrange(pvalue) %>%
         dplyr::mutate(p_adj = p.adjust(pvalue, method = "BH")) %>%
         dplyr::filter(p_adj <= pvalueThreshold)
-    message(paste0(nrow(object@joins), " joins found."))
+    message(paste0("\t", nrow(object@joins), " joins found in total."))
     return(invisible(object))                                                                                                                                                                                      
 }
 

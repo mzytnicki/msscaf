@@ -58,9 +58,7 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
 #'
 #' @export
 setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
-                                      binSize      = "ANY",
-                                      maxLinkRange = "ANY", 
-                                      sizes        = "ANY")
+                                      maxLinkRange = "ANY") 
 )
 
 
@@ -78,9 +76,7 @@ setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
 #'
 #' @export
 tenxcheckerData <- function(inputMatrix  = NULL,
-                            binSize      = NULL,
-                            maxLinkRange = NULL,
-                            sizes        = NULL) {
+                            maxLinkRange = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -111,9 +107,6 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     if (! identical(levels(inputMatrix$ref1), levels(inputMatrix$ref2))) {
         stop("Levels of the references should be identical.")
     }
-    if (! identical(names(sizes), levels(inputMatrix$ref1))) {
-        stop("Names of the sizes of chromosomes should match with the names of the matrix.")
-    }
 
     # Convert "diagonal matrices" to upper matrices
     diagonalData <- inputMatrix %>%
@@ -131,18 +124,12 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     object <- new("tenxcheckerData")
     
     object@inputMatrix  <- inputMatrix
-    object@binSize      <- binSize
     object@maxLinkRange <- maxLinkRange
-    object@sizes        <- sizes
 
     chromosomes <- mixedsort(levels(object@inputMatrix$ref1))
     object@inputMatrix <- object@inputMatrix %>%
         mutate(ref1 = fct_relevel(ref1, chromosomes)) %>%
         mutate(ref2 = fct_relevel(ref2, chromosomes))
-    if (is.null(object@sizes)) {
-        object@sizes <- computeRefSizes(object)
-    }
-    object@sizes <- object@sizes[mixedsort(names(object@sizes))]
     
     return(invisible(object))
 }
@@ -306,7 +293,7 @@ addExp <- function(object, data, expName) {
     data <- updateRefs(object, data)
 
     parameters <- new("tenxcheckerParameters")
-    parameters@binSize         <- data@binSize
+    parameters@binSize         <- object@binSize
     parameters@maxLinkRange    <- data@maxLinkRange
     parameters@sampleSize      <- 10000
     parameters@loessSpan       <- 0.5
