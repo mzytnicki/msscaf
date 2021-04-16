@@ -832,5 +832,7 @@ splitPositions <- c(50, 50)
 joinRef1 <- c(3, 4)
 joinRef2 <- c(4, 5)
 joinDistances <- c(1, 10)
-object <- makeSimObject(2, 5, 100, 20, 5, 0.2, c(1, 2), c(50, 50), c(3, 4), c(4, 5), c(1, 10))
+object <- makeSimObject(1, 1, 100, 20, 5, 0.2, c(1), c(50), c(), c(), c())
+object <- makeSimObject(1, 2, 100, 20, 5, 0.2, c(), c(), c(1), c(2), c(1))
+#object <- makeSimObject(2, 5, 100, 20, 5, 0.2, c(1, 2), c(50, 50), c(3, 4), c(4, 5), c(1, 10))
 ```

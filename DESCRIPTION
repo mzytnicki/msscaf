@@ -22,7 +22,8 @@ Imports:
     ggforce,
     BiocParallel,
     progress,
-    Biostrings
+    Biostrings,
+    gridExtra
 LinkingTo:
     RcppArmadillo,
     Rcpp,

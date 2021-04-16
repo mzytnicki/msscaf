@@ -52,6 +52,7 @@
 #' @import progress
 #' @import Matrix
 #' @import Biostrings
+#' @import gridExtra
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
 #' @useDynLib tenxchecker

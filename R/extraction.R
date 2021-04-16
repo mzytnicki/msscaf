@@ -67,3 +67,25 @@ splitBy2Ref <- function(object, sizes) {
     names(data) <- pairs
     lapply(data, create2Ref, object = object, sizes = sizes)
 }
+
+getDataset <- function(object, name) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Object should be a 'tenxcheckerClass'.")
+    }
+    index <- purrr::detect_index(object@data, function(d) d@name == name)
+    if (index == 0) {
+        stop(paste0("Dataset name '", name, "' not found."))
+    }
+    return(object@data[[index]])
+}
+
+getDatasetRef <- function(object, datasetName, ref1, ref2 = NULL) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Object should be a 'tenxcheckerClass'.")
+    }
+    dataset <- getDataset(object, name)
+    if (is.null(ref2)) {
+        return(extractRef(dataset, ref1, object@sizes[[ref1]]))
+    }
+    return(extract2Ref(dataset, ref1, ref2, object@sizes[[ref1]], object@sizes[[ref2]]))
+}

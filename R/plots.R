@@ -181,7 +181,7 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
     minLim <- 1
     maxLim <- object@size
     if (length(bins) == 0) {
-        bins <- NA
+        bins <- NULL
     }
     if (length(lim) == 2) {
         scaleFactor <- computeScaleFactor(NULL, lim)
@@ -324,14 +324,17 @@ plot.10X2Ref <- function(object,
     return(p)
 }
 
-plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
-    if (!is.null(ref)) {
-	p <- object@interactionMatrix %>%
-	    filter(ref1 == ref) %>%
-	    filter(ref2 == ref) %>%
-	    tenxcheckerRefExp(ref, object@parameters) %>%
-	    plot.10XRef()
-	return(p)
+plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerExp'.")
+    }
+    if (! is.null(ref1)) {
+        if (! is.null(ref2)) {
+            object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
+            return(plot.10X2Ref(object))
+        }
+        object <- extractRef(object, ref1, sizes[[ref1]])
+        return(plot.10XRef(object))
     }
     scaleFactor <- computeScaleFactor(object, sizes)
     message(paste0("Scale factor: ", scaleFactor))
@@ -344,7 +347,8 @@ plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
 	scale_x_continuous(expand = c(0, 0)) +
 	scale_y_reverse(expand = c(0, 0)) +
 	theme_bw() +
-	theme(panel.spacing = unit(0, "lines"))
+	theme(panel.spacing = unit(0, "lines")) +
+        ggtitle(object@name)
     if (logColor) {
 	p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     }
@@ -352,4 +356,36 @@ plot.10X <- function(object, sizes, logColor = TRUE, ref = NULL) {
 	p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
     return(p)
+}
+
+plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1 = NULL, ref2 = NULL) {
+    if (is(object, "tenxcheckerClass")) {
+        if (! is.null(ref1)) {
+            if (! ref1 %in% object@chromosomes) {
+                stop(paste0("Reference #1 '", ref1, "', is not a known reference."))
+            }
+            if (! is.null(ref2)) {
+                if (! ref2 %in% object@chromosomes) {
+                    stop(paste0("Reference #2 '", ref2, "', is not a known reference."))
+                }
+                if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
+                   tmp <- ref1
+                   ref1 <- ref2
+                   ref2 <- tmp
+                }
+            }
+        }
+        sizes  <- object@sizes
+        if (is.null(dataset)) {
+             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2)
+             return(do.call("grid.arrange", c(plots, ncol = length(plots))))
+        }
+        else {
+            object <- getDataset(object, dataset)
+        }
+    }
+    else if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerClass' or 'tenxcheckerExp'.")
+    }
+    return(plot.10XDataset(object, sizes, logColor, ref1, ref2))
 }

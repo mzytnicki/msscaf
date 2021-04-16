@@ -1,41 +1,3 @@
-generateRow <- function(distance, maxNReads, size, diagSize) {
-    lambda <- as.integer(round(maxNReads * dgeom(distance, prob = 1 / diagSize)))
-    tibble(bin1 = seq.int(size), count = as.integer(round(rpois(size, lambda)))) %>%
-        dplyr::mutate(bin2 = as.integer(bin1 - distance)) %>%
-        dplyr::filter(bin2 >= 0) %>%
-        dplyr::select(bin1, bin2, count) %>%
-        dplyr::filter(count > 0)
-}
-
-makePlainMatrix <- function(size, maxNReads, diagSize) {
-    purrr::map_dfr(seq.int(size) - 1, generateRow, maxNReads, size, diagSize) %>%
-        dplyr::mutate(ref1 = factor(c("dummyRef")), .before = 1) %>%
-        dplyr::mutate(ref2 = factor(c("dummyRef")), .after = bin1)
-}
-
-makeNoiseMatrix <- function(data, size, gaussianSd) {
-    noise <- tibble(bin1 = seq.int(size) - 1, bin2 = seq.int(size) - 1) %>%
-        tidyr::complete(bin1, bin2) %>%
-        dplyr::mutate(count = as.integer(round(abs(rnorm(nrow(.), mean = 0, sd = gaussianSd))))) %>%
-        dplyr::filter(count > 0) %>%
-        dplyr::mutate(ref1 = factor(c("dummyRef")), .before = 1) %>%
-        dplyr::mutate(ref2 = factor(c("dummyRef")), .after = bin1)
-    data %>% bind_rows(noise) %>%
-        dplyr::group_by(ref1, bin1, ref2, bin2) %>%
-        dplyr::summarise(count = sum(count)) %>%
-        dplyr::ungroup()
-}
-
-makePlainNoisedData <- function(size, maxNReads, diagSize, gaussianNoise) {
-    data <- makePlainMatrix(size, maxNReads, diagSize)
-    data <- makeNoiseMatrix(data, size, gaussianNoise)
-    object <- tenxcheckerData(inputMatrix  = data,
-                              binSize      = 1,
-                              maxLinkRange = NULL,
-                              sizes        = c("dummyRef" = size))
-    return(invisible(object))
-}
-
 cleanMatrices <- function(interactionMatrices, refs) {
     interactionMatrices %>%
         dplyr::filter(count > 0) %>%
@@ -44,21 +6,19 @@ cleanMatrices <- function(interactionMatrices, refs) {
         dplyr::mutate(ref2 = factor(ref2, levels = refs))
 }
 
-generateCorner <- function(distance, r1, r2, refSize, maxNReads, diagSize) {
-    nRefs  <- length(refs)
-    lambda <- as.integer(round(maxNReads * dgeom(distance, prob = 1 / diagSize)))
-    tibble(bin1 = seq.int(from = refSize - distance, to = refSize - 1),
-           count = as.integer(round(rpois(distance, lambda)))) %>%
-        dplyr::mutate(bin2 = as.integer(bin1 + distance)) %>%
-        dplyr::filter(bin2 <= refSize) %>%
+generateCorner <- function(offset, r1, r2, refSize, maxNReads, diagSize, distance) {
+    lambda <- as.integer(round(maxNReads * dgeom(distance + offset, prob = 1 / diagSize)))
+    tibble(bin1 = seq.int(from = refSize - offset - 1, to = refSize - 1),
+           bin2 = seq.int(from = 0, to = offset),
+           count = as.integer(round(rpois(offset + 1, lambda)))) %>%
         dplyr::select(bin1, bin2, count) %>%
         dplyr::mutate(ref1 = r1) %>%
         dplyr::mutate(ref2 = r2)
 }
 
 addJoin <- function(interactionMatrices, refSize, maxNReads, ref1, ref2, distance, diagSize) {
-    corner <- purrr::map_dfr(seq.int(from = distance, to = diagSize), generateCorner, ref1, ref2, refSize, maxNReads, diagSize)
-    dplyr::bind_rows(interactionMatrices, diags) %>%
+    corner <- purrr::map_dfr(seq.int(refSize) - 1, generateCorner, ref1, ref2, refSize, maxNReads, diagSize, distance)
+    dplyr::bind_rows(interactionMatrices, corner) %>%
         dplyr::group_by(ref1, bin1, ref2, bin2) %>%
         dplyr::summarise(count = sum(count), .groups = "drop")
 }
@@ -72,12 +32,12 @@ addJoins <- function(interactionMatrices, refs, refSize, maxNReads, diagSize, re
 
 addSplit <- function(interactionMatrices, ref, position) {
     interactionMatrices %>%
-        dplyr::mutate(count = if_else(ref1 == ref & ref2 == ref & bin1 > position & bin2 < position, 0, count))
+        dplyr::mutate(count = if_else(ref1 == ref & ref2 == ref & bin1 > position & bin2 < position, 0L, count))
 }
 
-addSplits <- function(interactionMatrices, refs, positions) {
-    for (i in seq_along(refs)) {
-        interactionMatrices <- addSplit(interactionMatrices, refs[[i]], positions[[i]])
+addSplits <- function(interactionMatrices, refs, refIds, positions) {
+    for (i in seq_along(refIds)) {
+        interactionMatrices <- addSplit(interactionMatrices, refs[[refIds[[i]]]], positions[[i]])
     }
     return(interactionMatrices)
 }
@@ -95,7 +55,7 @@ addNoise <- function(interactionMatrices, gaussianNoise) {
 generateDiag <- function(distance, refs, refSize, maxNReads, diagSize) {
     nRefs  <- length(refs)
     lambda <- as.integer(round(maxNReads * dgeom(distance, prob = 1 / diagSize)))
-    tibble(bin1 = rep(seq.int(refSize) - 1, nRefs),
+    tibble(bin1 = as.integer(rep(seq.int(refSize) - 1, nRefs)),
            count = as.integer(round(rpois(refSize * nRefs, lambda)))) %>%
         dplyr::mutate(ref1 = rep(refs, each = refSize)) %>%
         dplyr::filter(count > 0) %>%
@@ -109,7 +69,7 @@ addDiagonalMatrices <- function(interactionMatrices, refs, refSize, maxNReads, d
     diags <- purrr::map_dfr(seq.int(refSize) - 1, generateDiag, refs, refSize, maxNReads, diagSize)
     dplyr::bind_rows(interactionMatrices, diags) %>%
         dplyr::group_by(ref1, bin1, ref2, bin2) %>%
-        dplyr::summarise(count = sum(count), .groups = "drop")
+        dplyr::summarise(count = as.integer(sum(count)), .groups = "drop")
 }
 
 makeEmptyInteractionMatrices <- function(refs, refSize) {
@@ -126,7 +86,7 @@ makeEmptyInteractionMatrices <- function(refs, refSize) {
 makeSimData <- function(refs, refSize, maxNReads, diagSize, gaussianNoise, splitRefs, splitPositions, joinRef1, joinRef2, joinDistances) {
     interactionMatrices <- makeEmptyInteractionMatrices(refs, refSize)
     interactionMatrices <- addDiagonalMatrices(interactionMatrices, refs, refSize, maxNReads, diagSize, gaussianNoise)
-    interactionMatrices <- addSplits(interactionMatrices, splitRefs, splitPositions)
+    interactionMatrices <- addSplits(interactionMatrices, refs, splitRefs, splitPositions)
     interactionMatrices <- addJoins(interactionMatrices, refs, refSize, maxNReads, diagSize, joinRef1, joinRef2, joinDistances)
     interactionMatrices <- addNoise(interactionMatrices, gaussianNoise)
     interactionMatrices <- cleanMatrices(interactionMatrices, refs)
@@ -134,7 +94,21 @@ makeSimData <- function(refs, refSize, maxNReads, diagSize, gaussianNoise, split
                     maxLinkRange = NULL)
 }
 
-makeSimObject <- function(nData, nRefs, refSize, maxNReads, diagSize, gaussianNoise, splitRefs, splitPositions, joinRef1, joinRef2, joinDistances) {
+makeSimObject <- function(nData = 1, nRefs = 1, refSize = 100, maxNReads = 20, diagSize = 5, gaussianNoise = 0.2, splitRefs = c(), splitPositions = c(), joinRef1 = c(), joinRef2 = c(), joinDistances = c()) {
+    if (length(splitRefs) != length(splitPositions)) {
+        stop("# split references and # split positions should be equal.")
+    }
+    if (length(joinRef1) != length(joinRef2)) {
+        stop("# join references #1 and # join references #2 should be equal.")
+    }
+    if (length(joinRef1) != length(joinDistances)) {
+        stop("# join distances and # join references should be equal.")
+    }
+    if (length(joinDistances) > 0) {
+        if (max(joinDistances) >= diagSize) {
+            stop("Join distance should be less than diagonal size.")
+        }
+    }
     refs                <- paste0("ref_", seq.int(nRefs))
     sizes               <- rep(refSize, nRefs)
     names(sizes)        <- refs
