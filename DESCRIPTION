@@ -23,7 +23,7 @@ Imports:
     BiocParallel,
     progress,
     Biostrings,
-    gridExtra
+    cowplot
 LinkingTo:
     RcppArmadillo,
     Rcpp,

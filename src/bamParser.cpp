@@ -11,18 +11,15 @@
 #include <atomic>
 #include <mutex>
 #include "sam.h"
-//#include "gperftools/profiler.h"
 
 // [[Rcpp::plugins(openmp)]]
 // [[Rcpp::plugins(cpp11)]]
 
 using namespace Rcpp;
 
-//const long maxRecords = 1000000000;
-
 int getMedian(std::vector<int> &v) {
     if (v.size() == 0) return 0;
-    size_t n = v.size() / 2;
+    size_t n = v.size() * 0.9;
     nth_element(v.begin(), v.begin()+n, v.end());
     return v[n];
 }                                                                                                                                                                                                                  
@@ -111,24 +108,28 @@ int getMoleculeSize (umiMap_t &umiMap) {
     Rcout << "Computing molecule sizes.\n";
     Progress progress(umiMap.size(), true);
     for (auto &it: umiMap) {
+        bool uniqueRef  = true;
         auto &positions = it.second;
-        int maxSize = 0;
-        int chrId   = -1;
-        int start   = 0;
-        int end     = 0;
+        int chrId       = -1;
+        int start       = 0;
+        int end         = 0;
         for (auto &position: positions) {
-            if (position.chrId == chrId) {
-                end = position.pos;
+            if (chrId == -1) {
+                chrId = position.chrId;
+                start = position.pos;
+                end   = position.pos;
             }
             else {
-                maxSize = std::max < int > (maxSize, end - start + 1);
-                chrId   = position.chrId;
-                start   = position.pos;
-                end     = position.pos;
+                if (position.chrId != chrId) {
+                    uniqueRef = false;
+                    break;
+                }
+                end = position.pos;
             }
         }
-        maxSize = std::max < int > (maxSize, end - start + 1);
-        sizes.push_back(maxSize);
+        if (uniqueRef) {
+            sizes.push_back(end - start + 1);
+        }
         progress.increment();
     }
     return getMedian(sizes);

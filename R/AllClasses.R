@@ -254,7 +254,7 @@ tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
     object@sequences         <- readDNAStringSet(sequenceFileName)
     names(object@sequences)  <- unlist(map(str_split(names(object@sequences), " "), 1))
     object@chromosomes       <- mixedsort(names(object@sequences))
-    object@sizes             <- ceiling(lengths(object@sequences) / object@binSize)
+    object@sizes             <- ceiling(lengths(object@sequences) / object@binSize) - 1
     names(object@sizes)      <- object@chromosomes
     return(invisible(object))
 }

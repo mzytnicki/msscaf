@@ -18,6 +18,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// splitChromosomeCpp
+void splitChromosomeCpp(DataFrame& data, int prevRef, int newRef, int shiftedRef, long splitPoint, bool firstPart);
+RcppExport SEXP _tenxchecker_splitChromosomeCpp(SEXP dataSEXP, SEXP prevRefSEXP, SEXP newRefSEXP, SEXP shiftedRefSEXP, SEXP splitPointSEXP, SEXP firstPartSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< int >::type prevRef(prevRefSEXP);
+    Rcpp::traits::input_parameter< int >::type newRef(newRefSEXP);
+    Rcpp::traits::input_parameter< int >::type shiftedRef(shiftedRefSEXP);
+    Rcpp::traits::input_parameter< long >::type splitPoint(splitPointSEXP);
+    Rcpp::traits::input_parameter< bool >::type firstPart(firstPartSEXP);
+    splitChromosomeCpp(data, prevRef, newRef, shiftedRef, splitPoint, firstPart);
+    return R_NilValue;
+END_RCPP
+}
 // computeRefSizesCpp
 IntegerVector computeRefSizesCpp(DataFrame& data);
 RcppExport SEXP _tenxchecker_computeRefSizesCpp(SEXP dataSEXP) {
@@ -89,6 +104,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// extractLines
+DataFrame extractLines(DataFrame matrix, DataFrame lines, int maxDistance);
+RcppExport SEXP _tenxchecker_extractLines(SEXP matrixSEXP, SEXP linesSEXP, SEXP maxDistanceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type matrix(matrixSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type lines(linesSEXP);
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    rcpp_result_gen = Rcpp::wrap(extractLines(matrix, lines, maxDistance));
+    return rcpp_result_gen;
+END_RCPP
+}
 // computeMeanTrianglesCpp
 DataFrame computeMeanTrianglesCpp(DataFrame& data, int distance);
 RcppExport SEXP _tenxchecker_computeMeanTrianglesCpp(SEXP dataSEXP, SEXP distanceSEXP) {
@@ -131,12 +159,14 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
+    {"_tenxchecker_splitChromosomeCpp", (DL_FUNC) &_tenxchecker_splitChromosomeCpp, 6},
     {"_tenxchecker_computeRefSizesCpp", (DL_FUNC) &_tenxchecker_computeRefSizesCpp, 1},
     {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
     {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
     {"_tenxchecker_normalizeHighCountRowsCpp", (DL_FUNC) &_tenxchecker_normalizeHighCountRowsCpp, 2},
     {"_tenxchecker_keepScaffoldsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsCpp, 2},
+    {"_tenxchecker_extractLines", (DL_FUNC) &_tenxchecker_extractLines, 3},
     {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},

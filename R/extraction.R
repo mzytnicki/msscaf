@@ -56,7 +56,7 @@ splitBy2Ref <- function(object, sizes) {
         #filter(maxCounts >= object@parameters@maxLinkRange) %>%
         filter(nCounts >= breakNCells) %>%
         pull(ref1_ref2)
-    message(paste0("\tKeeping ", length(pairs), " pairs of references."))
+    #message(paste0("\tKeeping ", length(pairs), " pairs of references."))
     data <- object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
         unite("ref1_ref2", ref1, ref2, remove = FALSE) %>%
@@ -83,7 +83,7 @@ getDatasetRef <- function(object, datasetName, ref1, ref2 = NULL) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Object should be a 'tenxcheckerClass'.")
     }
-    dataset <- getDataset(object, name)
+    dataset <- getDataset(object, datasetName)
     if (is.null(ref2)) {
         return(extractRef(dataset, ref1, object@sizes[[ref1]]))
     }

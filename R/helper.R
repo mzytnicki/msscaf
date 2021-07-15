@@ -154,15 +154,22 @@ rescaleValue <- function(value, scale) {
     as.integer(round(value / scale) * scale)
 }
 
-computeDistanceCount <- function(interactionMatrix, distance) {
-    bins <- seq.int(from = 0, to = distance, by = 1)
+# Transforms a sparse matrix (bin1, bin2) to full (bin1, distance)
+#   maxDistance: maximum distance wrt to the diagonal or corner
+fillCorner <- function(interactionMatrix, maxDistance, isCorner = FALSE) {
+    bins <- seq.int(from = 0, to = maxDistance, by = 1)
+    d    <- function(bin1, bin2, isCorner) {
+        if (isCorner) {
+            return(bin1 + bin2)
+        }
+        return(bin1 - bin2)
+    }
     emptyMatrix <- tibble(bin1 = bins, bin2 = bins) %>%
         tidyr::expand(bin1, bin2) %>%
-        dplyr::filter(bin1 >= bin2) %>%
-        dplyr::filter(bin1 - bin2 <= distance)
+        dplyr::mutate(distance = d(bin1, bin2, isCorner)) %>%
+        dplyr::filter(distance >= 0) %>%
+        dplyr::filter(distance <= maxDistance)
     emptyMatrix %>%
         dplyr::left_join(interactionMatrix, by = c("bin1", "bin2")) %>%
-        tidyr::replace_na(list(count = 0)) %>%
-        dplyr::mutate(distance = abs(bin1 - bin2)) %>%
-        dplyr::select(distance, count)
+        tidyr::replace_na(list(count = 0))
 }

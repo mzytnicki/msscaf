@@ -761,6 +761,7 @@ library("devtools")
 library("magrittr")
 library("tidyverse")
 library("Biostrings")
+library("cowplot")
 devtools::load_all(".")
 resolution  <- 1000
 bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam2.bam"
@@ -779,9 +780,11 @@ allObject@data[[3]]@parameters@maxLinkRange <- 50
 allObject <- cleanData(allObject)
 #saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 #allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-allObject <- findBreaks(allObject, 0.0001)
+allObject <- findBreaks(allObject, 0.05)
+gc()
 allObject <- splitChromosomes(allObject)
-allObject <- findJoins(allObject, 0.00001)
+gc()
+allObject <- findJoins(allObject, 0.05)
 allObject <- scaffold(allObject)
 writeXStringSet(allObject@sequences, "sequences.fa")
 allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
@@ -800,39 +803,94 @@ library("devtools")
 library("magrittr")
 library("tidyverse")
 library("Biostrings")
+library("cowplot")
 devtools::load_all(".")
-object <- makeSimObject(100)
-data1  <- makeSplitData(100, 20, 3, 0.2, 50)
-data2  <- makeSplitData(100, 20, 3, 0.2, 50)
-object <- addExp(object, data1, "test1")
-object <- addExp(object, data2, "test2")
+#object <- makeSimObject(1, 1, 100, 20, 5, 0.2, c(1), c(50), c(), c(), c())
+object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 2), c(25, 75), c(3, 4), c(4, 5), c(1, 5))
+object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 1, 2, 2), c(25, 75, 75, 75), c(3, 4), c(4, 5), c(1, 5))
+object <- makeSimObject(1, 2, 100, 20, 10, 0.2, c(), c(), c(1), c(2), c(5))
+plot.10X(object)
 object <- estimateDistributions(object)
 object@data[[1]]@parameters@maxLinkRange <- 6
 object@data[[2]]@parameters@maxLinkRange <- 6
 object <- cleanData(object)
-object <- findBreaks(object, 0.1)
-object@data[[1]]@breaks@mapPlots$dummyRef
-object@data[[1]]@breaks@changePlots$dummyRef
+object <- findBreaks(object, 0.05)
+object <- splitChromosomes(object)
+object <- findJoins(object, 0.05)
 ```
 
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-devtools::load_all(".")
-nData <- 2
-nRefs <- 5
-refSize <- 100
-maxNReads <- 20
-diagSize <- 5
-gaussianNoise <-
-splitRefs <- c(1, 2)
-splitPositions <- c(50, 50)
-joinRef1 <- c(3, 4)
-joinRef2 <- c(4, 5)
-joinDistances <- c(1, 10)
-object <- makeSimObject(1, 1, 100, 20, 5, 0.2, c(1), c(50), c(), c(), c())
-object <- makeSimObject(1, 2, 100, 20, 5, 0.2, c(), c(), c(1), c(2), c(1))
-#object <- makeSimObject(2, 5, 100, 20, 5, 0.2, c(1, 2), c(50, 50), c(3, 4), c(4, 5), c(1, 10))
-```
+Erreur dans extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) :
+Error in 'extractLines', got negative distances: ref1: 1, ref2: 1, bin1: 1, bin2: 365.
+
+
+object@data[[1]]@interactionMatrix %>% filter(ref1 == "ref_2", ref2 == "ref_1") %>% dplyr::mutate(bin2 = 99 - bin2) -> interactionMatrix
+interactionMatrix %>% filter(bin1 <= 10, bin2 <= 10) %>% ggplot(aes(x = bin1, y = bin2, fill = count)) + geom_raster()
+interactionMatrix %>% ggplot(aes(x = bin1, y = bin2, fill = count)) + geom_raster()
+
+maxDistance <- object@data[[1]]@parameters@maxLinkRange
+isCorner <- TRUE
+bins <- seq.int(from = 0, to = maxDistance, by = 1)                                                                                                                                                            
+d    <- function(bin1, bin2, isCorner) {
+	if (isCorner) {
+		return(bin1 + bin2)
+	}
+		return(bin1 - bin2)
+}
+emptyMatrix <- tibble(bin1 = bins, bin2 = bins) %>%
+	tidyr::expand(bin1, bin2) %>%
+	dplyr::mutate(distance = d(bin1, bin2, isCorner)) %>%
+	dplyr::filter(distance >= 0) %>%
+	dplyr::filter(distance <= maxDistance)                                                                                                                                                                     
+emptyMatrix %>%
+	dplyr::left_join(interactionMatrix, by = c("bin1", "bin2")) %>%
+	tidyr::replace_na(list(count = 0)) %>%
+        dplyr::mutate(count = as.integer(count)) -> interactionMatrix2
+
+
+interactionMatrix2 %>% ggplot(aes(x = bin1, y = bin2, fill = count)) + geom_raster()
+
+offset <- 0
+f <- function(offset) {
+	object@data[[1]]@parameters@distanceCount %>% mutate(distance = distance - offset) %>% filter(distance >= 0) -> background
+	interactionMatrix2 %>% filter(distance <= maxDistance - offset) %>% dplyr::left_join(background, by = "distance") %>% dplyr::mutate(d = (count - meanCount))
+}
+map_dfr(0:13, f, .id = "offset") %>% mutate(offset = as.integer(offset)) %>% ggplot(aes(x = bin1, y = bin2, fill = d)) + geom_raster() + scale_fill_gradient2() + facet_grid(cols = vars(offset))
+
+g <- function(offset) {
+	object@data[[1]]@parameters@distanceCount %>% mutate(distance = distance - offset) %>% filter(distance >= 0) -> background
+	interactionMatrix2 %>% filter(distance <= maxDistance - offset) %>% dplyr::left_join(background, by = "distance") %>% dplyr::mutate(d = abs(count - meanCount)) %>% pull(d) %>% median() -> r
+	#interactionMatrix2 %>% filter(distance <= maxDistance - offset) %>% dplyr::left_join(background, by = "distance") %>% dplyr::mutate(d = (count - meanCount) ^ 2) %>% pull(d) %>% sum() %>% sqrt() -> r
+        return(r / nrow(interactionMatrix2))
+}
+map_dbl(0:13, g)
+
+emptyMatrix <- tibble(bin1 = bins, bin2 = bins) %>%
+	tidyr::expand(bin1, bin2) %>%
+	dplyr::mutate(distance = bin1 - bin2) %>%
+	dplyr::filter(distance >= 0) %>%
+	dplyr::filter(distance <= maxDistance)                                                                                                                                                                     
+object@data[[1]]@interactionMatrix %>%
+	filter(ref1 == ref2) %>%
+	mutate(distance = bin1 - bin2) %>%
+        right_join(emptyMatrix, by = c("bin1", "bin2", "distance")) %>%
+	tidyr::replace_na(list(count = 0)) %>%
+	select(distance, count) -> fullInteractionMatrix
+lo <- loess(count ~ distance, data=fullInteractionMatrix)
+fullInteractionMatrix$loess <- predict(lo)
+
+ggplot(fullInteractionMatrix, aes(x = distance, y = count)) + geom_bin2d(binwidth = 1) + geom_point(aes(y = loess), col="red")
+
+lo <- loess(count ~ distance, data=interactionMatrix2)
+interactionMatrix2$loess <- predict(lo)
+
+ggplot(interactionMatrix2, aes(x = distance, y = count)) + geom_bin2d(binwidth = 1) + geom_point(aes(y = loess), col="red")
+
+bLoess <- fullInteractionMatrix %>% select(distance, loess) %>% arrange(distance) %>% distinct()
+oLoess <- interactionMatrix2 %>% select(distance, loess) %>% arrange(distance) %>% distinct()
+
+h <- function(offset) {
+	bLoess %>% mutate(distance = distance - offset) %>% filter(distance >= 0) -> background
+	oLoess %>% filter(distance <= maxDistance - offset) %>% dplyr::left_join(background, by = "distance", suffix = c("_o", "_b")) %>% dplyr::mutate(d = abs(loess_b - loess_o)) %>% pull(d) %>% sum() -> r
+        return(r / (maxDistance - offset + 1))
+}
+map_dbl(0:13, h)

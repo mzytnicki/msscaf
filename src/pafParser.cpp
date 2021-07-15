@@ -43,7 +43,7 @@ std::ostream& operator<<(std::ostream& os, interval_t const &interval) {
 
 int median(std::vector<int> &v) {
   if (v.size() == 0) return 0;
-  size_t n = v.size() / 2;
+  size_t n = v.size() * 0.9;
   nth_element(v.begin(), v.begin()+n, v.end());
   return v[n];
 }

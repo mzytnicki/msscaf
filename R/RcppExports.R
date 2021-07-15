@@ -5,6 +5,10 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
 }
 
+splitChromosomeCpp <- function(data, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
+    invisible(.Call('_tenxchecker_splitChromosomeCpp', PACKAGE = 'tenxchecker', data, prevRef, newRef, shiftedRef, splitPoint, firstPart))
+}
+
 computeRefSizesCpp <- function(data) {
     .Call('_tenxchecker_computeRefSizesCpp', PACKAGE = 'tenxchecker', data)
 }
@@ -27,6 +31,10 @@ normalizeHighCountRowsCpp <- function(data, sizes) {
 
 keepScaffoldsCpp <- function(data, keptRefs) {
     .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
+}
+
+extractLines <- function(matrix, lines, maxDistance) {
+    .Call('_tenxchecker_extractLines', PACKAGE = 'tenxchecker', matrix, lines, maxDistance)
 }
 
 computeMeanTrianglesCpp <- function(data, distance) {

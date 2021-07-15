@@ -378,7 +378,7 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1
         sizes  <- object@sizes
         if (is.null(dataset)) {
              plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2)
-             return(do.call("grid.arrange", c(plots, ncol = length(plots))))
+             return(do.call("plot_grid", c(plots, ncol = length(plots))))
         }
         else {
             object <- getDataset(object, dataset)

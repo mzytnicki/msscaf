@@ -34,10 +34,7 @@ checkBreak <- function(object) {
                    changeDistPlot = NULL,
                    mapPlot        = NULL))
     }
-    triangles <- computeMeanTriangles(data, object@parameters@maxLinkRange) %>%
-        as_tibble() # %>%
-        # dplyr::rename(fcMeanCount = meanCount) %>%
-        # dplyr::mutate(fcMeanCount = fcMeanCount - median(fcMeanCount))
+    triangles      <- computeMeanTriangles(data, object@parameters@maxLinkRange)
     changePlot     <- plotTriangles(triangles)
     changeDistPlot <- triangles %>%
         ggplot(aes(x = fcMeanCount)) +
@@ -83,7 +80,7 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     message("\t\tComputing stats.")
     breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
     # message(str(breaks))
-    data   <- map_dfr(breaks, "data", .id = "ref") %>% dplyr::mutate(ref = factor(ref))
+    data   <- map_dfr(breaks, "data", .id = "ref") %>% dplyr::mutate(ref = factor(ref, levels = chromosomes))
     breaksObject                 <- new("tenxcheckerBreaks")
     breaksObject@data            <- data
     breaksObject@changePlots     <- map(breaks, "changePlot")
@@ -147,7 +144,7 @@ removeNearEqualBreaks <- function(reference, breaks, distance, size, pvalueThres
             return(outputBreaks)
         }
         breakPoint <- breaks %>%
-            dplyr::slice_max(pvalue, n = 1, with_ties = FALSE)
+            dplyr::slice_min(pvalue, n = 1, with_ties = FALSE)
         if (nrow(outputBreaks) >= maxNBreaks) {
             stop(paste0("Found more than ",
                         maxNBreaks,
@@ -271,7 +268,11 @@ mergeBreaks <- function(object, pvalueThreshold) {
     minMaxLinkRange <- rep(minMaxLinkRange, nGroups)
     pvalueThreshold <- rep(pvalueThreshold, nGroups)
     breaks          <- pmap(list(refs, breaks, minMaxLinkRange, sizes, pvalueThreshold), removeNearEqualBreaks)
-    object@breaks   <- breaks %>% bind_rows() %>% dplyr::arrange(ref, bin)
+    object@breaks   <- breaks %>% bind_rows()
+    if (nrow(object@breaks) == 0) {
+        object@breaks <- dplyr::slice_head(object@data[[1]]@breaks@data, n = 0)
+    }
+    object@breaks   <- object@breaks %>% dplyr::arrange(ref, bin)
     return(invisible(object))
 }
 
@@ -311,4 +312,5 @@ findBreaks <- function(object, pvalue = 0.05) {
     object <- compareBreaks(object)
     object <- mergeBreaks(object, pvalue)
     if (nrow(object@breaks) <= 1000) object <- addBreakPlots(object)
+    return(invisible(object))
 }

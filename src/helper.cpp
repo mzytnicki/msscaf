@@ -1,11 +1,41 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <utility>
+#include <unordered_map>
 #include <Rcpp.h>
 // [[Rcpp::plugins(openmp)]]
 // [[Rcpp::plugins(cpp11)]]
 
 using namespace Rcpp;
+
+
+// [[Rcpp::export]]
+void splitChromosomeCpp (DataFrame &data, int prevRef, int newRef, int shiftedRef, long splitPoint, bool firstPart) {
+    auto f = (firstPart)? std::function<bool(long)>([splitPoint] (long x) { return (x >= splitPoint); }): std::function<bool(long)>([splitPoint] (long x) { return (x <= splitPoint); });
+    IntegerVector refs1  = data["ref1"];
+    IntegerVector refs2  = data["ref2"];
+    IntegerVector bins1  = data["bin1"];
+    IntegerVector bins2  = data["bin2"];
+    long long int nElements = refs1.size();
+    long offset = splitPoint - 1;
+    for (long long int i = 0; i < nElements; ++i) {
+        if ((refs1[i] == prevRef) && (f(bins1[i]))) {
+            refs1[i] = newRef;
+        }
+        if ((refs2[i] == prevRef) && (f(bins2[i]))) {
+            refs2[i] = newRef;
+        }
+        if (refs1[i] == shiftedRef) {
+            bins1[i] -= offset;
+        }
+        if (refs2[i] == shiftedRef) {
+            bins2[i] -= offset;
+        }
+        if ((refs1[i] == refs2[i]) && (bins1[i] < bins2[i])) stop("Error in 'splitChromosomeCpp', got negative distances. Prev ref: " + std::to_string(prevRef) + ", new ref: " + std::to_string(newRef) + ", shifted ref: " + std::to_string(shiftedRef) + ", split point: " + std::to_string(splitPoint) + ", first part: " + std::to_string(firstPart) + ".");
+    }
+}
+
 
 // [[Rcpp::export]]
 IntegerVector computeRefSizesCpp (DataFrame &data) {
@@ -238,12 +268,79 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
 }
 
+uint64_t combineInts(int i1, int i2) {
+    if (i1 < 0) stop("Problem in 'combineInts': first data is " + std::to_string(i1) + ".");
+    if (i2 < 0) stop("Problem in 'combineInts': second data is " + std::to_string(i2) + ".");
+    return (static_cast < uint64_t > (i1) << 32) | static_cast < uint64_t > (i2);
+}
+
+// Extract matrix lines such that (ref, bin) match given data.
+// Convert them into (ref, bin, distance, count)
+// [[Rcpp::export]]
+DataFrame extractLines (DataFrame matrix, DataFrame lines, int maxDistance) {
+    IntegerVector   refs1         = matrix["ref1"];
+    IntegerVector   refs2         = matrix["ref2"];
+    IntegerVector   bins1         = matrix["bin1"];
+    IntegerVector   bins2         = matrix["bin2"];
+    IntegerVector   counts        = matrix["count"];
+    CharacterVector refNames      = refs1.attr("levels");
+    IntegerVector   selectedRefs  = lines["ref"];
+    IntegerVector   selectedBins  = lines["bin"];
+    long int        nMatrixLines  = refs1.size();
+    long int        nLines        = selectedRefs.size();
+    long int        nOutputLines  = nLines * (maxDistance + 1);
+    std::vector < std::vector < int > > lineDistance (nLines, std::vector < int > (maxDistance + 1, 0));
+    std::unordered_map < uint64_t, size_t > keptLines;
+    IntegerVector   outputRefs      (nOutputLines, 0);
+    IntegerVector   outputBins      (nOutputLines, 0);
+    IntegerVector   outputDistances (nOutputLines, 0);
+    IntegerVector   outputCounts    (nOutputLines, 0);
+    // Store lines
+    if (is_true(any(selectedBins < 0))) stop("Error in 'extractLines', got negative bins.");
+    keptLines.reserve(nLines);
+    for (long int lineId = 0; lineId < nLines; ++lineId) {
+        keptLines[combineInts(selectedRefs[lineId], selectedBins[lineId])] = lineId;
+    }
+    // Read matrix
+    for (long int i = 0; i < nMatrixLines; ++i) {
+        // Select matching lines
+        if (refs1[i] == refs2[i]) {
+            int distance = bins1[i] - bins2[i];
+            if (distance < 0) stop("Error in 'extractLines', got negative distances: ref: " + std::to_string(refs1[i]) + ", bin1: " + std::to_string(bins1[i]) + ", bin2: " + std::to_string(bins2[i]) + ".");
+            if (distance <= maxDistance) {
+                std::unordered_map < uint64_t, size_t >::iterator it = keptLines.find(combineInts(refs1[i], bins1[i]));
+                if (it != keptLines.end()) {
+                    lineDistance[it->second][distance] = counts[i];
+                }
+            }
+        }
+    }
+    // Create output data frame
+    unsigned int i = 0;
+    for (long int lineId = 0; lineId < nLines; ++lineId) {
+        for (int distance = 0; distance <= maxDistance; ++distance) {
+            outputRefs[i]      = selectedRefs[lineId];
+            outputBins[i]      = selectedBins[lineId];
+            outputDistances[i] = distance;
+            outputCounts[i]    = lineDistance[lineId][distance];
+            ++i;
+        }
+    }
+    outputRefs.attr("class") = "factor";
+    outputRefs.attr("levels") = refNames;
+    return Rcpp::DataFrame::create(_["ref"] = outputRefs, _["bin"] = outputBins, _["distance"] = outputDistances, _["count"] = outputCounts);
+}
+
 /* Matrix is sparse symmetric, represented as list of triplets: (i, j, c),
  *   with i >= j.
  * Distance is the maximum link range (here, 4), values further away from
  *   diagonal are discarded: i <= j + d.  'X' cells are discarded.
- * Diagonal are 'a' cells.  They are computed with row/col sums.
+ * Triangle are 'a' cells.  They are computed with row/col sums.
  *   tri[i] = tri[i-1] + rowSum[i] - colSum[i-1]
+ *   When the diagonal is excluded:
+ *    - the rowSum/colSums do not start from diagonal, but with an offset of 2
+ *    - tri[0] = 0
+ *    - tri[i] = tri[i-1] + rowSum[i-1] - colSum[i]
  * Squares are 'a' and 'b' cells.  They are computed with diag sums.
  *   squ[i] = squ[i-1] + diag[2i+d] + diag[2i+d-1] - diag[2i-d] - diag[2i-d+1]
  *
@@ -252,13 +349,13 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
  *   -+---+---+---+---+---+---+---+---+---+-
  * 0  |   |   |   |   | X | X | X | X | X | 
  *   -+---+---+---+---+---+---+---+---+---+-
- *    |   |   |   | b | a | X | X | X | X | 
+ *    |   |   |   | b |   | X | X | X | X | 
  *   -+---+---+---+---+---+---+---+---+---+-
- *    |   |   | b | b | a | a | X | X | X | 
+ *    |   |   | b | b |   | a | X | X | X | 
  *   -+---+---+---+---+---+---+---+---+---+-
- *    |   |   |   | b | a | a | a | X | X | 
+ *    |   |   |   | b |   | a | a | X | X | 
  *   -+---+---+---+---+---+---+---+---+---+-
- * j  |   |   |   |   | a | a | a | a | X | 
+ * j  |   |   |   |   |   |   |   |   | X | 
  *   -+---+---+---+---+---+---+---+---+---+-
  *    |   |   |   |   |   | b | b | b |   | 
  *   -+---+---+---+---+---+---+---+---+---+-
@@ -299,20 +396,46 @@ DataFrame computeMeanTrianglesCpp (DataFrame &data, int distance) {
     //   take log
     for (long int i = 0; i < n; ++i) {
         int d = bins1[i] - bins2[i];
+        if (d < 0) stop("Bin1 should not be less than bin2 in 'computeMeanTrianglesCpp'.\n");
         if ((counts[i] > 0) && (d <= distance)) {
-            if (counts[i] < 1) stop("Counts should be greater than 1 in 'computeMeanTrianglesCpp'\n");
-            double count = log10(counts[i]);
-            fullMatrix[bins1[i]][d] = count + pseudoCount;
+//Rcerr << "line " << i << ": " << bins1[i] << "-" << bins2[i] << " (" << bins1[i] << "-" << d << ") -> " << counts[i] << "\n";
+            if (counts[i] < 1) stop("Counts should be greater than 1 in 'computeMeanTrianglesCpp'.\n");
+            // double count = log10(counts[i]);
+            fullMatrix[bins1[i]][d] = log10(counts[i] + pseudoCount);
         }
     }
-    for (int d = 0; d <= distance; ++d) {
-        for (int i = 0; i < size; ++i) {
-            normFactors[d] += fullMatrix[i][d];
+    // Find normalization factor.
+    // Caveat: some values should be not used (distance < bin).
+    for (int bin = 0; bin < size; ++bin) {
+        for (int d = 0; (d <= distance) && (d <= bin); ++d) {
+            normFactors[d] += fullMatrix[bin][d];
         }
-        normFactors[d] /= size;
         // if ((nNormFactors[i] > 0) && (normFactors[i] == 0)) stop("Problem of null normalization factor (d = " + std::to_string(i) + ", # counts = " + std::to_string(nNormFactors[i]) + ") in 'computeMeanTrianglesCpp'\n");
         // Rcerr << d << ": " << normFactors[d] << "\n";
     }
+    for (int d = 0; d <= distance; ++d) {
+        normFactors[d] /= (size - d);
+//Rcerr << "norm fact @ " << d << ": " << normFactors[d] << "\n";
+    }
+/*
+for (int i = 0; i < size; ++i) {
+    Rcerr << i << ":";
+    for (int d = 0; d <= distance; ++d) {
+       Rcerr << " " << fullMatrix[i][d] << " (" << log10(fullMatrix[i][d] / normFactors[d]) << ")  ";
+    }
+    Rcerr << "\n";
+}
+*/
+/*
+for (int d = 0; d <= distance; ++d) {
+    double s = 0.0;
+    for (int bin = 0; bin < size && d <= bin; ++bin) {
+        s += fullMatrix[bin][d] - normFactors[d];
+    }
+    Rcerr << d << ":" << s << "\n";
+}
+*/
+    // for (int d = 0; d <= distance; ++d) { double s = 0; for (int i = 0; i < size; ++i) s += fullMatrix[i][d]; if (abs(s) < 0.01) stop("Problem during first normalization in 'computeMeanTrianglesCpp'.\n"); }
     for (int bin1 = 0; bin1 < size; ++bin1) {
         for (int d = 0; (d <= distance) && (d <= bin1); ++d) {
             int bin2 = bin1 - d;
@@ -322,19 +445,24 @@ DataFrame computeMeanTrianglesCpp (DataFrame &data, int distance) {
             double norm  = normFactors[d];
             if ((norm == 0.0) && (count != 0.0)) stop("Problem during normalization in 'computeMeanTrianglesCpp'\n");
             //Rcerr << bin1 << "-" << bin2 << " (" << d << "): " << count << "-" << norm << " -> " << ((norm == 0.0)? 0.0: log10(count / norm)) << "\n";
-            count = (norm == 0.0)? 0.0: log10(count / norm);
-            sumBin1[bin1] += count;
-            sumBin2[bin2] += count;
-            ++nBin1[bin1];
-            ++nBin2[bin2];
+            //count = (norm == 0.0)? 0.0: log10(count / norm);
+            count -= norm;
+            if (d > 1) {
+                sumBin1[bin1] += count;
+                sumBin2[bin2] += count;
+                ++nBin1[bin1];
+                ++nBin2[bin2];
+            }
             sumDiag[bin1 + bin2] += count;
             ++nDiag[bin1 + bin2];
             //Rcerr << "sumbin2 " << d << " " << bin2 << " " << sumBin2[bin2] << "\n";
         }
     }
     //Rcerr << "Sum bins1: " << std::accumulate(sumBin1.begin(), sumBin1.end(), 0.0) << "\n";
-    triCounts[0] = sumBin2[0];
-    nTriCells[0] = nBin2[0];
+    //triCounts[0] = sumBin2[0];
+    triCounts[0] = 0;
+    //nTriCells[0] = nBin2[0];
+    nTriCells[0] = 0;
     squCounts[0] = 0;
     nSquCells[0] = 0;
     for (int i = 0; i <= std::min<int>(2 * size - 1, distance); ++i) {
@@ -344,7 +472,8 @@ DataFrame computeMeanTrianglesCpp (DataFrame &data, int distance) {
     //Rcerr << "Squ:" << 0 << ": " << squCounts[0] << "\n";
     for (long int i = 1; i < size; ++i) {
         //Rcerr << "Bin:" << i << ": " << sumBin1[i] << ", " << sumBin2[i] << "\n";
-        triCounts[i] = triCounts[i-1] + sumBin2[i] - sumBin1[i-1];
+        //triCounts[i] = triCounts[i-1] + sumBin2[i] - sumBin1[i-1];
+        triCounts[i] = triCounts[i-1] + sumBin2[i-1] - sumBin1[i];
         nTriCells[i] = nTriCells[i-1] + nBin2[i]   - nBin1[i-1];
         squCounts[i] = squCounts[i-1] + ((2 * i + distance     >= 2 * size)? 0: sumDiag[2 * i + distance]) +
                                         ((2 * i + distance - 1 >= 2 * size)? 0: sumDiag[2 * i + distance - 1]) -
@@ -356,6 +485,29 @@ DataFrame computeMeanTrianglesCpp (DataFrame &data, int distance) {
                                         ((2 * (i-1) - distance + 1 < 0)?     0: nDiag[2 * (i-1) - distance + 1]);
         //Rcerr << "Tri:" << i << ": " << triCounts[i] << ", " << squCounts[i] << "\n";
     }
+
+/*
+NumericVector triCounts2 (size);
+for (long int bin = 0; bin < size; ++bin) {
+Rcerr << "bin " << bin << ":\n";
+    for (int i = 0; (i <= distance) && (bin+i < size); ++i) {
+Rcerr << "\ti: " << bin+i << "\n";
+        for (int d = i; (d <= distance) && (d <= bin+i); ++d) {
+Rcerr << "\t\td: " << d << "->" << fullMatrix[bin+i][d] << " (" << log10(fullMatrix[bin+i][d] / normFactors[d]) << ")\n";
+            //triCounts2[bin] += log10(fullMatrix[bin+i][d] / normFactors[d]);
+            triCounts2[bin] += (fullMatrix[bin+i][d] == normFactors[d])? 0.0: ((fullMatrix[bin+i][d] < normFactors[d])? -1: 1);
+        }
+    }
+Rcerr << "\t" << triCounts2[bin]  << "\n";
+}
+for (long int bin = 0; bin < size; ++bin) {
+    if (abs(triCounts[bin] - triCounts2[bin]) >= 0.001) {
+        stop("Data differ @ bin " + std::to_string(bin) + ": " + std::to_string(triCounts[bin]) + " vs " + std::to_string(triCounts2[bin]));
+    }
+}
+triCounts = triCounts2;
+*/
+
     for (long int i = 0; i < size; ++i) {
         //if (squCounts[i] < 0) stop("Problem: negative square counts (i = " + std::to_string(i) + "/" + std::to_string(size) + ", squares = " + std::to_string(squCounts[i]) + ") in 'computeMeanTrianglesCpp'.");
         //if (triCounts[i] < 0) stop("Problem: negative triangle counts (i = " + std::to_string(i) + "/" + std::to_string(size) + ", triangles = " + std::to_string(triCounts[i]) + ") in 'computeMeanTrianglesCpp'.");
@@ -364,18 +516,20 @@ DataFrame computeMeanTrianglesCpp (DataFrame &data, int distance) {
         //if (nSquCells[i] < nTriCells[i]) stop("Problem of # cells count (i = " + std::to_string(i) + "/" + std::to_string(size) + ", # squares = " + std::to_string(nSquCells[i]) + ", # triangles = " + std::to_string(nTriCells[i]) + ") in 'computeMeanTrianglesCpp'.");
         //if ((nTriCells[i] == 0) && (triCounts[i] != 0)) stop("Problem of in triangle counts in 'computeMeanTrianglesCpp'.");
         //if ((nSquCells[i] == 0) && (squCounts[i] != 0)) stop("Problem of in square counts in 'computeMeanTrianglesCpp'.");
-        double tmp1 = (nTriCells[i] == nSquCells[i])? 0: (squCounts[i] - triCounts[i]) / static_cast<double>(nSquCells[i] - nTriCells[i]);
+        // double tmp1 = (nTriCells[i] == nSquCells[i])? 0: (squCounts[i] - triCounts[i]) / static_cast<double>(nSquCells[i] - nTriCells[i]);
         double tmp2 = (nTriCells[i] == 0)? 0: triCounts[i] / nTriCells[i];
-        // meanCounts[i] = tmp2;
-        meanCounts[i] = tmp2 - tmp1;
+        meanCounts[i] = tmp2;
+        // meanCounts[i] = tmp2 - tmp1;
         //meanCounts[i] = (triCounts[i] / nTriCells[i]) - (squCounts[i] - triCounts[i]) / (nSquCells[i] - triCounts[i]);
     }
     // Rescale (I do not know why...)
+    /*
     double normMeanCounts = std::accumulate(meanCounts.begin(), meanCounts.end(), 0.0) / size;
     //Rcerr << "Final normalization factor: " << normMeanCounts << "\n";
     for (int i = 0; i < size; ++i) {
         meanCounts[i] -= normMeanCounts;
     }
+    */
     return Rcpp::DataFrame::create(_["bin"] = bin, _["fcMeanCount"] = meanCounts, _["nCells"] = nTriCells);
 }
 /*
