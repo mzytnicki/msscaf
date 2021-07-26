@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // parseBamFileCpp
 List parseBamFileCpp(String fileName, int32_t binSize);
 RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP) {
@@ -156,6 +161,46 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// getRefOrders
+List getRefOrders(DataFrame& joins, List sizes);
+RcppExport SEXP _tenxchecker_getRefOrders(SEXP joinsSEXP, SEXP sizesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type joins(joinsSEXP);
+    Rcpp::traits::input_parameter< List >::type sizes(sizesSEXP);
+    rcpp_result_gen = Rcpp::wrap(getRefOrders(joins, sizes));
+    return rcpp_result_gen;
+END_RCPP
+}
+// scaffoldContigs
+CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes, int binSize);
+RcppExport SEXP _tenxchecker_scaffoldContigs(SEXP contigsSEXP, SEXP ordersSEXP, SEXP sizesSEXP, SEXP binSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< CharacterVector >::type contigs(contigsSEXP);
+    Rcpp::traits::input_parameter< List >::type orders(ordersSEXP);
+    Rcpp::traits::input_parameter< List >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type binSize(binSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(scaffoldContigs(contigs, orders, sizes, binSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// scaffoldCounts
+DataFrame scaffoldCounts(DataFrame matrices, List groups, IntegerVector scaffoldRefs, List sizes);
+RcppExport SEXP _tenxchecker_scaffoldCounts(SEXP matricesSEXP, SEXP groupsSEXP, SEXP scaffoldRefsSEXP, SEXP sizesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type matrices(matricesSEXP);
+    Rcpp::traits::input_parameter< List >::type groups(groupsSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type scaffoldRefs(scaffoldRefsSEXP);
+    Rcpp::traits::input_parameter< List >::type sizes(sizesSEXP);
+    rcpp_result_gen = Rcpp::wrap(scaffoldCounts(matrices, groups, scaffoldRefs, sizes));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
@@ -170,6 +215,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
     {"_tenxchecker_parsePafCpp", (DL_FUNC) &_tenxchecker_parsePafCpp, 5},
+    {"_tenxchecker_getRefOrders", (DL_FUNC) &_tenxchecker_getRefOrders, 2},
+    {"_tenxchecker_scaffoldContigs", (DL_FUNC) &_tenxchecker_scaffoldContigs, 4},
+    {"_tenxchecker_scaffoldCounts", (DL_FUNC) &_tenxchecker_scaffoldCounts, 4},
     {NULL, NULL, 0}
 };
 

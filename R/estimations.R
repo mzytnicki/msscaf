@@ -160,6 +160,19 @@ estimateMinRowCount <- function(object, sizes) {
     return(object)
 }
 
+# Smoothen a (distance, count) distribution
+smoothenDistribution <- function(corner) {
+    corner %>%
+        # replace loess with mean?
+        dplyr::select(distance, count) %>%
+        dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
+        dplyr::arrange(distance) %>%
+        dplyr::distinct()
+        # dplyr::group_by(distance) %>%
+        # dplyr::summarise(count = mean(count), .groups = "drop") %>%
+        # dplyr::arrange(distance)
+}
+
 estimateDistanceCount <- function(object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
@@ -191,77 +204,114 @@ estimateDistanceCount <- function(object, sizes) {
             as_tibble()
 #message(str(distanceCount))
     }
-    # Perform the loess
-    object@parameters@distanceCount <- distanceCount %>%
-        # replace loess with mean?
-        dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
-        dplyr::select(distance, count) %>%
-        # dplyr::group_by(distance) %>%
-        # dplyr::summarise(count = median(count), .groups = "drop") %>%
-        dplyr::arrange(distance) %>%
-        dplyr::distinct()
+    object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
 }
 
-compareCornerOffset <- function(offset, corner, background, maxDistance) {
-    cornerDistance(corner     %>%
-                       dplyr::mutate(distance = distance - offset) %>%
-                       dplyr::filter(distance >= 0),
-                   background %>%
-                       dplyr::mutate(distance = distance - offset) %>%
-                       dplyr::filter(distance >= 0))
-#   cornerEuclideanDistance(corner     %>% dplyr::filter(distance >= offset),
-#                           background %>% dplyr::filter(distance >= offset))
+# Offset (distance, count) distribution
+offsetDistribution <- function(distribution, offset) {
+    distribution %>%
+        dplyr::mutate(distance = distance - offset) %>%
+        dplyr::filter(distance >= 0)
 }
 
-compareCorner <- function(corner, background, distance, pb) {
-# message("corner")
-# message(str(corner))
-# message("background")
-# message(str(background))
+# Compute the difference between two (distance, count) distribution
+cornerDifference <- function(observedDistribution, backgroundDistribution) {
+#message(str(observedDistribution))
+#message(str(backgroundDistribution))
+    n <- nrow(observedDistribution)
+    #if (n == 0) return(0)
+    if (nrow(backgroundDistribution) != n) {
+        stop(paste0("Cannot compute corner distance is the lengths differ: # observed: ", nrow(observedDistribution), ", # background: ", nrow(backgroundDistribution), "."))
+    }
+    v <- observedDistribution %>%
+        dplyr::left_join(backgroundDistribution, by = "distance", suffix = c("_obs", "_back")) %>%
+        dplyr::mutate(d = count_obs - count_back) %>%
+        dplyr::pull(d) %>%
+        sum()
+#   v <- observedDistribution %>%
+#       dplyr::left_join(backgroundDistribution, by = "distance") %>%
+#       dplyr::mutate(d = (count - meanCount) ^ 2) %>%
+#       dplyr::pull(d) %>%
+#       sum() %>%
+#       sqrt()
+#message(str(v / n))
+#   return(v / n)
+    return(v)
+}
+
+# Apply an offset to the corner and background distribution, and compare them.
+computeCornerDifferenceOffset <- function(offset, corner, background, maxDistance, bothOffsets) {
+    background <- offsetDistribution(background, offset)
+    if (bothOffsets) {
+        corner <- offsetDistribution(corner, offset)
+    }
+    else {
+        corner <- corner %>%
+            dplyr::filter(distance <= maxDistance - offset)
+    }
+    cornerDifference(corner, background)
+}
+
+
+# Smoothen distribution, compare to background distribution with various offsets
+computeCornerDifferenceOffsets <- function(corner, background, distance, bothOffsets, pb) {
     pb$tick()
-    corner <- corner %>%
-        # replace loess with mean?
-        dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
-        dplyr::select(distance, count) %>%
-        # dplyr::group_by(distance) %>%
-        # dplyr::summarise(count = median(count), .groups = "drop") %>%
-        dplyr::arrange(distance) %>%
-        dplyr::distinct()
-    purrr::map(seq.int(from = 0, to = distance - 1, by = 1), compareCornerOffset, corner, background, distance)
+    corner    <- smoothenDistribution(corner)
+    offsets   <- seq.int(from = 0, to = distance - 1, by = 1)
+    distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffset, corner, background, distance, bothOffsets)
+    tibble(distance = offsets, score = distances)
 }
 
 extractCornerFromPoint <- function(parameters, object, pb) {
     pb$tick()
     corner <- object@interactionMatrix %>%
-        dplyr::filter(ref1 == parameters$ref1) %>%
-        dplyr::filter(ref2 == parameters$ref2) %>%
-        dplyr::mutate(bin1 = bin1 - parameters$bin1) %>%
-        dplyr::mutate(bin2 = bin2 - parameters$bin2) %>%
+        dplyr::filter(ref1 == parameters$ref) %>%
+        dplyr::filter(ref2 == parameters$ref) %>%
+        dplyr::mutate(bin1 = bin1 - parameters$bin) %>%
+        dplyr::mutate(bin2 = bin2 - parameters$bin) %>%
         dplyr::filter(bin1 >= 0, bin1 <= object@parameters@maxLinkRange) %>%
         dplyr::filter(bin2 >= 0, bin2 <= object@parameters@maxLinkRange) %>%
         dplyr::filter(bin1 >= bin2)
-    fillCorner(corner, object@parameters@maxLinkRange, FALSE)
+    fillCorner(corner, object@parameters@maxLinkRange, FALSE) %>%
+        dplyr::select(distance, count)
+#   corner <- object@interactionMatrix %>%
+#       dplyr::filter(ref1 == parameters$ref1) %>%
+#       dplyr::filter(ref2 == parameters$ref2) %>%
+#       dplyr::mutate(bin1 = bin1 - parameters$bin1) %>%
+#       dplyr::mutate(bin2 = bin2 - parameters$bin2) %>%
+#       dplyr::filter(bin1 >= 0, bin1 <= object@parameters@maxLinkRange) %>%
+#       dplyr::filter(bin2 >= 0, bin2 <= object@parameters@maxLinkRange) %>%
+#       dplyr::filter(bin1 >= bin2)
+#   fillCorner(corner, object@parameters@maxLinkRange, FALSE)
 }
 
+# Get random points on the diagonal
 findRandomCornerPoints <- function(object, sizes, nSamples) {
-    # Extract all observed pairs of refs
-    object@interactionMatrix %>%
-        dplyr::select(ref1, ref2) %>%
-        dplyr::filter(ref1 != ref2) %>%
-        dplyr::distinct() %>%
-    # Compute ref sizes
-        dplyr::mutate(size1 = sizes[ref1]) %>%
-        dplyr::mutate(size2 = sizes[ref2]) %>%
-        dplyr::mutate(size  = size1 * size2) %>%
-    # Sample, weighted by size
+    sizes %>%
+        tibble::enframe(name = "ref", value = "size") %>%
         dplyr::slice_sample(n = nSamples, weight_by = size, replace = TRUE) %>%
-    # Get random point
-        dplyr::mutate(size1 = size1 - object@parameters@maxLinkRange) %>%
-        dplyr::mutate(size2 = size2 - object@parameters@maxLinkRange) %>%
-        dplyr::mutate(bin1 = as.integer(round(runif(nrow(.)) * size1))) %>%
-        dplyr::mutate(bin2 = as.integer(round(runif(nrow(.)) * size2))) %>%
-        dplyr::select(ref1, bin1, ref2, bin2)
+        dplyr::mutate(size = size - object@parameters@maxLinkRange) %>%
+        dplyr::mutate(bin = as.integer(round(runif(nrow(.)) * size)))
+#   # Extract all observed pairs of refs
+#   object@interactionMatrix %>%
+#       dplyr::select(ref1, ref2) %>%
+#       dplyr::filter(ref1 != ref2) %>%
+#       dplyr::distinct() %>%
+#   # Compute ref sizes
+#       dplyr::mutate(size1 = sizes[ref1]) %>%
+#       dplyr::mutate(size2 = sizes[ref2]) %>%
+#       dplyr::mutate(size  = size1 * size2) %>%
+#   # Sample, weighted by size
+#       dplyr::slice_sample(n = nSamples, weight_by = size, replace = TRUE) %>%
+#   # Get random point
+#       dplyr::mutate(size1 = size1 - object@parameters@maxLinkRange) %>%
+#       dplyr::mutate(size2 = size2 - object@parameters@maxLinkRange) %>%
+#       dplyr::mutate(bin1 = as.integer(round(runif(nrow(.)) * size1))) %>%
+#       dplyr::mutate(bin2 = as.integer(round(runif(nrow(.)) * size2))) %>%
+#       dplyr::select(ref1, bin1, ref2, bin2)
+#       dplyr::mutate(bin2 = as.integer(round(runif(nrow(.)) * size2))) %>%
+#       dplyr::select(ref1, bin1, ref2, bin2)
 }
 
 estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
@@ -276,14 +326,13 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
     corners  <- purrr::map(points, extractCornerFromPoint, object, pb)
     message("\t\tComputing stats.")
     pb       <- progress_bar$new(total = length(points))
-    object@parameters@cornerScores <- purrr::map(corners, compareCorner, object@parameters@distanceCount, object@parameters@maxLinkRange, pb) %>%
-        purrr::transpose() %>%
-        purrr::map(unlist) %>%
-        purrr::map(sort) %>%
-        purrr::map(nSamples * pvalueThreshold) %>%
-        unlist() %>%
-        tibble::enframe(name = "distance", value = "score") %>%
-        dplyr::mutate(distance = distance - 1)
+    object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
+        group_by(distance) %>%
+        # This parameter should be tuned!
+        slice_max(score, prop = 0.75, with_ties = FALSE) %>%
+        # slice_max(score, prop = pvalueThreshold, with_ties = FALSE) %>%
+        slice_min(score, n = 1, with_ties = FALSE) %>%
+        ungroup()
     return(object)
 }
 

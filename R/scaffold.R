@@ -1,36 +1,40 @@
 # Change the UB-LR system to after/collinear
 # When ref can be merged to several refs, choose the best one.
-selectJoins <- function(joins) {
+selectJoins <- function(object, joins) {
     # Change to the after/collinear system
-    joins1 <- joins %>%
+    #joins1 <- joins %>%
+    joins %>%
         dplyr::select(ref1, ref2, vert, hor, pvalue) %>%
         dplyr::mutate(after     = (hor == "R")) %>%
         dplyr::mutate(collinear = ((hor == "R") == (vert == "U"))) %>%
-        dplyr::select(-c(vert, hor))
-    # Create symmetric case (ref1 and 2 inverted)
-    joins2 <- joins1 %>%
-        dplyr::rename(tmp = ref1) %>%
-        dplyr::rename(ref1 = ref2) %>%
-        dplyr::rename(ref2 = tmp) %>%
-        dplyr::mutate(after = ((!collinear) == after))
-    # Choose best "after" ref
-    filteredJoins <- dplyr::bind_rows(joins1, joins2) %>%
-        dplyr::group_by(ref1, after) %>%
-        dplyr::filter(pvalue == min(pvalue)) %>%
-        dplyr::ungroup() %>%
-        dplyr::filter(ref1 < ref2)
-    merges <- dplyr::slice(filteredJoins, 0)
-    # Remove possible duplicates
-    while (nrow(filteredJoins) > 0) {
-        bestLine <- filteredJoins %>% dplyr::arrange(pvalue) %>% dplyr::slice(1) %>% as.list()
-        merges <- dplyr::bind_rows(merges, as_tibble(bestLine))
-        filteredJoins <- filteredJoins %>%
-            dplyr::filter((ref1  != bestLine$ref1) |
-                          (ref2  != bestLine$ref2) |
-                          (after != bestLine$after))
-    }
-    merges %<>% dplyr::arrange(pvalue)
-    return(merges)
+        dplyr::select(-c(vert, hor)) %>%
+        dplyr::arrange(pvalue) %>%
+        dplyr::mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
+        dplyr::mutate(ref2 = factor(ref2, levels = object@chromosomes))
+#   # Create symmetric case (ref1 and 2 inverted)
+#   joins2 <- joins1 %>%
+#       dplyr::rename(tmp = ref1) %>%
+#       dplyr::rename(ref1 = ref2) %>%
+#       dplyr::rename(ref2 = tmp) %>%
+#       dplyr::mutate(after = ((!collinear) == after))
+#   # Choose best "after" ref
+#   filteredJoins <- dplyr::bind_rows(joins1, joins2) %>%
+#       dplyr::group_by(ref1, after) %>%
+#       dplyr::filter(pvalue == min(pvalue)) %>%
+#       dplyr::ungroup() %>%
+#       dplyr::filter(ref1 < ref2)
+#   merges <- dplyr::slice(filteredJoins, 0)
+#   # Remove possible duplicates
+#   while (nrow(filteredJoins) > 0) {
+#       bestLine <- filteredJoins %>% dplyr::arrange(pvalue) %>% dplyr::slice(1) %>% as.list()
+#       merges <- dplyr::bind_rows(merges, as_tibble(bestLine))
+#       filteredJoins <- filteredJoins %>%
+#           dplyr::filter((ref1  != bestLine$ref1) |
+#                         (ref2  != bestLine$ref2) |
+#                         (after != bestLine$after))
+#   }
+#   merges %<>% dplyr::arrange(pvalue)
+#   return(merges)
 }
 
 # Set the largest ref as reference
@@ -41,8 +45,71 @@ orderJoins <- function(object, joins) {
         dplyr::mutate(reference = dplyr::if_else(size1 >= size2, ref1, ref2)) %>%
         dplyr::mutate(other     = dplyr::if_else(size1 >= size2, ref2, ref1)) %>%
         dplyr::mutate(after     = ((!collinear) == after)) %>%
-        dplyr::select(reference, other, after, collinear) %>%
+        dplyr::mutate(refSize   = object@sizes[reference]) %>%
+        dplyr::mutate(otherSize = object@sizes[other]) %>%
+        dplyr::select(reference, other, after, collinear, refSize, otherSize) %>%
         dplyr::filter(reference != other)
+}
+
+# Update scaffold places by adding one scaffold join
+.addScaffold <- function(scaffoldPlaces, join) {
+# message(str(join))
+# scaffoldPlaces %>% head() %>% str() %>% message()
+    forwardDirection <- scaffoldPlaces %>%
+        dplyr::filter(ref == join$reference) %>%
+        dplyr::slice(1) %>%
+        pull(forward)
+    if (join$after & join$collinear & forwardDirection) {
+        scaffoldPlaces <- scaffoldPlaces %>%
+            dplyr::mutate(offset  = dplyr::if_else(newRef == join$other, as.integer(join$refSize + offset), offset)) %>%
+            dplyr::mutate(newSize = dplyr::if_else(newRef == join$reference, newSize + join$otherSize, newSize)) %>%
+            dplyr::mutate(forward = dplyr::if_else(newRef == join$other, forward == join$collinear, forward)) %>%
+            dplyr::mutate(newRef  = dplyr::if_else(newRef == join$other, join$reference, newRef))
+        return(scaffoldPlaces)
+    }
+    if (join$after & join$collinear) {
+        scaffoldPlaces <- scaffoldPlaces %>%
+            dplyr::mutate(offset  = dplyr::if_else(newRef == join$other, as.integer(join$refSize + offset), offset)) %>%
+            dplyr::mutate(newSize = dplyr::if_else(newRef == join$reference, newSize + join$otherSize, newSize)) %>%
+            dplyr::mutate(forward = dplyr::if_else(newRef == join$other, forward == join$collinear, forward)) %>%
+            dplyr::mutate(newRef  = dplyr::if_else(newRef == join$other, join$reference, newRef))
+        return(scaffoldPlaces)
+    }
+    if (join$after) {
+        scaffoldPlaces <- scaffoldPlaces %>%
+            dplyr::mutate(offset  = dplyr::if_else(newRef == join$other, as.integer(join$refSize + newSize - offset - size + 2), offset)) %>%
+            dplyr::mutate(forward = dplyr::if_else(newRef == join$other, ! forward, forward)) %>%
+            dplyr::mutate(newSize = dplyr::if_else(newRef == join$reference, newSize + join$otherSize, newSize)) %>%
+            dplyr::mutate(newRef  = dplyr::if_else(newRef == join$other, join$reference, newRef))
+        return(scaffoldPlaces)
+    }
+    if ((!join$after) & join$collinear) {
+        scaffoldPlaces <- scaffoldPlaces %>%
+            dplyr::mutate(offset  = dplyr::if_else(newRef == join$reference, as.integer(join$otherSize + offset), offset)) %>%
+            dplyr::mutate(newSize = dplyr::if_else(newRef == join$reference, newSize + join$otherSize, newSize)) %>%
+            dplyr::mutate(newRef  = dplyr::if_else(newRef == join$other, join$reference, newRef))
+        return(scaffoldPlaces)
+    }
+    scaffoldPlaces %>%
+        dplyr::mutate(offset  = dplyr::if_else(newRef == join$other, as.integer(newSize - offset - size + 2), offset)) %>%
+        dplyr::mutate(offset  = dplyr::if_else(newRef == join$reference, as.integer(join$otherSize + offset), offset)) %>%
+        dplyr::mutate(newSize = dplyr::if_else(newRef == join$reference, newSize + join$otherSize, newSize)) %>%
+        dplyr::mutate(newRef  = dplyr::if_else(newRef == join$other, join$reference, newRef))
+}
+
+# Create a table, with the list of new places for the contigs
+createScaffoldPlaces <- function(object, joins) {
+    scaffoldPlaces <- object@sizes %>%
+        tibble::enframe(name = "ref", value = "size") %>%
+        dplyr::mutate(newRef = ref) %>%
+        dplyr::mutate(offset = as.integer(0)) %>%
+        dplyr::mutate(newSize = size) %>%
+        dplyr::mutate(forward = TRUE)
+    #scaffoldPlaces <- purrr::reduce2(purrr::transpose(joins), .addScaffold, .init = scaffoldPlaces)
+    for (join in purrr::transpose(joins)) scaffoldPlaces <- .addScaffold(scaffoldPlaces, join)
+    for (join in purrr::transpose(joins)) {
+        scaffoldPlaces <- .addScaffold(scaffoldPlaces, join)
+    }
 }
 
 .stitchChromosomePair <- function(object, sizes, reference, other, after, collinear) {
@@ -108,25 +175,38 @@ repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin)
                               other))
 }
 
+.scaffold <- function(object, orders, groupNames, sizes) {
+    message(paste0("\tDataset '", object@name, "'."))
+    object@interactionMatrix <- scaffoldCounts(object@interactionMatrix, orders, groupNames, sizes) %>% as_tibble()
+    return(object)
+}
+
 scaffold <- function(object) {
-    selectedJoins <- selectJoins(object@joins)
-    orderedJoins  <- orderJoins(object, selectedJoins)
-    pb <- progress_bar$new(total = nrow(orderedJoins))
-    while (nrow(orderedJoins) != 0) {
-        firstRow     <- orderedJoins %>% dplyr::slice(1) %>% as.list()
-        orderedJoins <- orderedJoins %>% dplyr::slice(-1)
-        reference    <- firstRow$reference
-        other        <- firstRow$other
-        after        <- firstRow$after
-        collinear    <- firstRow$collinear
-        # message(paste0("  Stitching ", reference, " with ", other, ", ", nrow(orderedJoins), " remaining."))
-        object       <- stitchChromosomePair(object, reference, other, after, collinear)
-        if (nrow(orderedJoins) != 0) {
-            orderedJoins <- repairJoins(orderedJoins, reference, other, after, collinear) %>%
-                dplyr::rename(ref1 = reference, ref2 = other)
-            orderedJoins <- orderJoins(object, orderedJoins)
-        }
-        pb$tick()
-    }
+    selectedJoins <- selectJoins(object, object@joins)
+    #selectedJoins <- selectJoins(object@joins)
+    # orderedJoins  <- orderJoins(object, selectedJoins)
+    groups        <- getRefOrders(selectedJoins, object@sizes)
+    groupNames    <- as.numeric(factor(names(groups), levels = object@chromosomes))
+    message("Scaffolding sequences.")
+    scaffolds     <- scaffoldContigs(as.character(object@sequences), groups, object@sizes, object@binSize)
+    message("Scaffolding counts.")
+    object@data   <- purrr::map(object@data, .scaffold, groups, groupNames, object@sizes)
+#   pb <- progress_bar$new(total = nrow(orderedJoins))
+#   while (nrow(orderedJoins) != 0) {
+#       firstRow     <- orderedJoins %>% dplyr::slice(1) %>% as.list()
+#       orderedJoins <- orderedJoins %>% dplyr::slice(-1)
+#       reference    <- firstRow$reference
+#       other        <- firstRow$other
+#       after        <- firstRow$after
+#       collinear    <- firstRow$collinear
+#       # message(paste0("  Stitching ", reference, " with ", other, ", ", nrow(orderedJoins), " remaining."))
+#       object       <- stitchChromosomePair(object, reference, other, after, collinear)
+#       if (nrow(orderedJoins) != 0) {
+#           orderedJoins <- repairJoins(orderedJoins, reference, other, after, collinear) %>%
+#               dplyr::rename(ref1 = reference, ref2 = other)
+#           orderedJoins <- orderJoins(object, orderedJoins)
+#       }
+#       pb$tick()
+#   }
     return(object)
 }

@@ -49,3 +49,15 @@ parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
     .Call('_tenxchecker_parsePafCpp', PACKAGE = 'tenxchecker', fname, resolution, minAlnLen, minCount, minNCells)
 }
 
+getRefOrders <- function(joins, sizes) {
+    .Call('_tenxchecker_getRefOrders', PACKAGE = 'tenxchecker', joins, sizes)
+}
+
+scaffoldContigs <- function(contigs, orders, sizes, binSize) {
+    .Call('_tenxchecker_scaffoldContigs', PACKAGE = 'tenxchecker', contigs, orders, sizes, binSize)
+}
+
+scaffoldCounts <- function(matrices, groups, scaffoldRefs, sizes) {
+    .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, groups, scaffoldRefs, sizes)
+}
+

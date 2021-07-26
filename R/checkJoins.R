@@ -74,60 +74,8 @@ checkJoin <- function(object, counts, progressBar) {
                 tBR      = testBR))
 }
 
-#cornerEuclideanDistance <- function(observedDistribution, backgroundDistribution) {
-cornerDistance <- function(observedDistribution, backgroundDistribution) {
-# message(str(observedDistribution))
-# message(str(backgroundDistribution))
-    n <- nrow(observedDistribution)
-    #if (n == 0) return(0)
-#message("Eucl. distance")
-#observedDistribution %>% dplyr::left_join(backgroundDistribution, by = "distance") %>% dplyr::mutate(d = (count - meanCount) ^ 2) %>% str() %>% message()
-    if (nrow(observedDistribution) != nrow(backgroundDistribution)) {
-        stop(paste0("Cannot compute corner distance is the lengths differ: # observed: ", nrow(observedDistribution), ", # background: ", nrow(backgroundDistribution), "."))
-    }
-    v <- observedDistribution %>%
-        dplyr::left_join(backgroundDistribution, by = "distance", suffix = c("_obs", "_back")) %>%
-        dplyr::mutate(d = abs(count_obs - count_back)) %>%
-        dplyr::pull(d) %>%
-        sum()
-#   v <- observedDistribution %>%
-#       dplyr::left_join(backgroundDistribution, by = "distance") %>%
-#       dplyr::mutate(d = (count - meanCount) ^ 2) %>%
-#       dplyr::pull(d) %>%
-#       sum() %>%
-#       sqrt()
-# message(str(v / n))
-    return(v / n)
-}
-
-computeCornerDistanceOffset <- function(offset, backgroundDistribution, corner, maxDistance) {
-# message("computeCornerDistanceOffset")
-# message(str(offset))
-# message(str(maxDistance))
-# message(str(backgroundDistribution))
-# message(str(corner %>% dplyr::filter(distance <= maxDistance - offset)))
-    backgroundDistribution <- backgroundDistribution %>%
-        dplyr::mutate(distance = distance - offset) %>%
-        dplyr::filter(distance >= 0)
-    corner <- corner %>%
-        dplyr::select(distance, count) %>%
-        dplyr::filter(distance <= maxDistance - offset) %>%
-        # replace loess with mean?
-        # dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
-        # dplyr::arrange(distance) %>%
-        # dplyr::distinct()
-        dplyr::group_by(distance) %>%
-        dplyr::summarise(count = mean(count), .groups = "drop") %>%
-        dplyr::arrange(distance)
-# message(str(corner))
-    cornerDistance(corner, backgroundDistribution)
-}
-
-# Extract the rignt corner, fill missing values with 0, and summarize as distance/count tibble.
+# Extract the right corner, fill missing values with 0, and summarize as distance/count tibble.
 extractCorner <- function(object, vert, hor) {
-# message(str(object@interactionMatrix))
-# message(str(vert))
-# message(str(hor))
     interactionMatrix <- object@interactionMatrix
     if (hor == "R") {
         interactionMatrix <- interactionMatrix %>%
@@ -137,12 +85,6 @@ extractCorner <- function(object, vert, hor) {
         interactionMatrix <- interactionMatrix %>%
             dplyr::mutate(bin2 = object@size2 - bin2)
     }
-# message(str(interactionMatrix))
-# message(str(interactionMatrix))
-# message(str(computeDistanceCount(interactionMatrix, object@parameters@maxLinkRange)))
-# message(str(computeDistanceCount(interactionMatrix, object@parameters@maxLinkRange) %>% filter(count > 0)))
-# message(str("corner"))
-# message(str(interactionMatrix))
     fillCorner(interactionMatrix, object@parameters@maxLinkRange, TRUE)
 }
 
@@ -211,9 +153,19 @@ extractRegions <- function(object) {
 filterRegions <- function(object, counts) {
     tmp <- counts %>%
         dplyr::filter(type != "interior") %>%
-        dplyr::group_by(chromosome1, chromosome2) %>%
         dplyr::summarize(maxCount = max(count), .groups = "drop") %>%
         dplyr::filter(maxCount > object@parameters@minCount)
+    if (nrow(tmp) > 0) {
+        return(counts)
+    }
+    tmp <- counts %>%
+        dplyr::filter(type != "interior") %>%
+        dplyr::mutate(zeros = if_else(count == 0, 1, 0)) %>%
+        dplyr::group_by(type) %>%
+        dplyr::summarize(nZeros    = sum(zeros),
+                         nNonZeros = sum(1 - zeros),
+                         .groups = "drop") %>%
+        dplyr::filter(nNonZeros > nZeros / 2)
     if (nrow(tmp) > 0) {
         return(counts)
     }
@@ -353,22 +305,13 @@ removeDuplicateJoins <- function(object) {
 ..checkCorners <- function(parameters, object, sizes, pb) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$vert, parameters$hor)
-# message("..checkCorners")
-# message(str(corner %>% arrange(desc(count))))
-    values    <- purrr::map_dbl(seq.int(from = 0, to = objectRef@parameters@maxLinkRange - 1, by = 1), computeCornerDistanceOffset, object@parameters@distanceCount, corner, object@parameters@maxLinkRange)
-# message(str(values))
-    bestValue    <- min(values, na.rm = TRUE)
-    bestDistance <- head(which(values == bestValue), 1) - 1
-# message(paste0("bestDistance: ", bestDistance))
-# message(str(object@parameters@cornerScores))
-    isSignificant <- object@parameters@cornerScores %>%
-        dplyr::filter(distance == bestDistance) %>%
-        dplyr::filter(bestValue <= score)
-# message(str(bestDistance))
-    pb$tick()
-    if (nrow(isSignificant) == 0) return(-1)
-    return(bestDistance)
-#message(str(values))
+    values    <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
+        dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
+        dplyr::filter(score_corner >= score_background) %>%
+        dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
+        dplyr::pull(distance)
+    if (length(values) == 0) return(-1)
+    return(values)
 }
 
 .checkCorners <- function(object, sizes, pvalueThreshold) {
