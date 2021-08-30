@@ -25,6 +25,9 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             binSize         = "ANY",
                                             sampleSize      = "ANY",
                                             loessSpan       = "ANY",
+                                            distanceCount   = "ANY",
+                                            cornerScores    = "ANY",
+                                            cornerLimit     = "ANY",
                                             breakThreshold  = "ANY", 
                                             breakNCells     = "ANY", 
                                             maxLinkRange    = "ANY", 
@@ -55,9 +58,7 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
 #'
 #' @export
 setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
-                                      binSize      = "ANY",
-                                      maxLinkRange = "ANY", 
-                                      sizes        = "ANY")
+                                      maxLinkRange = "ANY") 
 )
 
 
@@ -75,9 +76,7 @@ setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
 #'
 #' @export
 tenxcheckerData <- function(inputMatrix  = NULL,
-                            binSize      = NULL,
-                            maxLinkRange = NULL,
-                            sizes        = NULL) {
+                            maxLinkRange = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -92,8 +91,9 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     if (ncol(inputMatrix) != 5) {
         stop("'inputMatrix' should have 5 columns", call. = FALSE)
     }
-    if (any(colnames(inputMatrix) != c("ref1", "bin1", "ref2", "bin2", "count"))) {
-        stop("'inputMatrix' names are incorrect", call. = FALSE)
+    correctMatrixColNames <- c("ref1", "bin1", "ref2", "bin2", "count")
+    if (any(colnames(inputMatrix) != correctMatrixColNames)) {
+        stop(paste0("'inputMatrix' names are incorrect.  Should be ", paste0(correctMatrixColNames, collapse = ", "), ", found ", paste0(colnames(inputMatrix), collapse = ", "), "."), call. = FALSE)
     }
     if ((! is.factor(inputMatrix$ref1)) | (! is.factor(inputMatrix$ref2))) {
         stop("References should be factors.", call. = FALSE)
@@ -106,9 +106,6 @@ tenxcheckerData <- function(inputMatrix  = NULL,
 
     if (! identical(levels(inputMatrix$ref1), levels(inputMatrix$ref2))) {
         stop("Levels of the references should be identical.")
-    }
-    if (! identical(names(sizes), levels(inputMatrix$ref1))) {
-        stop("Names of the sizes of chromosomes should match with the names of the matrix.")
     }
 
     # Convert "diagonal matrices" to upper matrices
@@ -127,18 +124,12 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     object <- new("tenxcheckerData")
     
     object@inputMatrix  <- inputMatrix
-    object@binSize      <- binSize
     object@maxLinkRange <- maxLinkRange
-    object@sizes        <- sizes
 
     chromosomes <- mixedsort(levels(object@inputMatrix$ref1))
     object@inputMatrix <- object@inputMatrix %>%
         mutate(ref1 = fct_relevel(ref1, chromosomes)) %>%
         mutate(ref2 = fct_relevel(ref2, chromosomes))
-    if (is.null(object@sizes)) {
-        object@sizes <- computeRefSizes(object)
-    }
-    object@sizes <- object@sizes[mixedsort(names(object@sizes))]
     
     return(invisible(object))
 }
@@ -209,12 +200,15 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix = "ANY",
 #'
 #' @export
 setClass("tenxcheckerClass", slots = c(data               = "ANY",
+                                       sequences          = "ANY",
                                        binSize            = "ANY",
                                        minNBins           = "ANY",
                                        chromosomes        = "ANY",
                                        sizes              = "ANY",
                                        breaks             = "ANY",
+                                       breakPlots         = "ANY",
                                        joins              = "ANY",
+                                       joinPlots          = "ANY",
                                        newChromosomes     = "ANY",
                                        mergedChromosomes  = "ANY")
 )
@@ -233,26 +227,35 @@ setClass("tenxcheckerClass", slots = c(data               = "ANY",
 #' @examples
 #'
 #' @export
-tenxchecker <- function(binSize, minNBins = 20) {
+tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
+    if (!is.character(sequenceFileName)) {
+        stop("The sequence file should be a character.")
+    }
     if (!is.numeric(binSize)) {
         stop("'bin size' should be numeric.")
     }
     
     ##- end checking ---------------------------------------------------------#
     
-    object <- new("tenxcheckerClass")
+    object                   <- new("tenxcheckerClass")
     object@binSize           <- binSize
     object@minNBins          <- minNBins
     object@data              <- c()
     object@breaks            <- NULL
+    object@breakPlots        <- NULL
     object@joins             <- NULL
-    object@chromosomes       <- NULL
+    object@joinPlots         <- NULL
     object@newChromosomes    <- c()
     object@mergedChromosomes <- c()
 
+    object@sequences         <- readDNAStringSet(sequenceFileName) %>% as.character()
+    names(object@sequences)  <- unlist(map(str_split(names(object@sequences), " "), 1))
+    object@chromosomes       <- mixedsort(names(object@sequences))
+    object@sizes             <- ceiling(nchar(object@sequences) / object@binSize) - 1
+    names(object@sizes)      <- object@chromosomes
     return(invisible(object))
 }
 
@@ -287,19 +290,10 @@ addExp <- function(object, data, expName) {
     ##- end checking ---------------------------------------------------------#
 
 
-    if (length(object@data) == 0) {
-        object@chromosomes <- levels(data@inputMatrix$ref1)
-        object@sizes       <- data@sizes
-    }
-    else {
-        refTrans           <- mergeRefs(object@chromosomes, levels(data@inputMatrix$ref1))
-        object@chromosomes <- mixedsort(refTrans$all)
-        object@sizes       <- mergeSizes(object@sizes, data@sizes, refTrans)
-        object             <- updateRefs(object, refTrans)
-    }
+    data <- updateRefs(object, data)
 
     parameters <- new("tenxcheckerParameters")
-    parameters@binSize         <- data@binSize
+    parameters@binSize         <- object@binSize
     parameters@maxLinkRange    <- data@maxLinkRange
     parameters@sampleSize      <- 10000
     parameters@loessSpan       <- 0.5
@@ -307,6 +301,9 @@ addExp <- function(object, data, expName) {
     parameters@minRowCount     <- 100
     parameters@breakThreshold  <- NULL
     parameters@breakNCells     <- NULL
+    parameters@distanceCount   <- NULL
+    parameters@cornerScores    <- NULL
+    parameters@cornerLimit     <- NULL
     parameters@nRandomizations <- 10
     parameters@nBinZoom        <- 100
 
@@ -317,13 +314,6 @@ addExp <- function(object, data, expName) {
     newData@breaks            <- NULL
     newData@joins             <- NULL
 
-    if (length(object@data) != 0) {
-        refTrans <- refTrans %>%
-            dplyr::select(all, name2) %>%
-            dplyr::rename(new = all) %>%
-            dplyr::rename(old = name2)
-        newData <- updateRefsMatrices(newData, refTrans)
-    }
     object@data <- c(object@data, newData)
 
     return(invisible(object))

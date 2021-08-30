@@ -5,6 +5,22 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
 }
 
+filterCornersCpp <- function(data, sizes, cornerSize) {
+    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizes, cornerSize)
+}
+
+extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize) {
+    .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize)
+}
+
+classifyCornerPointsCpp <- function(interactions, size1, size2, cornerSize) {
+    .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, cornerSize)
+}
+
+splitChromosomeCpp <- function(data, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
+    invisible(.Call('_tenxchecker_splitChromosomeCpp', PACKAGE = 'tenxchecker', data, prevRef, newRef, shiftedRef, splitPoint, firstPart))
+}
+
 computeRefSizesCpp <- function(data) {
     .Call('_tenxchecker_computeRefSizesCpp', PACKAGE = 'tenxchecker', data)
 }
@@ -21,8 +37,24 @@ removeLowCountRowsCpp <- function(data, sizes, threshold) {
     .Call('_tenxchecker_removeLowCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes, threshold)
 }
 
+normalizeHighCountRowsCpp <- function(data, sizes) {
+    invisible(.Call('_tenxchecker_normalizeHighCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes))
+}
+
 keepScaffoldsCpp <- function(data, keptRefs) {
     .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
+}
+
+keepScaffoldsPairsCpp <- function(data, keptRefs) {
+    .Call('_tenxchecker_keepScaffoldsPairsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
+}
+
+extractLines <- function(matrix, lines, maxDistance) {
+    .Call('_tenxchecker_extractLines', PACKAGE = 'tenxchecker', matrix, lines, maxDistance)
+}
+
+computeMeanTrianglesCpp <- function(data, distance) {
+    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance)
 }
 
 parseHicCpp <- function(fname, resolution) {
@@ -31,5 +63,21 @@ parseHicCpp <- function(fname, resolution) {
 
 parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
     .Call('_tenxchecker_parsePafCpp', PACKAGE = 'tenxchecker', fname, resolution, minAlnLen, minCount, minNCells)
+}
+
+getRefOrders <- function(joins, sizes) {
+    .Call('_tenxchecker_getRefOrders', PACKAGE = 'tenxchecker', joins, sizes)
+}
+
+scaffoldContigs <- function(contigs, orders, sizes, binSize) {
+    .Call('_tenxchecker_scaffoldContigs', PACKAGE = 'tenxchecker', contigs, orders, sizes, binSize)
+}
+
+scaffoldCounts <- function(matrices, groups, scaffoldRefs, sizes) {
+    .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, groups, scaffoldRefs, sizes)
+}
+
+splitCpp <- function(object) {
+    .Call('_tenxchecker_splitCpp', PACKAGE = 'tenxchecker', object)
 }
 
