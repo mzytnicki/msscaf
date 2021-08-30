@@ -79,7 +79,7 @@ normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
     pb <- progress_bar$new(total = length(objects))
     message("\t\tComputing stats.")
     breaks <- lapply(objects, normalizeAndBreak, progressBar = pb, kr = kr, md = md, diag = diag)
-    # message(str(breaks))
+    #message(str(breaks))
     data   <- map_dfr(breaks, "data", .id = "ref") %>% dplyr::mutate(ref = factor(ref, levels = chromosomes))
     breaksObject                 <- new("tenxcheckerBreaks")
     breaksObject@data            <- data

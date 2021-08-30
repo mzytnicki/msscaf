@@ -223,7 +223,9 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
 	    scale_y_reverse(lim = c(maxLim, minLim), expand = c(0, 0)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
-            ggtitle(object@chromosome)
+            ggtitle(object@chromosome) +
+            xlab("") +
+            ylab("")
     if (logColor) {
         p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     } else {
@@ -277,7 +279,9 @@ plot.10X2Ref <- function(object,
 	    ylab(object@chromosome2) +
 	    theme_bw() +
 	    theme(panel.spacing = unit(0, "lines")) +
-	    coord_fixed()
+	    coord_fixed() +
+            xlab("") +
+            ylab("")
     if (circles) {
 	circles <- tibble(
 	    x      = c(1, 1, object@size1, object@size1),
@@ -348,7 +352,9 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
 	scale_y_reverse(expand = c(0, 0)) +
 	theme_bw() +
 	theme(panel.spacing = unit(0, "lines")) +
-        ggtitle(object@name)
+        ggtitle(object@name) +
+        xlab("") +
+        ylab("")
     if (logColor) {
 	p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     }

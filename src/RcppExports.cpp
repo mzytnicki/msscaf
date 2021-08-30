@@ -23,6 +23,47 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// filterCornersCpp
+DataFrame filterCornersCpp(DataFrame data, IntegerVector sizes, int cornerSize);
+RcppExport SEXP _tenxchecker_filterCornersCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(filterCornersCpp(data, sizes, cornerSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// extractCornersCpp
+DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize);
+RcppExport SEXP _tenxchecker_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type selectedRefs(selectedRefsSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, sizes, cornerSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// classifyCornerPointsCpp
+DataFrame classifyCornerPointsCpp(DataFrame interactions, int size1, int size2, int cornerSize);
+RcppExport SEXP _tenxchecker_classifyCornerPointsCpp(SEXP interactionsSEXP, SEXP size1SEXP, SEXP size2SEXP, SEXP cornerSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
+    Rcpp::traits::input_parameter< int >::type size1(size1SEXP);
+    Rcpp::traits::input_parameter< int >::type size2(size2SEXP);
+    Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(classifyCornerPointsCpp(interactions, size1, size2, cornerSize));
+    return rcpp_result_gen;
+END_RCPP
+}
 // splitChromosomeCpp
 void splitChromosomeCpp(DataFrame& data, int prevRef, int newRef, int shiftedRef, long splitPoint, bool firstPart);
 RcppExport SEXP _tenxchecker_splitChromosomeCpp(SEXP dataSEXP, SEXP prevRefSEXP, SEXP newRefSEXP, SEXP shiftedRefSEXP, SEXP splitPointSEXP, SEXP firstPartSEXP) {
@@ -106,6 +147,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
     Rcpp::traits::input_parameter< CharacterVector >::type keptRefs(keptRefsSEXP);
     rcpp_result_gen = Rcpp::wrap(keepScaffoldsCpp(data, keptRefs));
+    return rcpp_result_gen;
+END_RCPP
+}
+// keepScaffoldsPairsCpp
+DataFrame keepScaffoldsPairsCpp(DataFrame& data, DataFrame& keptRefs);
+RcppExport SEXP _tenxchecker_keepScaffoldsPairsCpp(SEXP dataSEXP, SEXP keptRefsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< DataFrame& >::type keptRefs(keptRefsSEXP);
+    rcpp_result_gen = Rcpp::wrap(keepScaffoldsPairsCpp(data, keptRefs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -201,9 +254,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// splitCpp
+S4 splitCpp(S4 object);
+RcppExport SEXP _tenxchecker_splitCpp(SEXP objectSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< S4 >::type object(objectSEXP);
+    rcpp_result_gen = Rcpp::wrap(splitCpp(object));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
+    {"_tenxchecker_filterCornersCpp", (DL_FUNC) &_tenxchecker_filterCornersCpp, 3},
+    {"_tenxchecker_extractCornersCpp", (DL_FUNC) &_tenxchecker_extractCornersCpp, 4},
+    {"_tenxchecker_classifyCornerPointsCpp", (DL_FUNC) &_tenxchecker_classifyCornerPointsCpp, 4},
     {"_tenxchecker_splitChromosomeCpp", (DL_FUNC) &_tenxchecker_splitChromosomeCpp, 6},
     {"_tenxchecker_computeRefSizesCpp", (DL_FUNC) &_tenxchecker_computeRefSizesCpp, 1},
     {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
@@ -211,6 +278,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
     {"_tenxchecker_normalizeHighCountRowsCpp", (DL_FUNC) &_tenxchecker_normalizeHighCountRowsCpp, 2},
     {"_tenxchecker_keepScaffoldsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsCpp, 2},
+    {"_tenxchecker_keepScaffoldsPairsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsPairsCpp, 2},
     {"_tenxchecker_extractLines", (DL_FUNC) &_tenxchecker_extractLines, 3},
     {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},
@@ -218,6 +286,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_getRefOrders", (DL_FUNC) &_tenxchecker_getRefOrders, 2},
     {"_tenxchecker_scaffoldContigs", (DL_FUNC) &_tenxchecker_scaffoldContigs, 4},
     {"_tenxchecker_scaffoldCounts", (DL_FUNC) &_tenxchecker_scaffoldCounts, 4},
+    {"_tenxchecker_splitCpp", (DL_FUNC) &_tenxchecker_splitCpp, 1},
     {NULL, NULL, 0}
 };
 

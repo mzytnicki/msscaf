@@ -5,6 +5,18 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
 }
 
+filterCornersCpp <- function(data, sizes, cornerSize) {
+    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizes, cornerSize)
+}
+
+extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize) {
+    .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize)
+}
+
+classifyCornerPointsCpp <- function(interactions, size1, size2, cornerSize) {
+    .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, cornerSize)
+}
+
 splitChromosomeCpp <- function(data, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
     invisible(.Call('_tenxchecker_splitChromosomeCpp', PACKAGE = 'tenxchecker', data, prevRef, newRef, shiftedRef, splitPoint, firstPart))
 }
@@ -33,6 +45,10 @@ keepScaffoldsCpp <- function(data, keptRefs) {
     .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
 }
 
+keepScaffoldsPairsCpp <- function(data, keptRefs) {
+    .Call('_tenxchecker_keepScaffoldsPairsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
+}
+
 extractLines <- function(matrix, lines, maxDistance) {
     .Call('_tenxchecker_extractLines', PACKAGE = 'tenxchecker', matrix, lines, maxDistance)
 }
@@ -59,5 +75,9 @@ scaffoldContigs <- function(contigs, orders, sizes, binSize) {
 
 scaffoldCounts <- function(matrices, groups, scaffoldRefs, sizes) {
     .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, groups, scaffoldRefs, sizes)
+}
+
+splitCpp <- function(object) {
+    .Call('_tenxchecker_splitCpp', PACKAGE = 'tenxchecker', object)
 }
 

@@ -68,16 +68,20 @@ splitChromosomes <- function(object) {
     if (nSplits == 0) {
         return(invisible(object))
     }
-    newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
-    object@chromosomes <- c(object@chromosomes, newRefs)
-    parameters <- object@breaks %>%
-        arrange(ref, desc(bin)) %>%
-        mutate(newRef = newRefs) %>%
-        transpose()
-    pb <- progress_bar$new(total = nSplits)
-    for (param in parameters) {
-        object <- splitChromosome(object, param)
-        pb$tick()
+    object <- splitCpp(object)
+    for (i in seq_along(object@data)) {
+        object@data[[i]]@interactionMatrix <- as_tibble(object@data[[i]]@interactionMatrix)
     }
+#   newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
+#   object@chromosomes <- c(object@chromosomes, newRefs)
+#   parameters <- object@breaks %>%
+#       arrange(ref, desc(bin)) %>%
+#       mutate(newRef = newRefs) %>%
+#       transpose()
+#   pb <- progress_bar$new(total = nSplits)
+#   for (param in parameters) {
+#       object <- splitChromosome(object, param)
+#       pb$tick()
+#   }
     return(invisible(object))
 }

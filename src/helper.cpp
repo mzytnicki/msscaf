@@ -268,6 +268,63 @@ DataFrame keepScaffoldsCpp (DataFrame &data, CharacterVector keptRefs) {
     return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
 }
 
+// Extract matrix lines such that (ref1, ref2) match given data.
+// [[Rcpp::export]]
+DataFrame keepScaffoldsPairsCpp (DataFrame &data, DataFrame &keptRefs) {
+    IntegerVector   refs1     = data["ref1"];
+    IntegerVector   refs2     = data["ref2"];
+    IntegerVector   bins1     = data["bin1"];
+    IntegerVector   bins2     = data["bin2"];
+    IntegerVector   counts    = data["count"];
+    CharacterVector refNames  = refs1.attr("levels");
+    int             nRefs     = refNames.size();
+    IntegerVector   keptRefs1 = keptRefs["ref1"];
+    IntegerVector   keptRefs2 = keptRefs["ref2"];
+    int             nKeptRefs = keptRefs1.size();
+    long long int   nDataIn   = refs1.size();
+    long long int   nDataOut  = 0;
+    std::vector < std::vector < bool > >  keptRefsBool (nRefs + 1);
+    for (int refId = 0; refId <= nRefs; ++refId) {
+        keptRefsBool[refId] = std::vector < bool > (refId + 1, false);
+    }
+    for (int keptRefId = 0; keptRefId < nKeptRefs; ++keptRefId) {
+        if (keptRefs1[keptRefId] >= static_cast < int > (keptRefsBool.size())) {
+            Rcerr << "Problem #1 in keepScaffoldsPairsCpp: " << keptRefs1[keptRefId] << " >= " << keptRefsBool.size() << ".\n";
+        }
+        if (keptRefs2[keptRefId] >= static_cast < int > (keptRefsBool[keptRefs1[keptRefId]].size())) {
+            Rcerr << "Problem #2 in keepScaffoldsPairsCpp: " << keptRefs2[keptRefId] << " >= " << keptRefsBool[keptRefs1[keptRefId]].size() << ".\n";
+        }
+        keptRefsBool[keptRefs1[keptRefId]][keptRefs2[keptRefId]] = true;
+    }
+    // In-place update of the data
+    for (long long int dataId = 0; dataId < nDataIn; ++dataId) {
+        if (keptRefsBool[refs1[dataId]][refs2[dataId]]) {
+            if (dataId != nDataOut) {
+                refs1[nDataOut]  = refs1[dataId];
+                refs2[nDataOut]  = refs2[dataId];
+                bins1[nDataOut]  = bins1[dataId];
+                bins2[nDataOut]  = bins2[dataId];
+                counts[nDataOut] = counts[dataId];
+            }
+            ++nDataOut;
+        }
+    }
+    refs1.erase(nDataOut, nDataIn);
+    refs2.erase(nDataOut, nDataIn);
+    bins1.erase(nDataOut, nDataIn);
+    bins2.erase(nDataOut, nDataIn);
+    counts.erase(nDataOut, nDataIn);
+    if (refs1.size() != nDataOut) {
+        Rcerr << "Problem while resizing vectors.\n";
+        stop("Stopping here.");
+    }
+    refs1.attr("class") = "factor";
+    refs2.attr("class") = "factor";
+    refs1.attr("levels") = refNames;
+    refs2.attr("levels") = refNames;
+    return Rcpp::DataFrame::create(_["ref1"]= refs1, _["bin1"]= bins1, _["ref2"]= refs2, _["bin2"]= bins2, _["count"]= counts);
+}
+
 uint64_t combineInts(int i1, int i2) {
     if (i1 < 0) stop("Problem in 'combineInts': first data is " + std::to_string(i1) + ".");
     if (i2 < 0) stop("Problem in 'combineInts': second data is " + std::to_string(i2) + ".");

@@ -806,10 +806,10 @@ library("Biostrings")
 library("cowplot")
 devtools::load_all(".")
 #object <- makeSimObject(1, 1, 100, 20, 5, 0.2, c(1), c(50), c(), c(), c())
-object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 2), c(25, 75), c(3, 4), c(4, 5), c(1, 5))
+#object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 2), c(25, 75), c(3, 4), c(4, 5), c(1, 5))
 object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 1, 2, 2), c(25, 75, 75, 75), c(3, 4), c(4, 5), c(1, 5))
-object <- makeSimObject(1, 2, 100, 20, 10, 0.2, c(), c(), c(1), c(2), c(5))
-plot.10X(object)
+#object <- makeSimObject(1, 2, 100, 20, 10, 0.2, c(), c(), c(1), c(2), c(5))
+#plot.10X(object)
 object <- estimateDistributions(object)
 object@data[[1]]@parameters@maxLinkRange <- 6
 object@data[[2]]@parameters@maxLinkRange <- 6
