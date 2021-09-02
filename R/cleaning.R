@@ -5,7 +5,10 @@ removeSmallScaffolds <- function(object) {
     message(paste0("Removing small scaffolds (currently: ", length(object@chromosomes), ")."))
     chromosomes <- names(object@sizes[object@sizes >= object@minNBins])
     object      <- keepScaffolds(object, chromosomes)
-    message(paste0("\tKeeping ", length(chromosomes), " scaffolds with at least ", object@minNBins, " bins."))
+    seenRefs    <- mixedsort(unique(unlist(map(object@data, ~ unique(c(as.character(unique(.x@interactionMatrix$ref1)),
+                                                                       as.character(unique(.x@interactionMatrix$ref2))))))))
+    object      <- keepScaffolds(object, seenRefs)
+    message(paste0("\tKeeping ", length(seenRefs), " scaffolds with at least ", object@minNBins, " bins."))
     return(object)
 }
 
@@ -63,5 +66,6 @@ cleanData <- function(object) {
     }
     object <- removeLowCount(object)
     object <- removeSmallScaffolds(object)
+    normalizeHighCountRows(object)
     return(invisible(object))
 }

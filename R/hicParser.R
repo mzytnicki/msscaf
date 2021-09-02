@@ -4,6 +4,6 @@ parseHicFile <- function(fileName, binSize) {
     data <- as_tibble(l$data) %>%
         arrange(ref1, bin1, ref2, bin2) %>%
         drop_na()
-    objectData <- tenxcheckerData(inputMatrix = data, binSize = binSize, sizes = l$sizes)
+    objectData <- tenxcheckerData(inputMatrix = data)
     return(objectData)
 }
