@@ -214,7 +214,7 @@ IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < 
     int prevRef            = -1;
     int prevSplit          = 0;
     int subContig          = 0;
-    for (int splitId = 1; splitId < nSplits; ++splitId) {
+    for (int splitId = 0; splitId < nSplits; ++splitId) {
         int ref   = refs[splitId];
         int split = bins[splitId];
         if ((ref != prevRef) && (prevRef != -1)) {
@@ -229,7 +229,7 @@ IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < 
     }
     updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1]);
     if (newSizes.size() != sizes.size() + nSplits) {
-        Rcerr << "Error while splitting sequences.\n";
+        Rcerr << "Error while splitting sequences: expected " << sizes.size() << " + " << nSplits << ", got " << newSizes.size() << "\n";
     }
     return newSizes;
 }
