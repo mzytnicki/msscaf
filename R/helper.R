@@ -102,6 +102,7 @@ keepScaffolds <- function(object, chromosomes) {
     object@chromosomes <- chromosomes
     object@sizes       <- object@sizes[chromosomes]
     object@data        <- map(object@data, .keepScaffolds, chromosomes = chromosomes)
+    object@sequences   <- object@sequences[chromosomes]
     return(object)
 }
 
