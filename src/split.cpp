@@ -189,6 +189,9 @@ CharacterVector splitSequences(CharacterVector contigs, DataFrame splits, Intege
         String newContig = newContigs[i];
         oldContigs.push_back(newContig, "new_ref_" + std::to_string(i + 1));
     }
+    if (oldContigs.size() != contigs.size() + nSplits) {
+        Rcerr << "Error while splitting sequences.\n";
+    }
     return oldContigs;
 }
 
@@ -211,7 +214,7 @@ IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < 
     int prevRef            = -1;
     int prevSplit          = 0;
     int subContig          = 0;
-    for (int splitId = 0; splitId < nSplits; ++splitId) {
+    for (int splitId = 1; splitId < nSplits; ++splitId) {
         int ref   = refs[splitId];
         int split = bins[splitId];
         if ((ref != prevRef) && (prevRef != -1)) {
@@ -225,6 +228,9 @@ IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < 
         ++subContig;
     }
     updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1]);
+    if (newSizes.size() != sizes.size() + nSplits) {
+        Rcerr << "Error while splitting sequences.\n";
+    }
     return newSizes;
 }
 

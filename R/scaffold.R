@@ -182,6 +182,10 @@ repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin)
 }
 
 scaffold <- function(object) {
+    if (nrow(object@joins) == 0) {
+        message("No split found.")
+        return(object)
+    }
     selectedJoins <- selectJoins(object, object@joins)
     #selectedJoins <- selectJoins(object@joins)
     # orderedJoins  <- orderJoins(object, selectedJoins)
