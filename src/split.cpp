@@ -138,6 +138,9 @@ DataFrame splitCountMatrices (DataFrame matrices, List splits, IntegerVector siz
             std::swap < int > (refs1[countId], refs2[countId]);
             std::swap < int > (bins1[countId], bins2[countId]);
         }
+        else if ((refs1[countId] == refs2[countId]) && (bins1[countId] < bins2[countId])) {
+            std::swap < int > (bins1[countId], bins2[countId]);
+        }
     }
     refs1.attr("class") = "factor";
     refs1.attr("levels") = newSequences;

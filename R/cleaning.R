@@ -16,7 +16,7 @@ removeSmallScaffolds <- function(object) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    message(paste0("Dataset '", object@name , "': Removing low counts rows."))
+    message(paste0("\tDataset '", object@name , "'."))
     object@interactionMatrix <- as_tibble(removeLowCountRowsCpp(object@interactionMatrix, sizes, object@parameters@minRowCount))
     return(object)
 }
@@ -25,6 +25,7 @@ removeLowCountRows <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
+    message(paste0("Removing low counts rows."))
     object@data <- map(object@data, .removeLowCountRows, sizes = object@sizes)
     return(object)
 }
@@ -33,7 +34,6 @@ removeLowCountRows <- function(object) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    message(paste0("Dataset '", object@name , "': Removing low counts."))
     nCells <- object@interactionMatrix %>%
         nrow()
     nLowCounts <- object@interactionMatrix %>%
@@ -41,7 +41,7 @@ removeLowCountRows <- function(object) {
         nrow()
     object@interactionMatrix %<>%
         filter(count >= object@parameters@minCount)
-    message(paste0("\tRemoved ", nLowCounts, " / ", nCells, " cells."))
+    message(paste0("\tDataset '", object@name , "': removed ", nLowCounts, " / ", nCells, " cells."))
     return(object)
 }
 
@@ -49,6 +49,7 @@ removeLowCount <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
+    message("Removing low counts.")
     object@data <- map(object@data, .removeLowCount)
     return(object)
 }
