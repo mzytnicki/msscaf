@@ -116,14 +116,14 @@ void setConvertor (DataFrame splits, IntegerVector sizes, PositionConvertor &con
 }
 
 // Update the count matrices, given the splits
-DataFrame splitCountMatrices (DataFrame matrices, List splits, IntegerVector sizes, PositionConvertor &convertor, CharacterVector newSequences) {
+DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, IntegerVector sizes, PositionConvertor &convertor, CharacterVector newSequences) {
     IntegerVector refs1  = matrices["ref1"];
     IntegerVector refs2  = matrices["ref2"];
     IntegerVector bins1  = matrices["bin1"];
     IntegerVector bins2  = matrices["bin2"];
     IntegerVector counts = matrices["count"];
     long long int nCounts = refs1.size();
-    Rcout << "Splitting count matrices.\n";
+    Rcout << "\tDataset '" << wrap(name) << "'.\n";
     Progress progress (nCounts, true);
     for (long long countId = 0; countId < nCounts; ++countId) {
         std::pair <int, int> p;
@@ -255,8 +255,10 @@ S4 splitCpp(S4 object) {
     newSizes.names()             = newSequences.names();
     for (int i = 0; i < data.size(); ++i) {
         S4 object = data[i];
+        Rcout << "Splitting count matrices.\n"; 
+        String name                      = wrap(object.slot("name"));
         DataFrame matrices               = wrap(object.slot("interactionMatrix"));
-        DataFrame newMatrices            = splitCountMatrices (matrices, splits, sizes, convertor, newSequences.names());
+        DataFrame newMatrices            = splitCountMatrices (name, matrices, splits, sizes, convertor, newSequences.names());
         object.slot("interactionMatrix") = newMatrices;
         data[i]                          = object;
     }

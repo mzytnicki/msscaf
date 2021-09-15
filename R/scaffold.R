@@ -4,10 +4,7 @@ selectJoins <- function(object, joins) {
     # Change to the after/collinear system
     #joins1 <- joins %>%
     joins %>%
-        dplyr::select(ref1, ref2, vert, hor, pvalue) %>%
-        dplyr::mutate(after     = (hor == "R")) %>%
-        dplyr::mutate(collinear = ((hor == "R") == (vert == "U"))) %>%
-        dplyr::select(-c(vert, hor)) %>%
+        dplyr::select(ref1, ref2, after1, after2, pvalue) %>%
         dplyr::arrange(pvalue) %>%
         dplyr::mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         dplyr::mutate(ref2 = factor(ref2, levels = object@chromosomes))

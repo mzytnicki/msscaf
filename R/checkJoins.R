@@ -232,6 +232,7 @@ getJoinInfo <- function(object, parameters) {
     }
     message(paste0("\tDataset '", object@name, "'."))
     selectedRefs   <- filterCornersCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange) %>% as_tibble()
+    message(str(selectedRefs))
     message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange) %>% as_tibble()
     minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange)
