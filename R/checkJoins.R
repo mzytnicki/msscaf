@@ -374,12 +374,13 @@ removeDuplicateJoins <- function(object) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
     values    <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
-        dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
-        dplyr::filter(score_corner >= score_background) %>%
-        dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
-        dplyr::pull(distance)
+	dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
+	dplyr::filter(score_corner >= score_background)
     if (length(values) == 0) return(-1)
-    return(values)
+    values %>%
+        dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
+        dplyr::pull(distance) %>%
+        return()
 }
 
 .checkCorners <- function(object, sizes, pvalueThreshold) {
