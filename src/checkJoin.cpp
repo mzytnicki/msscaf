@@ -20,16 +20,33 @@ bool isInCorner(int bin1, int bin2, int center1, int center2, int maxDistance) {
 }
 
 
+// Compute corner size
+// [[Rcpp::export]]
+int computeCornerSize(int size1, int size2, int maxDistance) {
+    int cornerSize = maxDistance * (maxDistance + 1) / 2;
+    size1 = maxDistance - (size1 / 2);
+    size2 = maxDistance - (size2 / 2);
+    if (size1 > 0) {
+        cornerSize = cornerSize - (size1 * (size1 + 1) / 2);
+    }
+    if (size2 > 0) {
+        cornerSize = cornerSize - (size2 * (size2 + 1) / 2);
+    }
+    return cornerSize;
+}
+
+
 // Read interaction matrix,
 //   stores the number of non-zero for each corner,
 //   output the non-near-empty corners.
-// [[Rcpp::export]]                                                                                                                                                                                                
+// [[Rcpp::export]]
 DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize) {
     IntegerVector refs1  = data["ref1"];
     IntegerVector refs2  = data["ref2"];
     IntegerVector bins1  = data["bin1"];
     IntegerVector bins2  = data["bin2"];
     IntegerVector counts = data["count"];
+    CharacterVector refs = refs1.attr("levels");
     int nRefs = sizes.size();
     std::vector < std::vector < std::array < int, nCornerType > > > cornerCounts (nRefs + 1); // indexes start with 1 in R
     std::vector < int > cornerRefs1;
@@ -79,12 +96,18 @@ DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize)
     cornerTypesR = cornerTypesR + 1; // factors start with 1
     cornerTypesR.attr("class")   = "factor";
     cornerTypesR.attr("levels")  = cornerTypesFactor;
-    return DataFrame::create(_["ref1"] = wrap(cornerRefs1), _["ref2"] = wrap(cornerRefs2), _["corner"] = cornerTypesR);
+    IntegerVector   cornerRefs1R = wrap(cornerRefs1);
+    cornerRefs1R.attr("class")   = "factor";
+    cornerRefs1R.attr("levels")  = refs;
+    IntegerVector   cornerRefs2R = wrap(cornerRefs2);
+    cornerRefs2R.attr("class")   = "factor";
+    cornerRefs2R.attr("levels")  = refs;
+    return DataFrame::create(_["ref1"] = cornerRefs1R, _["ref2"] = cornerRefs2R, _["corner"] = cornerTypesR);
 }
 
 
 bool isInStrictCorner(int bin1, int bin2, int center1, int center2, int size1, int size2, int maxDistance) {
-    return ((std::abs(bin1 - center1) + std::abs(bin2 - center2) < maxDistance) && (abs(bin1 - center1) < size1 / 2) && (abs(bin2 - center2) < size2 / 2));
+    return ((std::abs(bin1 - center1) + std::abs(bin2 - center2) < maxDistance) && (std::abs(bin1 - center1) < size1 / 2) && (std::abs(bin2 - center2) < size2 / 2));
 }
 
 CornerType classifyCornerPoint(int bin1, int bin2, int size1, int size2, int maxDistance) {
@@ -186,20 +209,38 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Int
 // Read interaction matrix,
 //   classify points into corners,
 //   output a (count, corner) tibble.
-// [[Rcpp::export]]                                                                                                                                                                                                
-DataFrame classifyCornerPointsCpp (DataFrame interactions, int size1, int size2, int cornerSize) {
+// [[Rcpp::export]]
+DataFrame classifyCornerPointsCpp (DataFrame interactions, int size1, int size2, int maxDistance) {
     IntegerVector bins1  = interactions["bin1"];
     IntegerVector bins2  = interactions["bin2"];
     IntegerVector counts = interactions["count"];
+    std::vector < int > countsCpp = as < std::vector < int > > (counts);
+    std::vector < int > nCounts (nCornerIntType + 1, 0);
     long long int nInteractions = bins1.size();
     std::vector < int > cornerTypes (nInteractions);
+    int cornerSize   = computeCornerSize(size1, size2, maxDistance);
+    int interiorSize = size1 * size2 - 4 * cornerSize;
     for (long long int interactionId = 0; interactionId < nInteractions; ++interactionId) {
-        cornerTypes[interactionId] = classifyCornerPoint(bins1[interactionId], bins2[interactionId], size1, size2, cornerSize);
+        int type = classifyCornerPoint(bins1[interactionId], bins2[interactionId], size1, size2, maxDistance);
+        cornerTypes[interactionId] = type;
+	++nCounts[type];
+    }
+    for (int type = 0; type < nCornerIntType; ++type) {
+        int size = (type == nCornerType)? interiorSize: cornerSize;
+	int sizeDiff = size - nCounts[type];
+	if (sizeDiff < 0) Rcerr << "Error while counting corner sizes: " << size << " vs " << nCounts[type] << "\n";
+        if (sizeDiff > 0) {
+	    std::vector < int > fillerType  (sizeDiff, type);
+	    std::vector < int > fillerCount (sizeDiff, 0);
+	    cornerTypes.insert(cornerTypes.end(), fillerType.begin(), fillerType.end());
+	    countsCpp.insert(countsCpp.end(), fillerCount.begin(), fillerCount.end());
+	}
     }
     CharacterVector cornerTypesFactor = {"BB", "EB", "BE", "EE", "interior"};
     IntegerVector   cornerTypesR      = wrap(cornerTypes);
     cornerTypesR                 = cornerTypesR + 1; // factors start with 1
     cornerTypesR.attr("class")   = "factor";
     cornerTypesR.attr("levels")  = cornerTypesFactor;
+    counts = wrap(countsCpp);
     return DataFrame::create(_["type"] = cornerTypesR, _["count"] = counts);
 }

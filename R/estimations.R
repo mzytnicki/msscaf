@@ -179,31 +179,37 @@ estimateDistanceCount <- function(object, sizes) {
     }
     message("\t\tEstimating distance/count distribution.")
     # Set genome to (ref1, bin1, distance), and transform missing values to 0
-    if (sum(sizes) <= object@parameters@sampleSize) {
-        distanceCount <- object@interactionMatrix %>%
-            dplyr::filter(ref1 == ref2) %>%
-            dplyr::mutate(distance = bin1 - bin2) %>%
-            dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
-            dplyr::select(ref1, bin1, distance, count) %>%
-            tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
-            dplyr::rename(ref = ref1, bin = bin1)
-    }
-    # Cannot do the loess on the whole genome (too big): sample a few positions
-    else {
-        sampleSize <- max(100, object@parameters@sampleSize / (object@parameters@maxLinkRange + 1))
-        lines <- sizes %>%
-            tibble::enframe(name = "ref", value = "size") %>%
-            dplyr::mutate(size = size - object@parameters@maxLinkRange) %>%
-            dplyr::filter(size > 0) %>%
-            dplyr::sample_n(sampleSize, replace = TRUE, weigth = size) %>%
-            dplyr::mutate(pos = runif(nrow(.))) %>%
-            dplyr::mutate(bin = as.integer(pos * size)) %>%
-            dplyr::select(ref, bin) %>%
-            dplyr::mutate(ref = factor(ref, levels = names(sizes)))
-        distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) %>%
-            as_tibble()
-#message(str(distanceCount))
-    }
+#   if (sum(sizes) <= object@parameters@sampleSize) {
+#       distanceCount <- object@interactionMatrix %>%
+#           dplyr::filter(ref1 == ref2) %>%
+#           dplyr::mutate(distance = bin1 - bin2) %>%
+#           dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+#           dplyr::select(ref1, bin1, distance, count) %>%
+#           tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
+#           dplyr::rename(ref = ref1, bin = bin1)
+#   }
+#   # Cannot do the loess on the whole genome (too big): sample a few positions
+#   else {
+#       sampleSize <- max(100, object@parameters@sampleSize / (object@parameters@maxLinkRange + 1))
+#       lines <- sizes %>%
+#           tibble::enframe(name = "ref", value = "size") %>%
+#           dplyr::mutate(size = size - object@parameters@maxLinkRange) %>%
+#           dplyr::filter(size > 0) %>%
+#           dplyr::sample_n(sampleSize, replace = TRUE, weigth = size) %>%
+#           dplyr::mutate(pos = runif(nrow(.))) %>%
+#           dplyr::mutate(bin = as.integer(pos * size)) %>%
+#           dplyr::select(ref, bin) %>%
+#           dplyr::mutate(ref = factor(ref, levels = names(sizes)))
+#       distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) %>%
+#           as_tibble()
+#   }
+    distanceCount <- object@interactionMatrix %>%
+        dplyr::filter(ref1 == ref2) %>%
+        dplyr::mutate(distance = bin1 - bin2) %>%
+        dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+        dplyr::select(ref1, bin1, distance, count) %>%
+        tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
+        dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange))
     object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
 }
@@ -224,20 +230,20 @@ cornerDifference <- function(observedDistribution, backgroundDistribution) {
     if (nrow(backgroundDistribution) != n) {
         stop(paste0("Cannot compute corner distance is the lengths differ: # observed: ", nrow(observedDistribution), ", # background: ", nrow(backgroundDistribution), "."))
     }
+#   v <- observedDistribution %>%
+#       dplyr::left_join(backgroundDistribution, by = "distance", suffix = c("_obs", "_back")) %>%
+#       dplyr::mutate(d = count_obs - count_back) %>%
+#       dplyr::pull(d) %>%
+#       sum()
     v <- observedDistribution %>%
         dplyr::left_join(backgroundDistribution, by = "distance", suffix = c("_obs", "_back")) %>%
-        dplyr::mutate(d = count_obs - count_back) %>%
+        dplyr::mutate(d = (count_obs - count_back) ^ 2) %>%
         dplyr::pull(d) %>%
-        sum()
-#   v <- observedDistribution %>%
-#       dplyr::left_join(backgroundDistribution, by = "distance") %>%
-#       dplyr::mutate(d = (count - meanCount) ^ 2) %>%
-#       dplyr::pull(d) %>%
-#       sum() %>%
-#       sqrt()
+        sum() %>%
+        sqrt()
 #message(str(v / n))
-#   return(v / n)
-    return(v)
+    return(v / n)
+#   return(v)
 }
 
 # Apply an offset to the corner and background distribution, and compare them.
@@ -323,15 +329,17 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
         purrr::transpose()
     message("\t\tExtracting random matrices.")
     pb       <- progress_bar$new(total = length(points))
-    corners  <- purrr::map(points, extractCornerFromPoint, object, pb)
+    corners  <- purrr::map(points, extractCornerFromPoint, object, pb) %>%
+    	purrr::map(~ dplyr::bind_cols(.x %>% dplyr::select(distance) %>% dplyr::sample_n(nrow(.)),
+    	                              .x %>% dplyr::select(count)))
     message("\t\tComputing stats.")
     pb       <- progress_bar$new(total = length(points))
     object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
         group_by(distance) %>%
         # This parameter should be tuned!
-        slice_max(score, prop = 0.75, with_ties = FALSE) %>%
+        slice_min(score, prop = 0.5, with_ties = FALSE) %>%
         # slice_max(score, prop = pvalueThreshold, with_ties = FALSE) %>%
-        slice_min(score, n = 1, with_ties = FALSE) %>%
+        slice_max(score, n = 1, with_ties = FALSE) %>%
         ungroup()
     return(object)
 }

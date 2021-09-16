@@ -1,16 +1,3 @@
-computeCornerSize <- function(size1, size2, maxDistance) {
-    cornerSize <- maxDistance * (maxDistance + 1) / 2
-    size1      <- maxDistance - (size1 / 2)
-    size2      <- maxDistance - (size2 / 2)
-    if (size1 > 0) {
-        cornerSize <- cornerSize - (size1 * (size1 + 1) / 2)
-    }
-    if (size2 > 0) {
-        cornerSize <- cornerSize - (size2 * (size2 + 1) / 2)
-    }
-    return(cornerSize)
-}
-
 # Perform test
 # counts is a tibble with 2 columns:
 #  - count: the counts
@@ -232,7 +219,6 @@ getJoinInfo <- function(object, parameters) {
     }
     message(paste0("\tDataset '", object@name, "'."))
     selectedRefs   <- filterCornersCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange) %>% as_tibble()
-    message(str(selectedRefs))
     message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange) %>% as_tibble()
     minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange)
@@ -244,7 +230,7 @@ getJoinInfo <- function(object, parameters) {
         dplyr::ungroup() %>%
         dplyr::mutate(corner = as.character(corner)) %>%
         dplyr::mutate(after1 = (stringr::str_sub(corner, 1, 1) == "E")) %>%
-        dplyr::mutate(after2 = (stringr::str_sub(corner, 2, 1) == "E")) %>%
+        dplyr::mutate(after2 = (stringr::str_sub(corner, 2, 2) == "E")) %>%
         dplyr::select(ref1, ref2, after1, after2, pvalue)
     message(paste0("\t\tKeeping ", nrow(selectedRefs), " of them."))
     selectedCounts <- keepScaffoldsPairsCpp(object@interactionMatrix, selectedRefs) %>% as_tibble()
@@ -375,9 +361,9 @@ removeDuplicateJoins <- function(object) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
     values    <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
-	dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
-	dplyr::filter(score_corner >= score_background)
-    if (length(values) == 0) return(-1)
+        dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
+        dplyr::filter(score_corner <= score_background)
+    if (nrow(values) == 0) return(-1)
     values %>%
         dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
         dplyr::pull(distance) %>%
@@ -389,11 +375,10 @@ removeDuplicateJoins <- function(object) {
     nJoins <- nrow(object@joins@data)
     pb     <- progress_bar$new(total = nrow(object@joins@data))
     values <- object@joins@data %>%
-#       dplyr::mutate(hor = as.character(hor)) %>%
-#       dplyr::mutate(vert = as.character(vert)) %>%
+        dplyr::mutate(ref1 = as.character(ref1)) %>%
+        dplyr::mutate(ref2 = as.character(ref2)) %>%
         purrr::transpose() %>%
         purrr::map_dbl(..checkCorners, object, sizes, pb)
-# message(str(values))
     object@joins@data <- object@joins@data %>%
         dplyr::mutate(offset = values) %>%
         dplyr::filter(offset >= 0)

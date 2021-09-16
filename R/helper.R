@@ -165,12 +165,11 @@ fillCorner <- function(interactionMatrix, maxDistance, isCorner = FALSE) {
         }
         return(bin1 - bin2)
     }
-    emptyMatrix <- tibble(bin1 = bins, bin2 = bins) %>%
+    tibble(bin1 = bins, bin2 = bins) %>%
         tidyr::expand(bin1, bin2) %>%
         dplyr::mutate(distance = d(bin1, bin2, isCorner)) %>%
         dplyr::filter(distance >= 0) %>%
-        dplyr::filter(distance <= maxDistance)
-    emptyMatrix %>%
+        dplyr::filter(distance <= maxDistance) %>%
         dplyr::left_join(interactionMatrix, by = c("bin1", "bin2")) %>%
         tidyr::replace_na(list(count = 0))
 }

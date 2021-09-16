@@ -22,8 +22,8 @@ extractRef <- function(object, ref, size) {
 
 extract2Ref <- function(object, r1, r2, size1, size2) {
     data <- object@interactionMatrix %>%
-        dplyr::mutate(ref1 = as.integer(ref1)) %>%
-        dplyr::mutate(ref2 = as.integer(ref2)) %>%
+#       dplyr::mutate(ref1 = as.integer(ref1)) %>%
+#       dplyr::mutate(ref2 = as.integer(ref2)) %>%
         dplyr::filter(ref1 == r1, ref2 == r2) %>%
         dplyr::select(-c(ref1, ref2))
     return(tenxchecker2RefExp(data, r1, r2, size1, size2, object@parameters))

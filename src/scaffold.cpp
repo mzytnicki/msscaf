@@ -29,22 +29,16 @@ List getRefOrders (DataFrame &joins, List sizes) {
     if (nJoins == 0) {
         return List();
     }
-Rcerr << "step 1: " << references.size() << "\n";
     int nReferences = std::max(*std::max_element(references.begin(), references.end()), *std::max_element(otherRefs.begin(), otherRefs.end())); // Starts with 1
-Rcerr << "step 1.1: " << nReferences << "\n";
     std::vector < std::vector < int > > refNext(nReferences + 1, std::vector < int > (2, 0)); // Indices: 0 => after, 1 => before
-Rcerr << "step 1.2\n";
     std::vector < int > refIdToGroupId(nReferences + 1, -1);
-Rcerr << "step 1.3\n";
     std::vector < std::vector < int > > groupIdToRefIds;
-Rcerr << "step 1.4\n";
     // Create groups
     for (int joinId = 0; joinId < nJoins; ++joinId) {
         int referenceId  = references[joinId];
         int otherRefId  = otherRefs[joinId];
         bool after1     = afters1[joinId];
         bool after2     = afters2[joinId];
-Rcerr << "Now " << referenceId << ", " << otherRefId << ", " << after1 << ", " << after2 << "\n";
         // Check whether the side of the main reference is not used
         if (refNext[referenceId][boolToNext(after1)] == 0) {
             // Check whether the side of the other reference is not used
@@ -86,7 +80,6 @@ Rcerr << "Now " << referenceId << ", " << otherRefId << ", " << after1 << ", " <
             }
         }
     }
-Rcerr << "step 2\n";
     // Get the (main) largest element of the group
     int nGroups = groupIdToRefIds.size();
     std::vector < int > groupLargestSizes (nGroups, 0);
@@ -99,7 +92,6 @@ Rcerr << "step 2\n";
             }
         }
     }
-Rcerr << "step 3\n";
     // Follow the threads
     List groups;
     for (int groupId = 0; groupId < nGroups; ++groupId) {
@@ -138,7 +130,6 @@ Rcerr << "step 3\n";
             groups.push_back(group, refName);
         }
     }
-Rcerr << "step 4\n";
     return groups;
 }
 

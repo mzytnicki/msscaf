@@ -122,8 +122,9 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
     IntegerVector bins1  = matrices["bin1"];
     IntegerVector bins2  = matrices["bin2"];
     IntegerVector counts = matrices["count"];
+    std::string nameCpp  = name;
     long long int nCounts = refs1.size();
-    Rcout << "\tDataset '" << wrap(name) << "'.\n";
+    Rcout << "\tDataset '" << nameCpp << "'.\n";
     Progress progress (nCounts, true);
     for (long long countId = 0; countId < nCounts; ++countId) {
         std::pair <int, int> p;
@@ -253,9 +254,9 @@ S4 splitCpp(S4 object) {
     CharacterVector newSequences = splitSequences(chromosomes, splits, sizes, binSize, largestSubContigs);
     IntegerVector   newSizes     = updateSizes(splits, sizes, largestSubContigs);
     newSizes.names()             = newSequences.names();
+    Rcout << "Splitting count matrices.\n";
     for (int i = 0; i < data.size(); ++i) {
         S4 object = data[i];
-        Rcout << "Splitting count matrices.\n"; 
         String name                      = wrap(object.slot("name"));
         DataFrame matrices               = wrap(object.slot("interactionMatrix"));
         DataFrame newMatrices            = splitCountMatrices (name, matrices, splits, sizes, convertor, newSequences.names());
