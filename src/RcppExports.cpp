@@ -23,6 +23,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// computeCornerSize
+int computeCornerSize(int size1, int size2, int maxDistance);
+RcppExport SEXP _tenxchecker_computeCornerSize(SEXP size1SEXP, SEXP size2SEXP, SEXP maxDistanceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type size1(size1SEXP);
+    Rcpp::traits::input_parameter< int >::type size2(size2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeCornerSize(size1, size2, maxDistance));
+    return rcpp_result_gen;
+END_RCPP
+}
 // filterCornersCpp
 DataFrame filterCornersCpp(DataFrame data, IntegerVector sizes, int cornerSize);
 RcppExport SEXP _tenxchecker_filterCornersCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP) {
@@ -51,16 +64,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // classifyCornerPointsCpp
-DataFrame classifyCornerPointsCpp(DataFrame interactions, int size1, int size2, int cornerSize);
-RcppExport SEXP _tenxchecker_classifyCornerPointsCpp(SEXP interactionsSEXP, SEXP size1SEXP, SEXP size2SEXP, SEXP cornerSizeSEXP) {
+DataFrame classifyCornerPointsCpp(DataFrame interactions, int size1, int size2, int maxDistance);
+RcppExport SEXP _tenxchecker_classifyCornerPointsCpp(SEXP interactionsSEXP, SEXP size1SEXP, SEXP size2SEXP, SEXP maxDistanceSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
     Rcpp::traits::input_parameter< int >::type size1(size1SEXP);
     Rcpp::traits::input_parameter< int >::type size2(size2SEXP);
-    Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(classifyCornerPointsCpp(interactions, size1, size2, cornerSize));
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    rcpp_result_gen = Rcpp::wrap(classifyCornerPointsCpp(interactions, size1, size2, maxDistance));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -268,6 +281,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
+    {"_tenxchecker_computeCornerSize", (DL_FUNC) &_tenxchecker_computeCornerSize, 3},
     {"_tenxchecker_filterCornersCpp", (DL_FUNC) &_tenxchecker_filterCornersCpp, 3},
     {"_tenxchecker_extractCornersCpp", (DL_FUNC) &_tenxchecker_extractCornersCpp, 4},
     {"_tenxchecker_classifyCornerPointsCpp", (DL_FUNC) &_tenxchecker_classifyCornerPointsCpp, 4},
