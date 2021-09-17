@@ -189,7 +189,7 @@ scaffold <- function(object) {
     groups        <- getRefOrders(selectedJoins, object@sizes)
     groupNames    <- as.numeric(factor(names(groups), levels = object@chromosomes))
     message("Scaffolding sequences.")
-    scaffolds     <- scaffoldContigs(as.character(object@sequences), groups, object@sizes, object@binSize)
+    scaffolds     <- scaffoldContigs(object@sequences, groups, object@sizes, object@binSize)
     message("Scaffolding counts.")
     object@data   <- purrr::map(object@data, .scaffold, groups, groupNames, object@sizes)
 #   pb <- progress_bar$new(total = nrow(orderedJoins))

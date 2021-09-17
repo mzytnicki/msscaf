@@ -33,14 +33,12 @@ List getRefOrders (DataFrame &joins, List sizes) {
     std::vector < std::vector < int > > refNext(nReferences + 1, std::vector < int > (2, 0)); // Indices: 0 => after, 1 => before
     std::vector < int > refIdToGroupId(nReferences + 1, -1);
     std::vector < std::vector < int > > groupIdToRefIds;
-    Rcerr << "Got " << nReferences << "\n";
     // Create groups
     for (int joinId = 0; joinId < nJoins; ++joinId) {
         int referenceId  = references[joinId];
         int otherRefId  = otherRefs[joinId];
         bool after1     = afters1[joinId];
         bool after2     = afters2[joinId];
-        Rcerr << "Reading ref #" << referenceId << "\n";
         // Check whether the side of the main reference is not used
         if (refNext[referenceId][boolToNext(after1)] == 0) {
             // Check whether the side of the other reference is not used
@@ -192,6 +190,11 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
             }
             int nBins = sizes[contigId-1];
             int nMissingNts = (nBins+1) * binSize - contigSize;
+            if (nMissingNts < 0) {
+                CharacterVector refNames = contigs.names();
+                std::string refName = Rcpp::as<std::string>(refNames[contigId - 1]);
+                Rcerr << "Problem while creating filler for " << refName << ".  Got contig with " << nBins << " (size " << binSize << "), but the contig size is " << contigSize << "\n";
+            }
             filler = std::string(nMissingNts, 'N');
         }
         scaffolds.push_back(scaffold.str());

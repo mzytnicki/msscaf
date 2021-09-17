@@ -596,38 +596,3 @@ triCounts = triCounts2;
     */
     return Rcpp::DataFrame::create(_["bin"] = bin, _["fcMeanCount"] = meanCounts, _["nCells"] = nTriCells);
 }
-/*
-DataFrame computeMeanTrianglesCpp (DataFrame &data) {
-    IntegerVector bins1  = data["bin1"];
-    IntegerVector bins2  = data["bin2"];
-    IntegerVector counts = data["count"];
-    long int      size   = std::max < int > (max(bins1), max(bins2)) + 1;
-    long int      n      = bins1.size();
-    std::vector < int > sumBin1 (size);
-    std::vector < int > sumBin2 (size);
-    std::vector < int > nBin1   (size);
-    std::vector < int > nBin2   (size);
-    IntegerVector bin           (size);
-    NumericVector meanCount     (size);
-    IntegerVector nCells        (size);
-    for (long int i = 0; i < n; ++i) {
-        sumBin1[bins1[i]] += counts[i];
-        sumBin2[bins2[i]] += counts[i];
-        ++nBin1[bins1[i]];
-        ++nBin2[bins2[i]];
-    }
-    meanCount[0] = sumBin2[0];
-    nCells[0]    = nBin2[0];
-    for (long int i = 1; i < size; ++i) {
-        meanCount[i] = meanCount[i-1] + sumBin2[i] - sumBin1[i-1];
-        nCells[i]     = nCells[i-1]   + nBin2[i]   - nBin1[i-1];
-    }
-    for (long int i = 0; i < size; ++i) {
-        bin[i] = i;
-        if (nCells[i] > 0) {
-            meanCount[i] /= nCells[i];
-        }
-    }
-    return Rcpp::DataFrame::create(_["bin"] = bin, _["meanCount"] = meanCount, _["nCells"] = nCells);
-}
-*/

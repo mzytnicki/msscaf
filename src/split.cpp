@@ -187,6 +187,7 @@ CharacterVector splitSequences(CharacterVector contigs, DataFrame splits, Intege
         ++subContig;
         prevRef = ref;
         progress.increment();
+        prevSplit = split;
     }
     splitSequence(contigs, oldContigs, newContigs, prevRef, largestSubContigs[prevRef], subContig, prevSplit, -1);
     for (int i = 0; i < newContigs.size(); ++i) {
@@ -263,8 +264,9 @@ S4 splitCpp(S4 object) {
         object.slot("interactionMatrix") = newMatrices;
         data[i]                          = object;
     }
-    object.slot("data")      = data;
-    object.slot("sequences") = newSequences;
-    object.slot("sizes")     = newSizes;
+    object.slot("chromosomes") = newSequences.names();
+    object.slot("data")        = data;
+    object.slot("sequences")   = newSequences;
+    object.slot("sizes")       = newSizes;
     return object;
 }
