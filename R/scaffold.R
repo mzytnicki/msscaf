@@ -5,6 +5,9 @@ selectJoins <- function(object, joins) {
     #joins1 <- joins %>%
     joins %>%
         dplyr::select(ref1, ref2, after1, after2, pvalue) %>%
+        dplyr::group_by(ref1, ref2, after1, after2) %>%
+        dplyr::slice_min(order_by = pvalue, n = 1, with_ties = FALSE) %>%
+        dplyr::ungroup() %>%
         dplyr::arrange(pvalue) %>%
         dplyr::mutate(ref1 = factor(ref1, levels = object@chromosomes)) %>%
         dplyr::mutate(ref2 = factor(ref2, levels = object@chromosomes))
@@ -192,6 +195,7 @@ scaffold <- function(object) {
     scaffolds     <- scaffoldContigs(object@sequences, groups, object@sizes, object@binSize)
     message("Scaffolding counts.")
     object@data   <- purrr::map(object@data, .scaffold, groups, groupNames, object@sizes)
+    checkSizeDifference(object)
 #   pb <- progress_bar$new(total = nrow(orderedJoins))
 #   while (nrow(orderedJoins) != 0) {
 #       firstRow     <- orderedJoins %>% dplyr::slice(1) %>% as.list()
@@ -209,5 +213,6 @@ scaffold <- function(object) {
 #       }
 #       pb$tick()
 #   }
+    gc(verbose = FALSE)
     return(object)
 }

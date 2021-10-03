@@ -456,6 +456,7 @@ findJoins <- function(object, pvalue = 0.05) {
     object <- removeDuplicateJoins(object)
     object <- checkCorners(object, pvalue)
     object <- mergeJoins(object, pvalue)
-    object <- addJoinPlots(object)
+    #object <- addJoinPlots(object)
+    gc(verbose = FALSE)
     return(invisible(object))                                                                                                                                                                                      
 }

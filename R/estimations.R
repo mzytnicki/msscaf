@@ -209,7 +209,10 @@ estimateDistanceCount <- function(object, sizes) {
         dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
         dplyr::select(ref1, bin1, distance, count) %>%
         tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
-        dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange))
+        dplyr::select(distance, count) %>%
+        dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
+        dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+        tidyr::replace_na(list(count = 0))
     object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
 }
@@ -225,6 +228,8 @@ offsetDistribution <- function(distribution, offset) {
 cornerDifference <- function(observedDistribution, backgroundDistribution) {
 #message(str(observedDistribution))
 #message(str(backgroundDistribution))
+#message(str(nrow(observedDistribution)))
+#message(str(nrow(backgroundDistribution)))
     n <- nrow(observedDistribution)
     #if (n == 0) return(0)
     if (nrow(backgroundDistribution) != n) {
@@ -334,6 +339,12 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
     	                              .x %>% dplyr::select(count)))
     message("\t\tComputing stats.")
     pb       <- progress_bar$new(total = length(points))
+#message("distance count")
+#message(str(object@parameters@distanceCount))
+#message("corner[1]")
+#message(str(corners[[1]]))
+#message("max link range")
+#message(str(object@parameters@maxLinkRange))
     object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
         group_by(distance) %>%
         # This parameter should be tuned!

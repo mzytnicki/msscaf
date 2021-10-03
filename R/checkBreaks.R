@@ -312,5 +312,6 @@ findBreaks <- function(object, pvalue = 0.05) {
     object <- compareBreaks(object)
     object <- mergeBreaks(object, pvalue)
     if (nrow(object@breaks) <= 1000) object <- addBreakPlots(object)
+    gc(verbose = FALSE)
     return(invisible(object))
 }

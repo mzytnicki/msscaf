@@ -106,55 +106,6 @@ keepScaffolds <- function(object, chromosomes) {
     return(object)
 }
 
-computeScaleFactor <- function(object, sizes) {
-    if (is.null(object)) {
-        length <- sizes[[2]] - sizes[[1]]
-    }
-    else if (is(object, "tenxcheckerExp")) {
-        length <- sum(sizes)
-    }
-    else if (is(object, "tenxchecker2RefExp")) {
-        length <- min(object@size1, object@size2)
-    }
-    else if (is(object, "tenxcheckerRefExp")) {
-        length <- object@size
-    }
-    else {
-        stop("Do not know what to do with object.")
-    }
-    scaleFactor <- ceiling(log10(length))
-    if (scaleFactor <= 3) {
-        return(1)
-    }
-    return(10^(scaleFactor - 3))
-}
-
-rescale <- function(data, scale) {
-    if (scale == 1) {
-        return(data)
-    }
-    data %<>%
-        dplyr::mutate(bin1 = as.integer(round(bin1 / scale) * scale)) %>%
-        dplyr::mutate(bin2 = as.integer(round(bin2 / scale) * scale))
-    if ("ref1" %in% colnames(data)) {
-        data %<>%
-            dplyr::group_by(ref1, ref2, bin1, bin2) %>%
-            dplyr::summarise(count = mean(count)) %>%
-            dplyr::ungroup()
-    }
-    else {
-        data %<>%
-            dplyr::group_by(bin1, bin2) %>%
-            dplyr::summarise(count = mean(count)) %>%
-            dplyr::ungroup()
-    }
-    data
-}
-
-rescaleValue <- function(value, scale) {
-    as.integer(round(value / scale) * scale)
-}
-
 # Transforms a sparse matrix (bin1, bin2) to full (bin1, distance)
 #   maxDistance: maximum distance wrt to the diagonal or corner
 fillCorner <- function(interactionMatrix, maxDistance, isCorner = FALSE) {

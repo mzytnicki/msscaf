@@ -64,6 +64,11 @@ void findLargestSubContigs (DataFrame splits, IntegerVector sizes, std::vector <
 
 // Update the convertor between two bounds.
 void updateConvertor (PositionConvertor &convertor, int ref, int largestSubContig, int &newRef, int subContig, int prevSplit, int split) {
+    // discard previous split (split will be removed in the next call)
+    if (prevSplit != 0) {
+        convertor[ref][prevSplit] = std::make_pair(-1, -1);
+        ++prevSplit;
+    }
     if (subContig == largestSubContig) {
         for (int bin = prevSplit; bin < split; ++bin) {
             convertor[ref][bin] = std::make_pair(ref, bin - prevSplit);
@@ -96,7 +101,7 @@ void setConvertor (DataFrame splits, IntegerVector sizes, PositionConvertor &con
     for (int refId = 0; refId < nRefs; ++refId) {
         convertor[refId + 1].resize(sizes[refId] + 1); // size is the last element
         for (int bin = 0; bin <= sizes[refId]; ++bin) {
-            convertor[refId+1][bin] = std::make_pair(refId+1, bin);
+            convertor[refId + 1][bin] = std::make_pair(refId + 1, bin);
         }
     }
     for (int splitId = 0; splitId < nSplits; ++splitId) {
@@ -124,25 +129,54 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
     IntegerVector counts = matrices["count"];
     std::string nameCpp  = name;
     long long int nCounts = refs1.size();
+    std::vector < int > refs1Cpp;
+    std::vector < int > refs2Cpp;
+    std::vector < int > bins1Cpp;
+    std::vector < int > bins2Cpp;
+    std::vector < int > countsCpp;
+    refs1Cpp.reserve(nCounts);
+    refs2Cpp.reserve(nCounts);
+    bins1Cpp.reserve(nCounts);
+    bins2Cpp.reserve(nCounts);
+    countsCpp.reserve(nCounts);
     Rcout << "\tDataset '" << nameCpp << "'.\n";
     Progress progress (nCounts, true);
     for (long long countId = 0; countId < nCounts; ++countId) {
-        std::pair <int, int> p;
-        p = convertor[refs1[countId]][bins1[countId]];
-        refs1[countId] = p.first;
-        bins1[countId] = p.second;
-        p = convertor[refs2[countId]][bins2[countId]];
-        refs2[countId] = p.first;
-        bins2[countId] = p.second;
+        if (refs1[countId] >= static_cast < int > (convertor.size())) {
+            Rcerr << "Error #1 in splitCountMatrices: " << refs1[countId] << " >= " << convertor.size() << std::endl;
+        }
+        if (bins1[countId] >= static_cast < int > (convertor[refs1[countId]].size())) {
+            Rcerr << "Error #2 in splitCountMatrices: " << refs1[countId] << ":"  << bins1[countId] << " >= " << convertor[refs1[countId]].size() << "/" << sizes[refs1[countId]-1] << std::endl;
+        }
+        if (refs2[countId] >= static_cast < int > (convertor.size())) {
+            Rcerr << "Error #3 in splitCountMatrices: " << refs2[countId] << " >= " << convertor.size() << std::endl;
+        }
+        if (bins2[countId] >= static_cast < int > (convertor[refs2[countId]].size())) {
+            Rcerr << "Error #4 in splitCountMatrices: " << refs2[countId] << ":" << bins2[countId] << " >= " << convertor[refs2[countId]].size() << "/" << sizes[refs2[countId]-1] << std::endl;
+        }
+        std::pair <int, int> p1 = convertor[refs1[countId]][bins1[countId]];
+        std::pair <int, int> p2 = convertor[refs2[countId]][bins2[countId]];
+        if ((p1.first >= 0) && (p2.first >= 0)) {
+            refs1Cpp.push_back(p1.first);
+            bins1Cpp.push_back(p1.first);
+            refs2Cpp.push_back(p2.first);
+            bins2Cpp.push_back(p2.first);
+            countsCpp.push_back(counts[countId]);
+            if (refs1Cpp[countId] < refs2Cpp[countId]) {
+                std::swap < int > (refs1Cpp[countId], refs2Cpp[countId]);
+                std::swap < int > (bins1Cpp[countId], bins2Cpp[countId]);
+            }
+            else if ((refs1Cpp[countId] == refs2Cpp[countId]) && (bins1Cpp[countId] < bins2Cpp[countId])) {
+                std::swap < int > (bins1Cpp[countId], bins2Cpp[countId]);
+            }
+        }
         progress.increment();
-        if (refs1[countId] < refs2[countId]) {
-            std::swap < int > (refs1[countId], refs2[countId]);
-            std::swap < int > (bins1[countId], bins2[countId]);
-        }
-        else if ((refs1[countId] == refs2[countId]) && (bins1[countId] < bins2[countId])) {
-            std::swap < int > (bins1[countId], bins2[countId]);
-        }
     }
+    refs1 = refs1Cpp;
+    bins1 = bins1Cpp;
+    refs2 = refs2Cpp;
+    bins2 = bins2Cpp;
+    counts = countsCpp;
     refs1.attr("class") = "factor";
     refs1.attr("levels") = newSequences;
     refs2.attr("class") = "factor";
@@ -151,14 +185,21 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
     return output;
 }
 
-void splitSequence(CharacterVector &contigs, CharacterVector &oldContigs, CharacterVector &newContigs, int ref, int largestSubContig, int subContig, int prevSplit, int split) {
-    size_t lastPos = (split == -1)? std::string::npos: split;
+void splitSequence(CharacterVector &contigs, CharacterVector &oldContigs, CharacterVector &newContigs, int ref, int largestSubContig, int subContig, int prevSplit, int split, int binSize) {
+    // Exclude the split points
+Rcout << ref << " " << largestSubContig << " " << subContig << " " << prevSplit << " " << split << "\n";
+    if (prevSplit != 0) ++prevSplit;
+    size_t length = (split == -1)? std::string::npos: (split - prevSplit) * binSize;
+    prevSplit *= binSize;
+Rcout << "\t" << prevSplit << " " << length << "\n";
     std::string contig    = as < std::string > (contigs[ref - 1]); // Factors start with 1
-    std::string newContig = contig.substr(prevSplit, lastPos);
+    std::string newContig = contig.substr(prevSplit, length);
     if (subContig == largestSubContig) {
+Rcout << "A: " << (as<std::string>(oldContigs[ref - 1])).length()  << " " << newContig.length() << "\n";
         oldContigs[ref - 1] = newContig;
     }
     else {
+Rcout << "B: " << newContig.length() << "\n";
         newContigs.push_back(newContig);
     }
 }
@@ -179,17 +220,17 @@ CharacterVector splitSequences(CharacterVector contigs, DataFrame splits, Intege
         int ref   = refs[splitId];
         int split = bins[splitId];
         if ((ref != prevRef) && (prevRef != -1)) {
-            splitSequence(contigs, oldContigs, newContigs, prevRef, largestSubContigs[prevRef], subContig, prevSplit, -1);
+            splitSequence(contigs, oldContigs, newContigs, prevRef, largestSubContigs[prevRef], subContig, prevSplit, -1, binSize);
             subContig = 0;
             prevSplit = 0;
         }
-        splitSequence(contigs, oldContigs, newContigs, ref, largestSubContigs[ref], subContig, prevSplit, split);
+        splitSequence(contigs, oldContigs, newContigs, ref, largestSubContigs[ref], subContig, prevSplit, split, binSize);
         ++subContig;
         prevRef = ref;
         progress.increment();
         prevSplit = split;
     }
-    splitSequence(contigs, oldContigs, newContigs, prevRef, largestSubContigs[prevRef], subContig, prevSplit, -1);
+    splitSequence(contigs, oldContigs, newContigs, prevRef, largestSubContigs[prevRef], subContig, prevSplit, -1, binSize);
     for (int i = 0; i < newContigs.size(); ++i) {
         String newContig = newContigs[i];
         oldContigs.push_back(newContig, "new_ref_" + std::to_string(i + 1));
@@ -200,18 +241,24 @@ CharacterVector splitSequences(CharacterVector contigs, DataFrame splits, Intege
     return oldContigs;
 }
 
-void updateSize (IntegerVector &sizes, int ref, int subContig, int largestSubContig, int prevSplit, int split) {
+void updateSize (IntegerVector &sizes, int ref, int subContig, int largestSubContig, int prevSplit, int split, int binSize) {
+    // Exclude the split points
+    if (prevSplit != 0) ++prevSplit;
+    --split;
     int size = split - prevSplit;
+Rcerr << "update " << ref << " " << subContig << " " << largestSubContig << " " << prevSplit << " " << split << " " << size << "\n";
     if (largestSubContig == subContig) {
+Rcerr << "\tA: " << sizes[ref - 1] << " <- " << size << "\n";
         sizes[ref - 1] = size; // factors start with 1
     }
     else {
+Rcerr << "\tB\n";
         sizes.push_back(size);
     }
 }
 
 // Update sizes
-IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < int > &largestSubContigs) {
+IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < int > &largestSubContigs, int binSize) {
     IntegerVector refs     = splits["ref"];
     IntegerVector bins     = splits["bin"];
     IntegerVector newSizes = clone(sizes);
@@ -223,16 +270,16 @@ IntegerVector updateSizes (DataFrame splits, IntegerVector sizes, std::vector < 
         int ref   = refs[splitId];
         int split = bins[splitId];
         if ((ref != prevRef) && (prevRef != -1)) {
-            updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1]);
+            updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1] + 1, binSize);
             prevSplit   = 0;
             subContig   = 0;
         }
-        updateSize(newSizes, ref, subContig, largestSubContigs[ref], prevSplit, split);
+        updateSize(newSizes, ref, subContig, largestSubContigs[ref], prevSplit, split, binSize);
         prevSplit = split;
         prevRef   = ref;
         ++subContig;
     }
-    updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1]);
+    updateSize(newSizes, prevRef, subContig, largestSubContigs[prevRef], prevSplit, sizes[prevRef - 1] + 1, binSize);
     if (newSizes.size() != sizes.size() + nSplits) {
         Rcerr << "Error while splitting sequences: expected " << sizes.size() << " + " << nSplits << ", got " << newSizes.size() << "\n";
     }
@@ -253,7 +300,7 @@ S4 splitCpp(S4 object) {
     findLargestSubContigs(splits, sizes, largestSubContigs);
     setConvertor(splits, sizes, convertor, largestSubContigs);
     CharacterVector newSequences = splitSequences(chromosomes, splits, sizes, binSize, largestSubContigs);
-    IntegerVector   newSizes     = updateSizes(splits, sizes, largestSubContigs);
+    IntegerVector   newSizes     = updateSizes(splits, sizes, largestSubContigs, binSize);
     newSizes.names()             = newSequences.names();
     Rcout << "Splitting count matrices.\n";
     for (int i = 0; i < data.size(); ++i) {

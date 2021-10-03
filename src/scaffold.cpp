@@ -30,6 +30,9 @@ List getRefOrders (DataFrame &joins, List sizes) {
         return List();
     }
     int nReferences = std::max(*std::max_element(references.begin(), references.end()), *std::max_element(otherRefs.begin(), otherRefs.end())); // Starts with 1
+    if (nReferences < 0) {
+        Rcerr << "Error!  There are NAs in the refence list.\n";
+    }
     std::vector < std::vector < int > > refNext(nReferences + 1, std::vector < int > (2, 0)); // Indices: 0 => after, 1 => before
     std::vector < int > refIdToGroupId(nReferences + 1, -1);
     std::vector < std::vector < int > > groupIdToRefIds;
@@ -47,33 +50,49 @@ List getRefOrders (DataFrame &joins, List sizes) {
                 // Merge group
                 int groupIdRef   = refIdToGroupId[referenceId];
                 int groupIdOther = refIdToGroupId[otherRefId];
+// Rcout << "reading " << referenceId << " and " << otherRefId << ", " << isCollinear << ", " << groupIdRef << ", " << groupIdOther << "\n";
                 // No one is in a group
                 if ((groupIdRef == -1) && (groupIdOther == -1)) {
                     int newGroupId = groupIdToRefIds.size();
                     refIdToGroupId[referenceId] = newGroupId;
                     refIdToGroupId[otherRefId]  = newGroupId;
                     groupIdToRefIds.push_back({referenceId, otherRefId});
+// Rcout << "  case A: " << newGroupId << "\n";
                 }
                 // Main ref is in a group
                 else if (groupIdOther == -1) {
                     refIdToGroupId[otherRefId] = groupIdRef;
+                    if (groupIdRef >= static_cast<int>(groupIdToRefIds.size())) {
+                        Rcerr << "Error #1 in getRefOrder: looking for a group #" << groupIdRef << " in a vector of size " << groupIdToRefIds.size() << "\n";
+                    }
                     groupIdToRefIds[groupIdRef].push_back(otherRefId);
+// Rcout << "  case B: " << groupIdRef << "\n";
                 }
                 // Other ref is in a group
                 else if (groupIdRef == -1) {
+// Rcout << "  case C\n";
                     refIdToGroupId[referenceId] = groupIdOther;
+                    if (groupIdOther >= static_cast<int>(groupIdToRefIds.size())) {
+                        Rcerr << "Error #2 in getRefOrder: looking for a group #" << groupIdOther << " in a vector of size " << groupIdToRefIds.size() << "\n";
+                    }
                     groupIdToRefIds[groupIdOther].push_back(referenceId);
+// Rcout << "  case B: " << groupIdOther << "\n";
                 }
                 // Both refs are in a group: merge them
-                else {
-                    if (groupIdRef == groupIdOther) {
-                        Rcpp::stop("Problem while merging groups.");
+                // Do not merge contigs from the same group, in order to avoid cycles
+                else if (groupIdRef != groupIdOther) {
+                    if (groupIdRef >= static_cast<int>(groupIdToRefIds.size())) {
+                        Rcerr << "Error #3 in getRefOrder: looking for a group #" << groupIdRef << " in a vector of size " << groupIdToRefIds.size() << "\n";
+                    }
+                    if (groupIdOther >= static_cast<int>(groupIdToRefIds.size())) {
+                        Rcerr << "Error #4 in getRefOrder: looking for a group #" << groupIdOther << " in a vector of size " << groupIdToRefIds.size() << "\n";
                     }
                     for (int otherRefId: groupIdToRefIds[groupIdOther]) {
                         refIdToGroupId[otherRefId] = groupIdRef;
                     }
-                    groupIdToRefIds[groupIdRef].insert(groupIdToRefIds[groupIdRef].end(), groupIdToRefIds[otherRefId].begin(), groupIdToRefIds[otherRefId].end());
-                    groupIdToRefIds[otherRefId].clear();
+                    groupIdToRefIds[groupIdRef].insert(groupIdToRefIds[groupIdRef].end(), groupIdToRefIds[groupIdOther].begin(), groupIdToRefIds[groupIdOther].end());
+                    groupIdToRefIds[groupIdOther].clear();
+// Rcout << "  case D " << groupIdRef << " with " << groupIdToRefIds[groupIdRef].size() << "\n";
                 }
                 refNext[referenceId][boolToNext(after1)] = otherRefId * (isCollinear? 1: -1);
                 refNext[otherRefId][boolToNext(after2)] = referenceId * (isCollinear? 1: -1);
@@ -82,19 +101,26 @@ List getRefOrders (DataFrame &joins, List sizes) {
     }
     // Get the (main) largest element of the group
     int nGroups = groupIdToRefIds.size();
+// Rcout << nGroups << "\n";
     std::vector < int > groupLargestSizes (nGroups, 0);
     std::vector < int > groupLargestRefs  (nGroups, 0);
     for (int groupId = 0; groupId < nGroups; ++groupId) {
+// Rcout << "  group #" << groupId << ":";
         for (int refId: groupIdToRefIds[groupId]) {
+// Rcout << "   " << refNext[refId][0] << " " << refId << " " << refNext[refId][1];
             if (sizes[refId-1] > groupLargestSizes[groupId]) {
                 groupLargestSizes[groupId] = sizes[refId-1];
                 groupLargestRefs[groupId]  = refId;
             }
         }
+// Rcout << "\n";
     }
+//Rcpp::stop("stop");
+Rcout << "Step 1\n";
     // Follow the threads
     List groups;
     for (int groupId = 0; groupId < nGroups; ++groupId) {
+        std::vector < bool > refSeen (nReferences + 1, false);
         int firstRefId = groupLargestRefs[groupId];
         if (firstRefId != 0) {
             // Go forward from the main element of each group
@@ -102,25 +128,32 @@ List getRefOrders (DataFrame &joins, List sizes) {
             std::vector < int > backwardGroup;
             int nextRefId = firstRefId;
             bool isCollinear = true;
-            while (nextRefId != 0) {
+            refSeen[firstRefId] = true;
+            while ((nextRefId != 0) && (! refSeen[nextRefId])) {
                 forwardGroup.push_back(nextRefId * (isCollinear? 1: -1));
+                refSeen[nextRefId] = true;
+                nextRefId = refNext[nextRefId][boolToNext(isCollinear)];
                 if (nextRefId < 0) {
                     nextRefId = - nextRefId;
                     isCollinear = ! isCollinear;
                 }
-                nextRefId = refNext[nextRefId][boolToNext(isCollinear)];
             }
             // Go backward (but skip main element)
             isCollinear = true;
             nextRefId = firstRefId;
             nextRefId = refNext[nextRefId][boolToNext(!isCollinear)];
-            while (nextRefId != 0) {
+            if (nextRefId < 0) {
+                nextRefId = - nextRefId;
+                isCollinear = false;
+            }
+            while ((nextRefId != 0) && (! refSeen[nextRefId])) {
                 backwardGroup.push_back(nextRefId * (isCollinear? 1: -1));
+                refSeen[nextRefId] = true;
+                nextRefId = refNext[nextRefId][boolToNext(!isCollinear)];
                 if (nextRefId < 0) {
                     nextRefId = - nextRefId;
-                    isCollinear = ! isCollinear;
+                    isCollinear = false;
                 }
-                nextRefId = refNext[nextRefId][boolToNext(!isCollinear)];
             }
             // Merge lists
             std::reverse(backwardGroup.begin(), backwardGroup.end());
@@ -193,7 +226,7 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
             if (nMissingNts < 0) {
                 CharacterVector refNames = contigs.names();
                 std::string refName = Rcpp::as<std::string>(refNames[contigId - 1]);
-                Rcerr << "Problem while creating filler for " << refName << ".  Got contig with " << nBins << " (size " << binSize << "), but the contig size is " << contigSize << "\n";
+                Rcerr << "Problem while creating filler for " << refName << ".  Got contig with " << nBins << " bins (bin size " << binSize << "), but the contig size is " << contigSize << "\n";
             }
             filler = std::string(nMissingNts, 'N');
         }

@@ -314,6 +314,20 @@ addExp <- function(object, data, expName) {
     newData@breaks            <- NULL
     newData@joins             <- NULL
 
+    # Check whether some bins are out of range
+    overSized <- checkBinDifference(newData, object@sizes)
+    if (nrow(overSized) > 0) {
+        warning(paste("Some bins are beyong the reference sizes:",
+            str(overSized),
+            "The reference sequences and bins may be uncompatible.",
+            "Removing the bins."))
+        newData@interactionMatrix <- newData@interactionMatrix %>%
+            dplyr::mutate(size1 = object@sizes[ref1]) %>%
+            dplyr::mutate(size2 = object@sizes[ref2]) %>%
+            dplyr::filter(bin1 <= size1, bin2 <= size2) %>%
+            dplyr::select(-c(size1, size2))
+    }
+
     object@data <- c(object@data, newData)
 
     return(invisible(object))
