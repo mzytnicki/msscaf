@@ -90,7 +90,7 @@ void setConvertor (DataFrame splits, IntegerVector sizes, PositionConvertor &con
     IntegerVector bins = splits["bin"];
     int nRefs          = sizes.size();
     int nSplits        = refs.size();
-    int newRef         = nRefs;
+    int newRef         = nRefs + 1; // factors start with 1
     int prevRef        = -1;
     int prevSplit      = 0;
     int subContig      = 0;
@@ -158,9 +158,9 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
         std::pair <int, int> p2 = convertor[refs2[countId]][bins2[countId]];
         if ((p1.first >= 0) && (p2.first >= 0)) {
             refs1Cpp.push_back(p1.first);
-            bins1Cpp.push_back(p1.first);
+            bins1Cpp.push_back(p1.second);
             refs2Cpp.push_back(p2.first);
-            bins2Cpp.push_back(p2.first);
+            bins2Cpp.push_back(p2.second);
             countsCpp.push_back(counts[countId]);
             if (refs1Cpp[countId] < refs2Cpp[countId]) {
                 std::swap < int > (refs1Cpp[countId], refs2Cpp[countId]);
@@ -187,19 +187,15 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
 
 void splitSequence(CharacterVector &contigs, CharacterVector &oldContigs, CharacterVector &newContigs, int ref, int largestSubContig, int subContig, int prevSplit, int split, int binSize) {
     // Exclude the split points
-Rcout << ref << " " << largestSubContig << " " << subContig << " " << prevSplit << " " << split << "\n";
     if (prevSplit != 0) ++prevSplit;
     size_t length = (split == -1)? std::string::npos: (split - prevSplit) * binSize;
     prevSplit *= binSize;
-Rcout << "\t" << prevSplit << " " << length << "\n";
     std::string contig    = as < std::string > (contigs[ref - 1]); // Factors start with 1
     std::string newContig = contig.substr(prevSplit, length);
     if (subContig == largestSubContig) {
-Rcout << "A: " << (as<std::string>(oldContigs[ref - 1])).length()  << " " << newContig.length() << "\n";
         oldContigs[ref - 1] = newContig;
     }
     else {
-Rcout << "B: " << newContig.length() << "\n";
         newContigs.push_back(newContig);
     }
 }
@@ -246,13 +242,10 @@ void updateSize (IntegerVector &sizes, int ref, int subContig, int largestSubCon
     if (prevSplit != 0) ++prevSplit;
     --split;
     int size = split - prevSplit;
-Rcerr << "update " << ref << " " << subContig << " " << largestSubContig << " " << prevSplit << " " << split << " " << size << "\n";
     if (largestSubContig == subContig) {
-Rcerr << "\tA: " << sizes[ref - 1] << " <- " << size << "\n";
         sizes[ref - 1] = size; // factors start with 1
     }
     else {
-Rcerr << "\tB\n";
         sizes.push_back(size);
     }
 }
