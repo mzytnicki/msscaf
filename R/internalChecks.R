@@ -1,6 +1,6 @@
 # Are the number of bins consistent with the sequence size?
 checkSizeDifference <- function(object) {
-    sizeDiff <- tibble(binSize = object@sizes,
+    sizeDiff <- tibble(binSize = unlist(object@sizes),
         strSize = purrr::map_int(object@sequences, str_length),
         binnedStrSize = strSize %/% object@binSize -
             dplyr::if_else(strSize %% object@binSize == 0, 1, 0)) %>%
@@ -35,5 +35,20 @@ checkAllBinDifference <- function(object) {
     if (! empty) {
         stop(paste("Error! Bin of interaction matrix exceeds sizes.",
             str(differences), sep = "\n"))
+    }
+}
+
+checkMatrix <- function(object) {
+    object@interactionMatrix %>%
+      dplyr::filter((as.integer(ref1) < as.integer(ref2)) | ((as.integer(ref1) == as.integer(ref2)) & (bin1 < bin2))) %>%
+      dplyr::mutate(source = object@name)
+}
+
+# Are the matrices up-triangular?
+checkMatrices <- function(object) {
+    matrices <- purrr::map_dfr(object@data, checkMatrix)
+    if (nrow(matrices) > 0) {
+        stop(paste("Error! Matrices are not up-triangular.",
+            str(matrices), sep = "\n"))
     }
 }

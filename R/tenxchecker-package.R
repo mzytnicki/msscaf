@@ -41,6 +41,7 @@
 #'
 #' @author Matthias Zytnicki
 #'
+#' @import MASS
 #' @import methods
 #' @import gtools
 #' @import magrittr

@@ -100,6 +100,42 @@ estimateBackgroundCounts <- function(object) {
             dplyr::arrange(size) %>%
             dplyr::slice(1) %>%
             dplyr::pull(size)
+
+
+#       selectedBins <- object@interactionMatrix %>%
+#           dplyr::select(ref1, bin1) %>%
+#           dplyr::distinct() %>%
+#           dplyr::sample_n(min(object@parameters@sampleSize, nrow(.)))
+#       selectedCells <- object@interactionMatrix %>%
+#           dplyr::filter(ref1 == ref2) %>%
+#           dplyr::right_join(selectedBins, by = c("ref1", "bin1")) %>%
+#           dplyr::mutate(distance = abs(bin1 - bin2)) %>%
+#           dplyr::select(ref1, bin1, distance, count) %>%
+#           tidyr::expand(nesting(ref1, bin1), tidyr::full_seq(distance, 1)) %>%
+#           dplyr::rename(distance = `tidyr::full_seq(distance, 1)`) %>%
+#           dplyr::mutate(bin2 = bin1 - distance) %>%
+#           dplyr::filter(bin2 >= 0)
+#       distanceCount <- object@interactionMatrix %>%
+#           dplyr::right_join(selectedCells, by = c("ref1", "bin1", "bin2")) %>%
+#           dplyr::select(distance, count) %>%
+#           tidyr::replace_na(list(count = 0)) %>%
+#           dplyr::group_by(distance) %>%
+#           dplyr::summarise(medCount = mean(count), .groups = "drop")
+#       tmp <- selectedBins %>%
+#           dplyr::mutate(ref2 = ref1) %>%
+#           dplyr::mutate(bin2 = bin1)
+#           tidyr::expand(tidyr::nesting(ref1, bin1), tidyr::nesting(ref2, bin2)) %>%
+#           dplyr::filter(ref1 != ref2) %>%
+#           dplyr::right_join(object@interactionMatrix, by = c("ref1", "bin1", "ref2", "bin2")) %>%
+#           tidyr::replace_na(list(count = 0)) %>%
+#           dplyr::summarise(medCount = mean(count))
+#           
+
+#           dplyr::mutate(loess = predict(loess(count ~ distance, data = ., span = 0.1))) %>%
+#           dplyr::select(distance, loess) %>%
+#           dplyr::distinct() %>%
+#           dplyr::arrange(distance)
+        
 #       object@parameters@maxLinkRange <- object@interactionMatrix %>%
 #           filter(ref1 == ref2) %>%
 #           mutate(distance = abs(bin1 - bin2)) %>%
@@ -131,32 +167,57 @@ estimateMoleculeSize <- function(object) {
     return(object)
 }
 
-.estimateMinRowCount <- function(object, sizes) {
+.estimateRowCount <- function(object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    tmp <- computeSymmetricColSum(object@interactionMatrix, sizes)
+    colSums <- object@interactionMatrix %>%
+        computeSymmetricColSum(sizes) %>%
+        as_tibble()
+    tmp <- colSums %>%
+        dplyr::filter(sum > 0) %>%
+        dplyr::pull(sum)
+    quartiles <- quantile(tmp, prob = c(.25, .75))
+    outlierThreshold <- quartiles[[2]] + 1.5 * (quartiles[[2]] - quartiles[[1]])
+    tmp <- tmp %>% keep(~ .x <= outlierThreshold)
+
     tryCatch({
-            f <- fitdistr(tmp, densfun="logistic")
-            t <- max(object@parameters@minCount,
-                     f$estimate["location"] + f$estimate["scale"] * qlogis(0.01))
-            message(paste0("Dataset '", object@name, "': Estimated min. row count: ", t, "."))
-            object@parameters@minRowCount <- t
-            return(object)
+            fitNB <- fitdistr(tmp, "negative binomial")
+            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.01]
+            if (length(t) > 0) {
+                object@parameters@minRowCount <- max(t)
+            }
+            else {
+                object@parameters@minRowCount <- object@parameters@minCount
+            }
+            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]], lower.tail = FALSE) < 0.01]
+            if (length(t) > 0) {
+                object@parameters@maxRowCount <- min(t)
+            }
+            else {
+                object@parameters@maxRowCount <- max(tmp) + 1
+            }
+            message(paste0("Dataset '", object@name, "': Estimated min./max. row counts: ", object@parameters@minRowCount, "/", object@parameters@maxRowCount))
         },
         error = function(e) {
-            message(paste0("Dataset '", object@name, "': Cannot estimate min. row count, keeping default ", object@parameters@minCount, "."))
+            message(paste0("Dataset '", object@name, "': Cannot estimate min./max. row count, keeping default ", object@parameters@minRowCount, "/", object@parameters@maxRowCount))
             object@parameters@minRowCount <- object@parameters@minCount
-            return(object)
+            object@parameters@maxRowCount <- max(colSums$sum) + 1
         }
     )
+    nRows <- nrow(colSums)
+    object@outlierBins <- colSums %>%
+        dplyr::filter(sum < object@parameters@minRowCount | sum > object@parameters@maxRowCount) %>%
+        dplyr::select(- sum)
+    message(paste0("\t", nrow(object@outlierBins), "/", nRows, " outlier bins."))
+    return(object)
 }
 
-estimateMinRowCount <- function(object, sizes) {
+estimateRowCount <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    object@data <- purrr::map(object@data, .estimateMinRowCount, sizes = sizes)
+    object@data <- purrr::map(object@data, .estimateRowCount, sizes = object@sizes)
     return(object)
 }
 
@@ -203,13 +264,17 @@ estimateDistanceCount <- function(object, sizes) {
 #       distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) %>%
 #           as_tibble()
 #   }
-    distanceCount <- object@interactionMatrix %>%
-        dplyr::filter(ref1 == ref2) %>%
-        dplyr::mutate(distance = bin1 - bin2) %>%
-        dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
-        dplyr::select(ref1, bin1, distance, count) %>%
-        tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
-        dplyr::select(distance, count) %>%
+#   distanceCount <- object@interactionMatrix %>%
+#       dplyr::filter(ref1 == ref2) %>%
+#       dplyr::mutate(distance = bin1 - bin2) %>%
+#       dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+#       dplyr::select(ref1, bin1, distance, count) %>%
+#       tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
+#       dplyr::select(distance, count) %>%
+#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
+#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+#       tidyr::replace_na(list(count = 0))
+    distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange) %>%
         dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
         dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
         tidyr::replace_na(list(count = 0))
@@ -263,7 +328,6 @@ computeCornerDifferenceOffset <- function(offset, corner, background, maxDistanc
     }
     cornerDifference(corner, background)
 }
-
 
 # Smoothen distribution, compare to background distribution with various offsets
 computeCornerDifferenceOffsets <- function(corner, background, distance, bothOffsets, pb) {
@@ -403,5 +467,6 @@ estimateDistributions <- function(object) {
     }
     object <- estimateBackgroundCounts(object)
     object <- estimateMoleculeSize(object)
+    object <- estimateRowCount(object)
     return(invisible(object))
 }

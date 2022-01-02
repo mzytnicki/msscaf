@@ -7,17 +7,21 @@ splitByRef <- function(object, chromosomes, sizes) {
     # There might be fewer chromosomes than expected.
     chromosomes <- names(data)
     sizes <- sizes[chromosomes]
-    pmap(list(data, chromosomes, sizes),
+    names <- rep.int(object@name, length(sizes))
+    pmap(list(data, chromosomes, sizes, names),
          tenxcheckerRefExp,
          parameters = object@parameters)
 }
 
-extractRef <- function(object, ref, size) {
+extractRef <- function(object, keptRef, size) {
     data <- object@interactionMatrix %>%
         dplyr::filter(ref1 == ref2) %>%
-        dplyr::filter(ref1 == ref) %>%
+        dplyr::filter(ref1 == keptRef) %>%
         dplyr::select(-c(ref1, ref2))
-    return(tenxcheckerRefExp(data, ref, size, object@parameters))
+    outlierBins <- object@outlierBins %>%
+        dplyr::filter(ref == keptRef) %>%
+        dplyr::select(bin)
+    return(tenxcheckerRefExp(data, keptRef, size, object@name, outlierBins, object@parameters))
 }
 
 extract2Ref <- function(object, r1, r2, size1, size2) {
@@ -26,7 +30,7 @@ extract2Ref <- function(object, r1, r2, size1, size2) {
 #       dplyr::mutate(ref2 = as.integer(ref2)) %>%
         dplyr::filter(ref1 == r1, ref2 == r2) %>%
         dplyr::select(-c(ref1, ref2))
-    return(tenxchecker2RefExp(data, r1, r2, size1, size2, object@parameters))
+    return(tenxchecker2RefExp(data, r1, r2, size1, size2, object@name, object@parameters))
 }
 
 create2Ref <- function(data, object, sizes) {
@@ -42,6 +46,7 @@ create2Ref <- function(data, object, sizes) {
                               ref2,
                               size1,
                               size2,
+                              object@name,
                               object@parameters))
 }
 
@@ -99,7 +104,7 @@ getDatasetRef <- function(object, datasetName, ref1, ref2 = NULL) {
     }
     dataset <- getDataset(object, datasetName)
     if (is.null(ref2)) {
-        return(extractRef(dataset, ref1, object@sizes[[ref1]]))
+        return(extractRef(dataset, ref1, object@sizes[[ref1]], object@name))
     }
-    return(extract2Ref(dataset, ref1, ref2, object@sizes[[ref1]], object@sizes[[ref2]]))
+    return(extract2Ref(dataset, ref1, ref2, object@sizes[[ref1]], object@sizes[[ref2]], object@name))
 }

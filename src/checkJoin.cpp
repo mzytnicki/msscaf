@@ -1,15 +1,15 @@
 #include <cstdlib>
 #include <vector>
 #include <array>
-#include <Rcpp.h>                                                                                                                                                                                                  
+#include <Rcpp.h>
+
+// [[Rcpp::depends(RcppProgress)]]
+#include <progress.hpp>
+#include <progress_bar.hpp>
                                                                                                                                                                                                                    
-// [[Rcpp::depends(RcppProgress)]]                                                                                                                                                                                 
-#include <progress.hpp>                                                                                                                                                                                            
-#include <progress_bar.hpp>                                                                                                                                                                                        
+// [[Rcpp::plugins(cpp11)]]
                                                                                                                                                                                                                    
-// [[Rcpp::plugins(cpp11)]]                                                                                                                                                                                        
-                                                                                                                                                                                                                   
-using namespace Rcpp;                                                                                                                                                                                              
+using namespace Rcpp;
 
 enum CornerType { BB, EB, BE, EE, interior };
 const int nCornerType { 4 };
@@ -66,6 +66,14 @@ DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize)
         int size1 = sizes[ref1-1];
         int size2 = sizes[ref2-1];
         if ((ref1 != ref2) && (count > 0)) {
+            if (ref1 > nRefs) {
+                Rcerr << "Error #1 in filter corner: ref #" << ref1 << " >= " << nRefs << " refs.\n";
+                stop("Aborting.");
+            }
+            if (ref2 >= ref1) {
+                Rcerr << "Error #2 in filter corner: first ref #" << ref1 << " <= second ref " << ref2 << ".\n";
+                stop("Aborting.");
+            }
             if (isInCorner(bin1, bin2, 0, 0, cornerSize)) {
                 ++cornerCounts[ref1][ref2][BB];
             }
@@ -146,9 +154,8 @@ int getCornerDistanceCpp(int bin1, int bin2, CornerType ct, int size1, int size2
     return 0;
 }
 
-// Read interaction matrix,
-//   stores the number of non-zero for each corner,
-//   output the non-near-empty corners.
+// Read interaction matrix and a set of pairs of references
+//   output the corners.
 // [[Rcpp::export]]                                                                                                                                                                                                
 DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize) {
     IntegerVector refs1  = interactions["ref1"];

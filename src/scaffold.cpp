@@ -18,6 +18,12 @@ inline int boolToNext(bool isNext) {
     return (isNext? 0: 1);
 }
 
+// Group the contigs into scaffolds
+// Return a list, such that:
+//    the names are the ids of the longest contigs for each scaffold,
+//    the values are the ids of the contigs,
+//    the values are ordered (first element is left of second element)
+//    the opposite of the ids of the contigs are used, if the contigs is reversed
 // [[Rcpp::export]]
 List getRefOrders (DataFrame &joins, List sizes) {
     CharacterVector refNames = sizes.names();
@@ -25,23 +31,23 @@ List getRefOrders (DataFrame &joins, List sizes) {
     IntegerVector otherRefs  = joins["ref2"];
     LogicalVector afters1    = joins["after1"];
     LogicalVector afters2    = joins["after2"];
-    int nJoins = references.size();
-    if (nJoins == 0) {
-        return List();
-    }
-    int nReferences = std::max(*std::max_element(references.begin(), references.end()), *std::max_element(otherRefs.begin(), otherRefs.end())); // Starts with 1
-    if (nReferences < 0) {
-        Rcerr << "Error!  There are NAs in the refence list.\n";
-    }
+    int nJoins               = references.size();
+    int nReferences          = sizes.size();
+    std::vector < bool > seen (nReferences + 1, false);
     std::vector < std::vector < int > > refNext(nReferences + 1, std::vector < int > (2, 0)); // Indices: 0 => after, 1 => before
     std::vector < int > refIdToGroupId(nReferences + 1, -1);
     std::vector < std::vector < int > > groupIdToRefIds;
+    if (nJoins == 0) {
+        return List();
+    }
     // Create groups
     for (int joinId = 0; joinId < nJoins; ++joinId) {
-        int referenceId  = references[joinId];
+        int referenceId = references[joinId];
         int otherRefId  = otherRefs[joinId];
         bool after1     = afters1[joinId];
         bool after2     = afters2[joinId];
+        seen[referenceId] = true;
+        seen[otherRefId]  = true;
         // Check whether the side of the main reference is not used
         if (refNext[referenceId][boolToNext(after1)] == 0) {
             // Check whether the side of the other reference is not used
@@ -116,19 +122,20 @@ List getRefOrders (DataFrame &joins, List sizes) {
 // Rcout << "\n";
     }
 //Rcpp::stop("stop");
-Rcout << "Step 1\n";
+//Rcout << "Step 1\n";
     // Follow the threads
     List groups;
     for (int groupId = 0; groupId < nGroups; ++groupId) {
         std::vector < bool > refSeen (nReferences + 1, false);
         int firstRefId = groupLargestRefs[groupId];
+// Rcout << "Start with " << firstRefId << "\n";
         if (firstRefId != 0) {
             // Go forward from the main element of each group
             std::vector < int > forwardGroup;
             std::vector < int > backwardGroup;
             int nextRefId = firstRefId;
             bool isCollinear = true;
-            refSeen[firstRefId] = true;
+// Rcout << "Go forward: " << nextRefId << " " << isCollinear << "   ";
             while ((nextRefId != 0) && (! refSeen[nextRefId])) {
                 forwardGroup.push_back(nextRefId * (isCollinear? 1: -1));
                 refSeen[nextRefId] = true;
@@ -137,6 +144,7 @@ Rcout << "Step 1\n";
                     nextRefId = - nextRefId;
                     isCollinear = ! isCollinear;
                 }
+// Rcout << nextRefId << " " << isCollinear << "   ";
             }
             // Go backward (but skip main element)
             isCollinear = true;
@@ -146,6 +154,7 @@ Rcout << "Step 1\n";
                 nextRefId = - nextRefId;
                 isCollinear = false;
             }
+// Rcout << "\nGo backward: " << nextRefId << " " << isCollinear << "   ";
             while ((nextRefId != 0) && (! refSeen[nextRefId])) {
                 backwardGroup.push_back(nextRefId * (isCollinear? 1: -1));
                 refSeen[nextRefId] = true;
@@ -154,12 +163,22 @@ Rcout << "Step 1\n";
                     nextRefId = - nextRefId;
                     isCollinear = false;
                 }
+// Rcout << nextRefId << " " << isCollinear << "   ";
             }
+// Rcout << "\n";
             // Merge lists
             std::reverse(backwardGroup.begin(), backwardGroup.end());
             backwardGroup.insert(backwardGroup.end(), forwardGroup.begin(), forwardGroup.end());
             IntegerVector group = wrap(backwardGroup);
             std::string refName = as<std::string>(refNames[firstRefId-1]);
+            groups.push_back(group, refName);
+        }
+    }
+    // Add unmerged contigs
+    for (int refId = 1; refId <= nReferences; ++refId) {
+        if (! seen[refId]) {
+            IntegerVector group = { refId };
+            std::string refName = as<std::string>(refNames[refId - 1]);
             groups.push_back(group, refName);
         }
     }
@@ -192,12 +211,43 @@ void reverseComplement(std::string &s) {
     std::transform(begin(s), end(s), begin(s), complement);
 }
 
+// Compute the size of the scaffolds after scaffolding
+// Outputs the new sizes for the "main" contigs.
+// [[Rcpp::export]]
+List scaffoldSizes(List orders, IntegerVector orderIds, List sizes) {
+    std::vector<int> sizesVector (sizes.size());
+    std::vector<int> newSizesVector (orders.size(), 0);
+    List             newSizes;
+    CharacterVector  orderNames = orders.names();
+    // Transform list to vector (to do arithmetics on the sizes)
+    for (int sizeId = 0; sizeId < sizes.size(); ++sizeId) {
+        // size is actually the last element
+        sizesVector[sizeId] = as<int>(sizes[sizeId]) + 1;
+    }
+    // Set main contig sizes
+    for (int orderId = 0; orderId < orders.size(); ++orderId) {
+        IntegerVector contigIds = orders[orderId];
+        for (int contigId: contigIds) {
+            if (contigId < 0) contigId = - contigId;
+            newSizesVector[orderId] += sizesVector[contigId - 1];
+        }
+    }
+    // Convert back to list
+    for (int orderId = 0; orderId < orders.size(); ++orderId) {
+        newSizes.push_back(newSizesVector[orderId] - 1, as<std::string>(orderNames[orderId]));
+    }
+    return newSizes;
+}
+
 // Scaffold the contigs into scaffolds
 // orders is a list of list. Each list contains the (1-based) id of a contig, * (-1) is the contig is reversed.
+// Do not preserve order of the contigs
 // [[Rcpp::export]]
 CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes, int binSize) {
     CharacterVector scaffolds;
+    CharacterVector chromosomeNames = contigs.names();
     int nScaffolds = orders.size();
+// Rcout << "# contigs: " << contigs.size() << "\n";
     Progress p (nScaffolds, true);
     for (int scaffoldId = 0; scaffoldId < nScaffolds; ++scaffoldId) {
         IntegerVector order = orders[scaffoldId];
@@ -206,6 +256,7 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
         for (int i = 0; i < order.size(); ++i) {
             int  contigId = order[i];
             int  contigSize;
+// Rcout << "  contigs id: " << contigId << "\n";
             if (! filler.empty()) {
                 scaffold << filler;
             }
@@ -221,8 +272,10 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
                 scaffold << contig;
                 contigSize = contig.size();
             }
+// Rcout << "Contig size #" << contigId << ": " << contigSize << " vs " << as<int>(sizes[contigId-1]) << "\n";
             int nBins = sizes[contigId-1];
             int nMissingNts = (nBins+1) * binSize - contigSize;
+// Rcout << "# missing nts: " << nMissingNts << "\n";
             if (nMissingNts < 0) {
                 CharacterVector refNames = contigs.names();
                 std::string refName = Rcpp::as<std::string>(refNames[contigId - 1]);
@@ -230,7 +283,8 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
             }
             filler = std::string(nMissingNts, 'N');
         }
-        scaffolds.push_back(scaffold.str());
+// Rcout << "  scaffold id: " << scaffoldId << "\n";
+        scaffolds.push_back(scaffold.str(), as<std::string>(as<CharacterVector>(orders.names())[scaffoldId]));
         p.increment();
     }
     return scaffolds;

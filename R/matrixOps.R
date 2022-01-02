@@ -11,15 +11,24 @@ makeSymmetric <- function(data) {
                           dplyr::rename(ref2 = tmp) %>%
                           dplyr::rename(tmp = bin1) %>%
                           dplyr::rename(bin1 = bin2) %>%
-                          dplyr::rename(bin2 = tmp))
+                          dplyr::rename(bin2 = tmp)) %>%
+                          dplyr::distinct()
         return(data)
     }
-    data %<>%
-        dplyr::bind_rows(data %>%
-                      dplyr::rename(tmp = bin1) %>%
-                      dplyr::rename(bin1 = bin2) %>%
-                      dplyr::rename(bin2 = tmp))
-    return(data)
+    data %>%
+        makeSymmetricRefCpp() %>%
+        tibble::as_tibble()
+}
+
+# Set all the outlier bins to NA
+# Possibly overwrite current data, and create new cells
+# Data: a symmetric tibble: bin1, bin2, count
+# Outliers: a 1-row tibble: bin
+# Size: size of the reference
+# MinLim: min. bin to consider
+# MaxLim: max. bin to consider
+removeOutliersRef <- function(data, outliers, size, minLim = -1, maxLim = -1) {
+    removeOutliersRefCpp(data, outliers, size, minLim, maxLim) %>% tibble::as_tibble()
 }
 
 makeFullMatrix <- function(data) {

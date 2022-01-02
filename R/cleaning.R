@@ -1,3 +1,14 @@
+.removeSmallScaffoldsOutlierBins <- function(object, refs) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    object@outlierBins <- object@outlierBins %>%
+        dplyr::mutate(ref = as.character(ref)) %>%
+        dplyr::filter(ref %in% refs) %>%
+        dplyr::mutate(ref = factor(ref, levels = refs))
+    return(object)
+}
+
 removeSmallScaffolds <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
@@ -8,6 +19,7 @@ removeSmallScaffolds <- function(object) {
     seenRefs    <- mixedsort(unique(unlist(map(object@data, ~ unique(c(as.character(unique(.x@interactionMatrix$ref1)),
                                                                        as.character(unique(.x@interactionMatrix$ref2))))))))
     object      <- keepScaffolds(object, seenRefs)
+    object@data <- purrr::map(object@data, .removeSmallScaffoldsOutlierBins, refs = seenRefs)
     message(paste0("\tKeeping ", length(seenRefs), " scaffolds with at least ", object@minNBins, " bins."))
     return(object)
 }
@@ -17,7 +29,9 @@ removeSmallScaffolds <- function(object) {
         stop("Parameter should be a tenxcheckerExp.")
     }
     message(paste0("\tDataset '", object@name , "'."))
-    object@interactionMatrix <- as_tibble(removeLowCountRowsCpp(object@interactionMatrix, sizes, object@parameters@minRowCount))
+    output <- removeLowCountRowsCpp(object@interactionMatrix, sizes, object@parameters@minRowCount)
+    object@interactionMatrix <- as_tibble(output$matrix)
+    object@lowCountRows      <- as_tibble(output$rows)
     return(object)
 }
 
@@ -67,6 +81,6 @@ cleanData <- function(object) {
     }
     object <- removeLowCount(object)
     object <- removeSmallScaffolds(object)
-    normalizeHighCountRows(object)
+    #normalizeHighCountRows(object)
     return(invisible(object))
 }

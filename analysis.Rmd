@@ -462,6 +462,7 @@ object@parameters@minRowCount <- l$count
  - ONT: /work2/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz
  - Hi-C: /work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_hic_run1/Maison_plus/aligned/inter_30.hic
  - 10X: /work2/project/seqoccin/assemblies/scaffolders/10x/bos_taurus/LR_wtdbg_assembly_mother_37165_run123/Bovin-37165-align/outs/possorted_bam.bam
+ - Assembly from JuiceBox: /work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_polished_hic_run1/Maison_plus/juicebox/mother_raw_wtdbg2_58x_polished.final.assembly
 
 ```{bash}
 ~/Desktop/Apps/minimap2/minimap2 -t 10 -o /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa
@@ -487,74 +488,6 @@ zcat /Scratch/mazytnicki/Mother_1/trio1.mother.run1.fastq.gz | wc -l
 
 wc -l /Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf
 # 4862048 /Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("BiocParallel")
-devtools::load_all(".")
-hicFileName <- "/Scratch/mazytnicki/Mother_1/inter_30.hic"
-hicData <- parseHicFile(hicFileName, 10000)
-hicObject <- tenxcheckerExp(hicData)
-hicObject <- estimateDistributions(hicObject)
-hicObject@parameters@sampleSize   <- 100000
-hicObject@parameters@minCount     <- 3
-hicObject@parameters@maxLinkRange <- 500
-hicObject@parameters@minRowCount  <- 10
-hicObject@parameters@minNBins     <- 2
-hicObject@parameters@loessSpan    <- 0.5
-hicObject <- cleanData(hicObject)
-hicBreaks <- checkBreaks(hicObject)
-hicObject@parameters@breakNCells    <- 30
-hicObject@parameters@breakThreshold <- -0.3
-filteredHicBreaks <- filterBreaks(hicObject, hicBreaks$data)
-filteredHicBreaks$breaks %>% mutate(pos = bin * hicObject@parameters@binSize) %>% mutate(ref = str_to_lower(ref)) %>% select(ref, pos) %>% write_tsv("breaks_hic.tsv", col_names = FALSE)
-hicObject <- splitChromosomes(hicObject, filteredHicBreaks$breaks)
-hicObject@parameters@maxLinkRange <- 10
-hicObject@parameters@breakNCells <- 10
-joins <- checkJoins(hicObject)
-filteredJoins <- filterJoins(hicObject, joins)
-hicObject <- scaffold(hicObject, filteredJoins)
-plot.10X(hicObject)
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-#library("BiocParallel")
-#register(MulticoreParam(workers = 10), default = TRUE)
-devtools::load_all(".")
-bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam.bam"
-#bamFileName <- "/Scratch/mazytnicki/verySmallTest.bam"
-bamData           <- parseBamFile(bamFileName, 10000)
-gc()
-bamObject         <- tenxcheckerExp(bamData)
-#plotBackgroundCountDistribution(bamObject)
-#plotMoleculeSizeDistribution(bamObject)
-#plotRowCountDistribution(bamObject)
-bamObject         <- estimateDistributions(bamObject)
-bamObject@parameters@minCount <- 5
-bamObject@parameters@maxLinkRange <- 10
-bamObject@parameters@minRowCount <- 100
-bamObject@parameters@minNBins <- 2
-bamObject@parameters@maxLinkRange   <- 10
-bamObject@parameters@breakThreshold <- -3
-bamObject@parameters@breakNCells <- 0.75 * ((bamObject@parameters@maxLinkRange * (bamObject@parameters@maxLinkRange + 1)) / 2)
-gc()
-bamObject         <- cleanData(bamObject)
-gc()
-bamBreaks         <- checkBreaks(bamObject)
-bamObject         <- estimateBreakThreshold(bamObject, bamBreaks$data, 0.05)
-filteredBamBreaks <- filterBreaks(bamObject, bamBreaks$data)
-bamObject <- splitChromosomes(bamObject, filteredBamBreaks$breaks)
-gc()
-joins <- checkJoins(bamObject)
-gc()
-joins <- filterJoins(bamObject, joins)
-bamObject <- scaffold(bamObject, joins)
 ```
 
 ```{r}
@@ -615,8 +548,6 @@ allObject <- cleanData(allObject)
 gc()
 allObject <- findBreaks(allObject, 0.05)
 allObject <- splitChromosomes(allObject)
-allObject <- findJoins(allObject, 0.05)
-allObject <- scaffold(allObject)
 allObject@joins %>% select(-pvalue) %>% write_tsv("joins_100k.tsv", col_names = FALSE)
 ```
 
@@ -634,129 +565,7 @@ allObject@joins %>% select(-pvalue) %>% write_tsv("joins_100k.tsv", col_names = 
 ```
 
 ```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-devtools::load_all(".")
-resolution  <- 1000
- hicFileName <- "/Scratch/mazytnicki/Mother_1/inter_30.hic"
- hicData     <- parseHicFile(hicFileName, resolution)
- ontFileName <- "/Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf"
- ontData     <- parsePafFile(ontFileName, resolution, 500, 10, 10)
-bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam_reduced.bam"
-bamData     <- parseBamFile(bamFileName, resolution)
-contigFileName <- "/Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa"
-allObject <- tenxchecker(contigFileName, resolution)
- allObject <- addExp(allObject, ontData, "ONT")
- allObject <- addExp(allObject, hicData, "HiC")
-allObject <- addExp(allObject, bamData, "10X")
-allObject <- keepScaffolds(allObject, c("ctg10", "ctg1061", "ctg118", "ctg1185", "ctg12", "ctg126", "ctg128", "ctg13", "ctg1332", "ctg136", "ctg1427", "ctg1435", "ctg1451", "ctg146", "ctg154", "ctg17", "ctg173", "ctg18", "ctg189", "ctg198", "ctg2112", "ctg219", "ctg22", "ctg23", "ctg2379", "ctg257", "ctg26", "ctg276", "ctg281", "ctg29", "ctg30", "ctg31", "ctg312", "ctg32", "ctg322", "ctg33", "ctg3563", "ctg3623", "ctg38", "ctg4", "ctg4032", "ctg4123", "ctg4149", "ctg43", "ctg4330", "ctg446", "ctg4519", "ctg4700", "ctg4854", "ctg4913", "ctg50", "ctg5008", "ctg514", "ctg516", "ctg531", "ctg549", "ctg551", "ctg5765", "ctg6", "ctg61", "ctg655", "ctg669", "ctg67", "ctg68", "ctg703", "ctg737", "ctg766", "ctg79", "ctg8", "ctg80", "ctg82", "ctg9", "ctg91", "ctg95", "ctg976"))
-allObject <- estimateDistributions(allObject)
-allObject@data[[3]]@parameters@maxLinkRange <- 50
-allObject <- cleanData(allObject)
- allObject <- findBreaks(allObject, 0.05)
- allObject <- splitChromosomes(allObject)
-allObject <- findJoins(allObject, 0.00001)
-allObject <- scaffold(allObject)
-writeXStringSet(allObject@sequences, "sequences.fa")
-
-
-allObject@data[[1]]@joins@data
-ggsave("tmp.png", allObject@data[[1]]@joins@testPlots[[1]])
-ggsave("tmp2.png", allObject@data[[1]]@joins@mapPlots[[1]])
-allObject@sizes$ctg30
-allObject@sizes$ctg127
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("ggforce")
-devtools::load_all(".")
-resolution  <- 100
-bamFileName <- "/Scratch/mazytnicki/Mother_1/small_test.bam"
-bamData     <- parseBamFile(bamFileName, resolution)
-allObject <- tenxchecker(resolution)
-allObject <- addExp(allObject, bamData, "10X")
-allObject <- estimateDistributions(allObject)
-allObject <- cleanData(allObject)
-ggsave("tmp0.png", plot.10X(allObject@data[[1]], allObject@sizes))
-allObject@data[[1]]@parameters@maxLinkRange <- 100
-allObject <- findJoins(allObject, 0.05)
-ggsave("tmp.png", allObject@data[[1]]@joins@testPlots[[1]])
-ggsave("tmp2.png", allObject@data[[1]]@joins@mapPlots[[1]])
-allObject <- scaffold(allObject)
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-devtools::load_all(".")
-resolution  <- 100
-bamFileName <- "/Scratch/mazytnicki/Mother_1/small_test.bam"
-contigFileName <- "ctg104_ctg225.fa"
-bamData     <- parseBamFile(bamFileName, resolution)
-allObject <- tenxchecker(contigFileName, resolution)
-allObject <- addExp(allObject, bamData, "10X")
-allObject <- estimateDistributions(allObject)
-allObject@data[[1]]@parameters@maxLinkRange <- 50
-allObject <- cleanData(allObject)
-allObject <- findBreaks(allObject, 0.05)
-allObject <- findJoins(allObject, 0.05)
-allObject <- scaffold(allObject)
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-devtools::load_all(".")
-resolution  <- 100
-bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam_ctg37.bam"
-bamData     <- parseBamFile(bamFileName, resolution)
-contigFileName <- "/Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa"
-allObject <- tenxchecker(contigFileName, resolution)
-allObject <- addExp(allObject, bamData, "10X")
-allObject <- keepScaffolds(allObject, c("ctg37"))
-allObject <- estimateDistributions(allObject)
-allObject@data[[1]]@parameters@maxLinkRange <- 50
-allObject <- cleanData(allObject)
-allObject <- findBreaks(allObject, 0.05)
-```
-
-```{r}
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-devtools::load_all(".")
-resolution  <- 1000
-contigFileName <- "/Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa"
-hicFileName <- "/Scratch/mazytnicki/Mother_1/inter_30.hic"
-hicData     <- parseHicFile(hicFileName, resolution)
-allObject <- tenxchecker(contigFileName, resolution)
-allObject <- addExp(allObject, hicData, "HiC")
-allObject <- keepScaffolds(allObject, c("ctg10", "ctg1061", "ctg118", "ctg1185", "ctg12", "ctg126", "ctg128", "ctg13", "ctg1332", "ctg136", "ctg1427", "ctg1435", "ctg1451", "ctg146", "ctg154", "ctg17", "ctg173", "ctg18", "ctg189", "ctg198", "ctg2112", "ctg219", "ctg22", "ctg23", "ctg2379", "ctg257", "ctg26", "ctg276", "ctg281", "ctg29", "ctg30", "ctg31", "ctg312", "ctg32", "ctg322", "ctg33", "ctg3563", "ctg3623", "ctg38", "ctg4", "ctg4032", "ctg4123", "ctg4149", "ctg43", "ctg4330", "ctg446", "ctg4519", "ctg4700", "ctg4854", "ctg4913", "ctg50", "ctg5008", "ctg514", "ctg516", "ctg531", "ctg549", "ctg551", "ctg5765", "ctg6", "ctg61", "ctg655", "ctg669", "ctg67", "ctg68", "ctg703", "ctg737", "ctg766", "ctg79", "ctg8", "ctg80", "ctg82", "ctg9", "ctg91", "ctg95", "ctg976"))
-allObject <- estimateDistributions(allObject)
-allObject <- cleanData(allObject)
-#allObject <- findBreaks(allObject)
-#allObject <- splitChromosomes(allObject)
-allObject <- findJoins(allObject, 0.05)
-allObject@data[[1]]@joins@data
-ggsave("tmp.png", allObject@data[[1]]@joins@testPlots[[1]])
-ggsave("tmp2.png", allObject@data[[1]]@joins@mapPlots[[1]])
-allObject@sizes$ctg30
-allObject@sizes$ctg127
-allObject <- findJoins(allObject, 0.05)
-allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
-```
-
-```{r}
+library("MASS")
 library("devtools")
 library("magrittr")
 library("tidyverse")
@@ -775,23 +584,30 @@ allObject <- tenxchecker(contigFileName, resolution)
 allObject <- addExp(allObject, ontData, "ONT")
 allObject <- addExp(allObject, hicData, "HiC")
 allObject <- addExp(allObject, bamData, "10X")
+#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
+#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
 allObject <- estimateDistributions(allObject)
 allObject@data[[3]]@parameters@maxLinkRange <- 50
 allObject <- cleanData(allObject)
 #saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 #allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-allObject <- findBreaks(allObject, 0.05)
+allObject <- findBreaks(allObject, 0.01)
 allObject <- splitChromosomes(allObject)
-allObject <- findJoins(allObject, 0.05)
 #saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
 #allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
+allObject <- findJoins(allObject, 0.05)
+#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
+#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
 allObject <- scaffold(allObject)
-writeXStringSet(allObject@sequences, "sequences.fa")
+writeXStringSet(DNAStringSet(allObject@sequences), "sequences.fa")
+allObject@breaks %>% select(ref, bin) %>% mutate(bin = bin * resolution) %>% write_tsv("breaks.tsv", col_names = FALSE)
 allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
 ```
 
 ```{bash}
 ../CheckScaffolding/verifyJoins /Scratch/mazytnicki/Mother_1/mapping.paf 100000 10000 joins.tsv
+../CheckScaffolding/checkJoins /Scratch/mazytnicki/Mother_1/mapping.paf outJoins.txt 1000 1000
+../CheckScaffolding/checkBreaks /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len 100000 10000 predicted.out breaks.tsv putative.out > difference_breaks.txt
 
 # From tapou
 ~/Desktop/Apps/quast-5.0.2/quast-lg.py -t 15 -r /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz -t 6 -o /home/mazytnicki/Desktop/Projects/Other/Assembly/Quast/Test1 /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa wtdbg2_trio1_mother_37165_arcs_links.fa sequences.fa sequences_ONT_HiC.fa
@@ -799,6 +615,7 @@ allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FA
 ```
 
 ```{r}
+library("MASS")
 library("devtools")
 library("magrittr")
 library("tidyverse")

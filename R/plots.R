@@ -63,6 +63,26 @@ plotMoleculeSizeDistribution <- function(object) {
             scale_y_log10()
 }
 
+.plotDiagonalStrengthFit <- function(object) {
+    tmp <- object@breaks@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        dplyr::filter(fcMeanCount >= 0) %>%
+        dplyr::pull(fcMeanCount)
+    standardDev <- sd(c(tmp, -tmp))
+    object@breaks@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        ggplot(aes(fcMeanCount)) +
+        geom_histogram(aes(y = stat(density))) +
+        stat_function(fun = dnorm, args = list(mean = 0.0, sd = standardDev)) +
+        ggtitle(object@name)
+}
+
+# This plot shows how triangles (near the diagonal) are fitted.
+plotDiagonalStrengthFit <- function(object) {
+    plots <- purrr::map(object@data, .plotDiagonalStrengthFit)
+    return(do.call("plot_grid", c(plots, ncol = length(plots))))
+}
+
 plotBackgroundCountDistribution <- function(object) {
     object@interactionMatrix %>%
         filter(ref1 != ref2) %>%
@@ -114,12 +134,18 @@ plotCountDistribution <- function(object, log) {
 }
 
 plotMD <- function(object, log) {
-    p <- object@interactionMatrix %>%
+    samples    <- map_chr(object@data, "name")
+    sampleSize <- sum(map_dbl(map(object@data, "parameters"), "sampleSize"))
+    p <- map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
         filter(ref1 == ref2) %>%
+        sample_n(min(sampleSize, nrow(.))) %>%
+        mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
         mutate(distance = abs(bin1 - bin2)) %>%
         ggplot(aes(x = distance, y = count)) + 
-            geom_bin2d(binwidth = c(1, 10)) +
-            geom_smooth()
+            xlim(0, 100) + ylim(0, 50) +
+            geom_bin2d(binwidth = c(1, 1)) +
+            geom_smooth(method = "loess", formula = y ~ x) +
+	    facet_grid(cols = vars(sample), scale = "free", space = "free")
     if (log) {
         p <- p + scale_y_log10()
     }
@@ -181,22 +207,32 @@ plotInsertions2 <- function(object, bin, distance) {
 }
 
 
-plotRowCounts <- function(object) {
-    p <- object@interactionMatrix %>%
-        makeSymmetric() %>%
-        group_by(ref1, bin1) %>%
-        summarise(countSum = sum(count)) %>%
-        ungroup() %>%
-        group_by(ref1)
-    n <- p %>% group_keys()
-    p <- p %>%
-        group_split(keep = FALSE) %>%
-        map(~ ggplot(., aes(x = bin1, y = countSum)) + 
-                geom_point() +
-                geom_smooth())
-                #facet_grid(rows = vars(ref1)) #+
-    names(p) <- n$ref1
-    p
+.plotRowCountFit <- function(object, sizes) {
+    colSums <- object@interactionMatrix %>%
+        computeSymmetricColSum(sizes) %>%
+        as_tibble()
+    tmp <- colSums %>%
+        dplyr::filter(sum > 0) %>%
+        dplyr::pull(sum)
+    quartiles        <- quantile(tmp, prob = c(.25, .75))
+    outlierThreshold <- quartiles[[2]] + 1.5 * (quartiles[[2]] - quartiles[[1]])
+    tmp              <- tmp %>% keep(~ .x <= outlierThreshold)
+    fitNB            <- fitdistr(tmp, "negative binomial")
+    size             <- fitNB$estimate[[1]]
+    mu               <- fitNB$estimate[[2]]
+    ggplot(colSums, aes(x = sum)) + 
+        geom_density(aes(y = stat(density))) +
+        stat_function(fun = function(x){dnbinom(round(x), size = size, mu = mu)}, col = "red") + 
+        xlim(0, max(outlierThreshold, object@parameters@maxRowCount)) +
+        xlab(object@name) +
+        geom_vline(xintercept = object@parameters@minRowCount, linetype = "dashed") +
+        geom_vline(xintercept = object@parameters@maxRowCount, linetype = "dotted")
+}
+
+# This plot shows how column sums are fitted
+plotRowCountFit <- function(object) {
+    plots <- purrr::map(object@data, .plotRowCountFit, object@sizes)
+    return(do.call("plot_grid", c(plots, ncol = length(plots))))
 }
 
 .computeRowDensity <- function(chr, data = data) {
@@ -226,7 +262,7 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
+plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL, outliers = TRUE) {
     minLim <- 1
     maxLim <- object@size
     if (length(bins) == 0) {
@@ -257,6 +293,9 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
         data %<>% dplyr::filter(count > 0)
     }
     data %<>% makeSymmetric()
+    if (! outliers) {
+        data %<>% removeOutliersRef(object@outlierBins, object@size, minLim, maxLim)
+    }
     # if (!is.na(bin)) {
     #     xmin <- max(0, bin - object@parameters@nBinZoom)
     #     xmax <- min(object@size, bin + object@parameters@nBinZoom)
@@ -272,8 +311,8 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL) {
 	    scale_y_reverse(lim = c(maxLim, minLim), expand = c(0, 0)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
-            ggtitle(object@chromosome) +
-            xlab("") +
+            ggtitle(object@name) +
+            xlab(object@chromosome) +
             ylab("")
     if (logColor) {
         p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
@@ -298,7 +337,8 @@ plot.10X2Ref <- function(object,
 			 logColor = TRUE,
 			 circles = FALSE,
 			 center  = NULL,
-			 radius  = NULL) {
+			 radius  = NULL,
+                         outliers = TRUE) {
     if (is.null(radius)) {
         scaleFactor <- computeScaleFactor(object)
     }
@@ -329,8 +369,9 @@ plot.10X2Ref <- function(object,
 	    theme_bw() +
 	    theme(panel.spacing = unit(0, "lines")) +
 	    coord_fixed() +
-            xlab("") +
-            ylab("")
+            ggtitle(object@name) +
+            xlab(object@chromosome1) +
+            ylab(object@chromosome2)
     if (circles) {
 	circles <- tibble(
 	    x      = c(1, 1, object@size1, object@size1),
@@ -377,20 +418,20 @@ plot.10X2Ref <- function(object,
     return(p)
 }
 
-plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL) {
+plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
     if (! is.null(ref1)) {
         if (! is.null(ref2)) {
             object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
-            return(plot.10X2Ref(object))
+            return(plot.10X2Ref(object, outliers = outliers))
         }
         object <- extractRef(object, ref1, sizes[[ref1]])
-        return(plot.10XRef(object))
+        return(plot.10XRef(object, lim = c(bin1, bin2), outliers = outliers, bins = highlightedBins))
     }
     scaleFactor <- computeScaleFactor(object, sizes)
-    message(paste0("Scale factor: ", scaleFactor))
+    # message(paste0("Scale factor: ", scaleFactor))
     data        <- object@interactionMatrix %>% rescale(scaleFactor)
     p <- data %>%
 	makeSymmetric() %>%
@@ -413,26 +454,39 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
     return(p)
 }
 
-plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1 = NULL, ref2 = NULL) {
+plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
     if (is(object, "tenxcheckerClass")) {
+        if (is.null(bin1) != is.null(bin2)) {
+            stop("None, or both bins should be set.")
+        }
+        if ((! is.null(bin1)) & (! is.null(bin2))) {
+            if (bin2 < bin1) {
+                stop(paste0("Second bin (", bin2, ") should be less than first bin (", bin1, ")."))
+            }
+        }
         if (! is.null(ref1)) {
             if (! ref1 %in% object@chromosomes) {
                 stop(paste0("Reference #1 '", ref1, "', is not a known reference."))
             }
+            bin1 <- min(bin1, object@sizes[[ref1]])
             if (! is.null(ref2)) {
                 if (! ref2 %in% object@chromosomes) {
                     stop(paste0("Reference #2 '", ref2, "', is not a known reference."))
                 }
+                bin2 <- min(bin2, object@sizes[[ref2]])
                 if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
                    tmp <- ref1
                    ref1 <- ref2
                    ref2 <- tmp
+                   tmp <- bin1
+                   bin1 <- bin2
+                   bin2 <- tmp
                 }
             }
         }
         sizes  <- object@sizes
         if (is.null(dataset)) {
-             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2)
+             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins)
              return(do.call("plot_grid", c(plots, ncol = length(plots))))
         }
         else {
@@ -442,5 +496,11 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1
     else if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerClass' or 'tenxcheckerExp'.")
     }
-    return(plot.10XDataset(object, sizes, logColor, ref1, ref2))
+    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins))
+}
+
+# This will plot the region near a possible break
+plot.10XBreak <- function(object, ref, bin) {
+    nBinZoom <- max(map_dbl(map(object@data, "parameters"), "nBinZoom"))
+    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = FALSE, highlightedBins = bin)
 }

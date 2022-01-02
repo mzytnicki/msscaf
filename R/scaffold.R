@@ -186,16 +186,25 @@ scaffold <- function(object) {
         message("No split found.")
         return(object)
     }
-    selectedJoins <- selectJoins(object, object@joins)
-    #selectedJoins <- selectJoins(object@joins)
-    # orderedJoins  <- orderJoins(object, selectedJoins)
-    groups        <- getRefOrders(selectedJoins, object@sizes)
-    groupNames    <- as.numeric(factor(names(groups), levels = object@chromosomes))
+    selectedJoins    <- selectJoins(object, object@joins)
+    #selectedJoins   <- selectJoins(object@joins)
+    # orderedJoins   <- orderJoins(object, selectedJoins)
+    groups           <- getRefOrders(selectedJoins, object@sizes)
+    groupNames       <- as.numeric(factor(names(groups), levels = object@chromosomes))
+    orderGroups      <- order(groupNames)
+    groups           <- groups[orderGroups]
+    groupNames       <- groupNames[orderGroups]
     message("Scaffolding sequences.")
-    scaffolds     <- scaffoldContigs(object@sequences, groups, object@sizes, object@binSize)
+    object@sequences   <- scaffoldContigs(object@sequences, groups, object@sizes, object@binSize)
     message("Scaffolding counts.")
-    object@data   <- purrr::map(object@data, .scaffold, groups, groupNames, object@sizes)
+    object@data        <- purrr::map(object@data, .scaffold, groups, groupNames, object@sizes)
+    object@sizes       <- scaffoldSizes(groups, groupNames, object@sizes)
+    object@chromosomes <- names(object@sizes)
+    if (length(object@chromosomes) != length(object@sizes)) {
+        stop(paste0("Size of objects differ after scaffolding: ", length(object@chromosomes), " vs ", length(object@sizes), "."))
+    }
     checkSizeDifference(object)
+
 #   pb <- progress_bar$new(total = nrow(orderedJoins))
 #   while (nrow(orderedJoins) != 0) {
 #       firstRow     <- orderedJoins %>% dplyr::slice(1) %>% as.list()

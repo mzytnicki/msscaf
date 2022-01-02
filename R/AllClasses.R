@@ -22,6 +22,7 @@
 #' @export
 setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             minRowCount     = "ANY",
+                                            maxRowCount     = "ANY",
                                             binSize         = "ANY",
                                             sampleSize      = "ANY",
                                             loessSpan       = "ANY",
@@ -173,6 +174,8 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix = "ANY",
                                      name              = "ANY",
                                      parameters        = "ANY",
                                      breaks            = "ANY",
+                                     outlierBins       = "ANY",
+                                     lowCountRows      = "ANY",
                                      joins             = "ANY")
 )
 
@@ -299,6 +302,7 @@ addExp <- function(object, data, expName) {
     parameters@loessSpan       <- 0.5
     parameters@minCount        <- 3
     parameters@minRowCount     <- 100
+    parameters@maxRowCount     <- 1000000
     parameters@breakThreshold  <- NULL
     parameters@breakNCells     <- NULL
     parameters@distanceCount   <- NULL
@@ -313,6 +317,7 @@ addExp <- function(object, data, expName) {
     newData@parameters        <- parameters
     newData@breaks            <- NULL
     newData@joins             <- NULL
+    newData@outlierBins       <- tibble(ref = factor(), bin = integer())
 
     # Check whether some bins are out of range
     overSized <- checkBinDifference(newData, object@sizes)
@@ -358,6 +363,8 @@ addExp <- function(object, data, expName) {
 setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
                                         chromosome         = "ANY",
                                         size               = "ANY",
+                                        name               = "ANY",
+                                        outlierBins        = "ANY",
                                         parameters         = "ANY")
 )
 
@@ -375,10 +382,12 @@ setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
 #' @examples
 #'
 #' @export
-tenxcheckerRefExp <- function(matrix     = NULL,
-                              chromosome = NULL,
-                              size       = NULL,
-                              parameters = NULL) {
+tenxcheckerRefExp <- function(matrix      = NULL,
+                              chromosome  = NULL,
+                              size        = NULL,
+                              name        = NULL,
+                              outlierBins = NULL,
+                              parameters  = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -396,6 +405,12 @@ tenxcheckerRefExp <- function(matrix     = NULL,
     if (is.null(size) | is.na(size)) {
         stop(paste0("'size' must be specified for ref ", chromosome), call. = FALSE)
     }
+    if (is.null(name) | is.na(name)) {
+        stop("'name' must be specified", call. = FALSE)
+    }
+    if (! is_tibble(outlierBins)) {
+        stop("'outlierBins' should be a tibble", call. = FALSE)
+    }
     if (!is(parameters, "tenxcheckerParameters")) {
         stop("'parameters' should be 'tenxcheckerParameters' class instance", call. = FALSE)
     }
@@ -406,10 +421,12 @@ tenxcheckerRefExp <- function(matrix     = NULL,
     ##- end checking ---------------------------------------------------------#
     
     object <- new("tenxcheckerRefExp")
-    
+
     object@chromosome        <- chromosome
     object@size              <- size
     object@interactionMatrix <- matrix
+    object@name              <- name
+    object@outlierBins       <- outlierBins
     object@parameters        <- parameters
     
     return(invisible(object))
@@ -443,6 +460,7 @@ setClass("tenxchecker2RefExp", slots = c(interactionMatrix  = "ANY",
                                          chromosome2        = "ANY",
                                          size1              = "ANY",
                                          size2              = "ANY",
+                                         name               = "ANY",
                                          parameters         = "ANY")
 )
 
@@ -465,6 +483,7 @@ tenxchecker2RefExp <- function(matrix      = NULL,
                                chromosome2 = NULL,
                                size1       = NULL,
                                size2       = NULL,
+                               name        = NULL,
                                parameters  = NULL) {
     
     ##- checking general input arguments -------------------------------------#
@@ -476,6 +495,9 @@ tenxchecker2RefExp <- function(matrix      = NULL,
     }
     if (!is_tibble(matrix)) {
         stop("'matrix' should be a tibble", call. = FALSE)
+    }
+    if (is.null(name) | is.na(name)) {
+        stop("'name' must be specified", call. = FALSE)
     }
     
     ##- parameters
@@ -490,6 +512,7 @@ tenxchecker2RefExp <- function(matrix      = NULL,
     object@size1             <- size1
     object@size2             <- size2
     object@interactionMatrix <- matrix
+    object@name              <- name
     object@parameters        <- parameters
     
     return(invisible(object))

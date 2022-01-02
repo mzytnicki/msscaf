@@ -157,18 +157,20 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
         std::pair <int, int> p1 = convertor[refs1[countId]][bins1[countId]];
         std::pair <int, int> p2 = convertor[refs2[countId]][bins2[countId]];
         if ((p1.first >= 0) && (p2.first >= 0)) {
-            refs1Cpp.push_back(p1.first);
-            bins1Cpp.push_back(p1.second);
-            refs2Cpp.push_back(p2.first);
-            bins2Cpp.push_back(p2.second);
+            if ((p1.first < p2.first) || ((p1.first == p2.first) && (p1.second < p2.second))) {
+                refs2Cpp.push_back(p1.first);
+                bins2Cpp.push_back(p1.second);
+                refs1Cpp.push_back(p2.first);
+                bins1Cpp.push_back(p2.second);
+            }
+            else {
+                refs1Cpp.push_back(p1.first);
+                bins1Cpp.push_back(p1.second);
+                refs2Cpp.push_back(p2.first);
+                bins2Cpp.push_back(p2.second);
+            }
             countsCpp.push_back(counts[countId]);
-            if (refs1Cpp[countId] < refs2Cpp[countId]) {
-                std::swap < int > (refs1Cpp[countId], refs2Cpp[countId]);
-                std::swap < int > (bins1Cpp[countId], bins2Cpp[countId]);
-            }
-            else if ((refs1Cpp[countId] == refs2Cpp[countId]) && (bins1Cpp[countId] < bins2Cpp[countId])) {
-                std::swap < int > (bins1Cpp[countId], bins2Cpp[countId]);
-            }
+            if (refs1Cpp.back() < refs2Cpp.back()) Rcerr << "Error #5 in splitCountMatrices: " << p1.first << "-" << p1.second << " and " << p2.first << "-" << p2.second << "\n";
         }
         progress.increment();
     }
@@ -300,7 +302,7 @@ S4 splitCpp(S4 object) {
         S4 object = data[i];
         String name                      = wrap(object.slot("name"));
         DataFrame matrices               = wrap(object.slot("interactionMatrix"));
-        DataFrame newMatrices            = splitCountMatrices (name, matrices, splits, sizes, convertor, newSequences.names());
+        DataFrame newMatrices            = splitCountMatrices(name, matrices, splits, sizes, convertor, newSequences.names());
         object.slot("interactionMatrix") = newMatrices;
         data[i]                          = object;
     }

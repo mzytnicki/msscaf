@@ -74,6 +74,7 @@ splitChromosomes <- function(object) {
     }
     checkSizeDifference(object)
     checkAllBinDifference(object)
+    checkMatrices(object)
 #   newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
 #   object@chromosomes <- c(object@chromosomes, newRefs)
 #   parameters <- object@breaks %>%
