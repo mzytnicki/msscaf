@@ -27,20 +27,19 @@ rescale <- function(data, scale) {
     }
     data %<>%
         dplyr::mutate(bin1 = as.integer(round(bin1 / scale) * scale)) %>%
-        dplyr::mutate(bin2 = as.integer(round(bin2 / scale) * scale))
+        dplyr::mutate(bin2 = as.integer(round(bin2 / scale) * scale)) %>%
+        dplyr::mutate(count = as.numeric(count))
     if ("ref1" %in% colnames(data)) {
         data %<>%
             dplyr::group_by(ref1, ref2, bin1, bin2) %>%
             dplyr::summarise(count = mean(count)) %>%
             dplyr::ungroup()
+        return(data)
     }
-    else {
-        data %<>%
-            dplyr::group_by(bin1, bin2) %>%
-            dplyr::summarise(count = mean(count)) %>%
-            dplyr::ungroup()
-    }
-    data
+    data %>%
+        dplyr::group_by(bin1, bin2) %>%
+        dplyr::summarise(count = mean(count)) %>%
+        dplyr::ungroup()
 }
 
 rescaleValue <- function(value, scale) {
@@ -262,28 +261,30 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL, outliers = TRUE) {
-    minLim <- 1
-    maxLim <- object@size
+plot.10XRef <- function(object, logColor = TRUE, bin1 = NULL, bin2 = NULL, bins = NULL, outliers = TRUE) {
+    if ((! is.null(bin1)) & (! is.null(bin2))) {
+        if (bin2 < bin1) {
+            stop(paste0("Second bin (", bin2, ") should be less than first bin (", bin1, ")."))
+        }
+    }
     if (length(bins) == 0) {
         bins <- NULL
     }
-    if (length(lim) == 2) {
-        scaleFactor <- computeScaleFactor(NULL, lim)
-    }
-    else {
+    if (is.null(bin1)) {
         scaleFactor <- computeScaleFactor(object)
     }
-    if (length(lim) == 2) {
-        minLim <- max(lim[[1]], minLim)
-        maxLim <- min(lim[[2]], maxLim)
-    }
-    else if ((length(lim) != 1) & (! is_null(lim))) {
-        stop("'lim' should be a vector of size 2, or NULL.")
+    else {
+        if (bin1 < 0) {
+            bin1 <- 0
+        }
+        if (bin2 > object@size) {
+            bin2 <- object@size
+        }
+        scaleFactor <- computeScaleFactor(NULL, c(bin1, bin2))
     }
     data     <- object@interactionMatrix %>%
-                    dplyr::filter(bin1 >= minLim, bin1 <= maxLim) %>%
-                    dplyr::filter(bin2 >= minLim, bin2 <= maxLim) %>%
+                    dplyr::filter(bin1 >= bin1, bin1 <= bin2) %>%
+                    dplyr::filter(bin2 >= bin1, bin2 <= bin2) %>%
                     rescale(scaleFactor)
     minCount <- data %>% pull(count) %>% min()
     if ((minCount < 0) & (logColor)) {
@@ -294,7 +295,7 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL, outlie
     }
     data %<>% makeSymmetric()
     if (! outliers) {
-        data %<>% removeOutliersRef(object@outlierBins, object@size, minLim, maxLim)
+        data %<>% removeOutliersRef(object@outlierBins, object@size, bin1, bin2)
     }
     # if (!is.na(bin)) {
     #     xmin <- max(0, bin - object@parameters@nBinZoom)
@@ -307,8 +308,8 @@ plot.10XRef <- function(object, logColor = TRUE, bins = NULL, lim = NULL, outlie
     p <- data %>% 
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) +
-	    scale_x_continuous(lim = c(minLim, maxLim), expand = c(0, 0)) +
-	    scale_y_reverse(lim = c(maxLim, minLim), expand = c(0, 0)) +
+	    scale_x_continuous(lim = c(bin1, bin2), expand = c(0, 0)) +
+	    scale_y_reverse(lim = c(bin2, bin1), expand = c(0, 0)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
             ggtitle(object@name) +
@@ -422,13 +423,30 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
+    if (is.null(bin1) != is.null(bin2)) {
+        stop("None, or both bins should be set.")
+    }
     if (! is.null(ref1)) {
-        if (! is.null(ref2)) {
+        if (! ref1 %in% levels(object@interactionMatrix$ref1)) {
+            message(paste0("Reference #1 '", ref1, "', is not a known reference in dataset '", object@name, "'."))
+        }
+        if ((! is.null(ref2)) & (ref1 != ref2)) {
+            if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
+                message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
+            }
+            if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
+               tmp <- ref1
+               ref1 <- ref2
+               ref2 <- tmp
+               tmp <- bin1
+               bin1 <- bin2
+               bin2 <- tmp
+            }
             object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
             return(plot.10X2Ref(object, outliers = outliers))
         }
         object <- extractRef(object, ref1, sizes[[ref1]])
-        return(plot.10XRef(object, lim = c(bin1, bin2), outliers = outliers, bins = highlightedBins))
+        return(plot.10XRef(object, bin1 = bin1, bin2 = bin2, outliers = outliers, bins = highlightedBins))
     }
     scaleFactor <- computeScaleFactor(object, sizes)
     # message(paste0("Scale factor: ", scaleFactor))
@@ -454,43 +472,22 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
     return(p)
 }
 
-plot.10X <- function(object, sizes = NULL, logColor = TRUE, dataset = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
+plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
     if (is(object, "tenxcheckerClass")) {
-        if (is.null(bin1) != is.null(bin2)) {
-            stop("None, or both bins should be set.")
-        }
-        if ((! is.null(bin1)) & (! is.null(bin2))) {
-            if (bin2 < bin1) {
-                stop(paste0("Second bin (", bin2, ") should be less than first bin (", bin1, ")."))
-            }
-        }
-        if (! is.null(ref1)) {
-            if (! ref1 %in% object@chromosomes) {
-                stop(paste0("Reference #1 '", ref1, "', is not a known reference."))
-            }
-            bin1 <- min(bin1, object@sizes[[ref1]])
-            if (! is.null(ref2)) {
-                if (! ref2 %in% object@chromosomes) {
-                    stop(paste0("Reference #2 '", ref2, "', is not a known reference."))
-                }
-                bin2 <- min(bin2, object@sizes[[ref2]])
-                if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
-                   tmp <- ref1
-                   ref1 <- ref2
-                   ref2 <- tmp
-                   tmp <- bin1
-                   bin1 <- bin2
-                   bin2 <- tmp
-                }
-            }
-        }
         sizes  <- object@sizes
-        if (is.null(dataset)) {
+        if (is.null(datasetName)) {
              plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins)
              return(do.call("plot_grid", c(plots, ncol = length(plots))))
         }
         else {
-            object <- getDataset(object, dataset)
+            datasetNames <- map(object@data, "name")
+            if (datasetName %in% datasetNames) {
+                dataset <- object@data[datasetName == datasetNames][[1]]
+                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins))
+            }
+            else {
+                stop(paste0("Dataset name '", datasetName, "' is not known."))
+            }
         }
     }
     else if (! is(object, "tenxcheckerExp")) {
