@@ -43,7 +43,7 @@ std::ostream& operator<<(std::ostream& os, interval_t const &interval) {
 
 int median(std::vector<int> &v) {
   if (v.size() == 0) return 0;
-  size_t n = v.size() * 0.9;
+  size_t n = v.size() * 0.25;
   nth_element(v.begin(), v.begin()+n, v.end());
   return v[n];
 }
@@ -123,7 +123,7 @@ void updateMatrices(std::unordered_map < uint64_t, matrix_t > &matrices,
 }
 
 // [[Rcpp::export]]
-List parsePafCpp(std::string &fname, uint32_t resolution, int minAlnLen, int minCount, int minNCells) {
+DataFrame parsePafCpp(std::string &fname, uint32_t resolution, int minAlnLen, int minCount, int minNCells) {
   uint32_t nChrs = 0;
   std::unordered_map <std::string, uint32_t> chrIds;
   std::unordered_map < uint64_t, int > matrixCounts;
@@ -304,12 +304,9 @@ List parsePafCpp(std::string &fname, uint32_t resolution, int minAlnLen, int min
   chrs2.attr("class") = "factor";
   chrs1.attr("levels") = chrs;
   chrs2.attr("levels") = chrs;
-  DataFrame outputDataFrame = DataFrame::create(_["ref1"]  = chrs1,
-                                                _["bin1"]  = bins1,
-                                                _["ref2"]  = chrs2,
-                                                _["bin2"]  = bins2,
-                                                _["count"] = counts);
-  return List::create(_["data"] = outputDataFrame,
-                      _["size"] = median(moleculeSizes),
-                      _["sizes"] = chrSizes);
+  return DataFrame::create(_["ref1"]  = chrs1,
+                           _["bin1"]  = bins1,
+                           _["ref2"]  = chrs2,
+                           _["bin2"]  = bins2,
+                           _["count"] = counts);
 }

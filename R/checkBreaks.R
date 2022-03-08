@@ -1,60 +1,19 @@
-plotTriangles <- function(triangles, bins = NULL) {
-    p <- triangles %>%
-        gather(key = "type", value = "value", fcMeanCount, nCells) %>%
-        ggplot(aes(x = bin, y = value)) +
-            geom_line() +
-            facet_grid(rows = vars(type), scales = "free_y")
-    #if ((length(bins) >= 1) & (!is.null(bins)) & (!is.na(bins))) {
-    if (!is.null(bins)) {
-        for (bin in bins) {
-          p <- p + geom_vline(xintercept = bin,
-                              colour = "red",
-                              linetype = "longdash")
-        }
-    }
-    return(p)
-}
-
-checkBreak <- function(object) {
-    #message("    Checking breaks.")
-    data <- object@interactionMatrix
-    if (nrow(data) == 0) {
-       # Matrix is empty, skip
-       return(list(data           = tibble(ref = character(), fcMeanCount = numeric(), nCells = integer()),
-                   changePlot     = NULL,
-                   changeDistPlot = NULL,
-                   mapPlot        = NULL))
-    }
-    outlierBins    <- object@outlierBins %>% dplyr::filter(ref == object@chromosome) %>% pull(bin)
-    triangles      <- computeMeanTrianglesCpp(data, object@parameters@maxLinkRange, sizes, outlierBins)
-    return(triangles)
-}
-
-normalizeAndBreak <- function(object, progressBar, kr, md, diag) {
-    progressBar$tick()
-    if (isMatrixEmpty(object@interactionMatrix)) {
-        return(list(data           = tibble(ref = character(), fcMeanCount = numeric(), nCells = integer()),
-                    changePlot     = NULL,
-                    changeDistPlot = NULL,
-                    mapPlot        = NULL))
-    }
-    #message(paste0("\n  Working on ", object@chromosome, ".\n"))
-    if (kr) {
-        object <- normalizeKR(object)
-    }
-    if (md) {
-        object <- normalizeMD(object)
-    }
-    if (diag) {
-        object <- removeFarFromDiagonal(object)
-    }
-    checkBreak(object)
-}
-
 .checkBreaks <- function(object, chromosomes, sizes) {
     message(paste0("\tDataset '", object@name , "'.\n\t\tComputing stats."))
     breaksObject                 <- new("tenxcheckerBreaks")
-    breaksObject@data            <- computeMeanTrianglesCpp(object@interactionMatrix, object@parameters@maxLinkRange, sizes, object@outlierBins) %>% as_tibble()
+    breaksObject@data            <- computeMeanTrianglesCpp(object@interactionMatrix, object@parameters@maxLinkRange, object@parameters@metaSize, sizes, object@outlierBins) %>%
+                                        as_tibble()
+    # Possibly rescale by ref
+    factors <- breaksObject@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        dplyr::select(ref, fcMeanCount) %>%
+        dplyr::group_by(ref) %>%
+        dplyr::summarize(factor = mean(fcMeanCount), .groups = "drop") %>%
+        dplyr::mutate(factor = dplyr::if_else(factor > 0, 0, factor))
+    breaksObject@data <- breaksObject@data %>%
+        dplyr::left_join(factors, by = "ref") %>%
+        dplyr::mutate(fcMeanCount = fcMeanCount - factor) %>%
+        dplyr::select(- factor)
     breaksObject@changePlots     <- NULL
     breaksObject@changeDistPlots <- NULL
     breaksObject@mapPlots        <- NULL
@@ -71,24 +30,50 @@ checkBreaks <- function(object) {
     return(invisible(object))
 }
 
+.computeNCells <- function(object) {
+    if (object@parameters@metaSize > 1) {
+        object@parameters@breakNCells <- object@parameters@maxLinkRange * (object@parameters@maxLinkRange - 1) / 4
+    }
+    else {
+        object@parameters@breakNCells <- (object@parameters@maxLinkRange - 1) * (object@parameters@maxLinkRange - 2) / 4
+    }
+    return(object)
+}
+
+computeNCells <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    message("Estimating break thresholds")
+    object@data <- map(object@data, .computeNCells)
+    return(invisible(object))
+}
+
 .computeBreakPvalue <- function(object, pvalue) {
     if (! is(object, "tenxcheckerExp")) {
         stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
     }
     message(paste0("\tDataset '", object@name , "'."))
     # Half of the expected number
-    object@parameters@breakNCells <- (object@parameters@maxLinkRange - 1) * (object@parameters@maxLinkRange - 2) / 4
     tmp <- object@breaks@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
         dplyr::filter(fcMeanCount >= 0) %>%
         dplyr::pull(fcMeanCount)
     standardDev <- sd(c(tmp, -tmp))
+    nTestedPvalues <- object@breaks@data %>%
+        dplyr::filter(fcMeanCount < 0) %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        nrow()
     object@breaks@data <- object@breaks@data %>%
         dplyr::mutate(pvalue = pnorm(fcMeanCount,
             mean = 0.0, sd = standardDev)) %>%
         dplyr::mutate(pvalue = dplyr::if_else(fcMeanCount >= 0, 1, pvalue)) %>%
         dplyr::mutate(pvalue = dplyr::if_else(nCells < object@parameters@breakNCells, 1, pvalue)) %>%
-        dplyr::mutate(padj = p.adjust(pvalue, method = "hochberg", n = nrow(.)))
+        dplyr::mutate(testedPvalue = dplyr::if_else(fcMeanCount < 0 &
+                                                    nCells >= object@parameters@breakNCells,
+                                         pvalue, NA_real_)) %>%
+        dplyr::mutate(padj = p.adjust(testedPvalue, method = "BH", n = nTestedPvalues)) %>%
+        dplyr::select(-testedPvalue)
     return(object)
 }
 
@@ -205,8 +190,8 @@ filterBreaks <- function(object, pvalue) {
     } 
     newData <- object1@breaks@filteredData %>%
         dplyr::left_join(object2@breaks@data, by = c("ref", "bin"), suffix = c("", "_other")) %>%
-        dplyr::filter(fcMeanCount_other <= 0) %>%
-        dplyr::filter(pvalue_other < 0.5) %>%
+        dplyr::filter(is.na(fcMeanCount_other) | (fcMeanCount_other <= 0)) %>%
+        dplyr::filter(is.na(pvalue_other) | (pvalue_other < 0.5)) %>%
         #dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
         dplyr::select(ref, bin, nCells, fcMeanCount, pvalue, padj)
     object1@breaks@filteredData <- newData
@@ -284,6 +269,7 @@ findBreaks <- function(object, pvalue = 0.05) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
+    object <- computeNCells(object)
     object <- checkBreaks(object)
     object <- computeBreakPvalue(object)
     object <- filterBreaks(object, pvalue)

@@ -19,7 +19,7 @@ using namespace Rcpp;
 
 int getMedian(std::vector<int> &v) {
     if (v.size() == 0) return 0;
-    size_t n = v.size() * 0.9;
+    size_t n = v.size() * 0.5;
     nth_element(v.begin(), v.begin()+n, v.end());
     return v[n];
 }                                                                                                                                                                                                                  
@@ -103,36 +103,36 @@ int getMoleculeSize (std::vector < positions_t > &positionss) {
 }
 */
 
-int getMoleculeSize (umiMap_t &umiMap) {
-    std::vector < int > sizes;
+void getMoleculeSizeDistribution (umiMap_t &umiMap, std::vector < int > &moleculeSizeDistribution) {
     Rcout << "Computing molecule sizes.\n";
     Progress progress(umiMap.size(), true);
     for (auto &it: umiMap) {
         bool uniqueRef  = true;
         auto &positions = it.second;
-        int chrId       = -1;
-        int start       = 0;
-        int end         = 0;
-        for (auto &position: positions) {
-            if (chrId == -1) {
-                chrId = position.chrId;
-                start = position.pos;
-                end   = position.pos;
-            }
-            else {
-                if (position.chrId != chrId) {
-                    uniqueRef = false;
-                    break;
+        if (positions.size() > 1) {
+            int chrId       = -1;
+            int start       = 0;
+            int end         = 0;
+            for (auto &position: positions) {
+                if (chrId == -1) {
+                    chrId = position.chrId;
+                    start = position.pos;
+                    end   = position.pos;
                 }
-                end = position.pos;
+                else {
+                    if (position.chrId != chrId) {
+                        uniqueRef = false;
+                        break;
+                    }
+                    end = position.pos;
+                }
             }
-        }
-        if (uniqueRef) {
-            sizes.push_back(end - start + 1);
+            if (uniqueRef) {
+                moleculeSizeDistribution.push_back(end - start + 1);
+            }
         }
         progress.increment();
     }
-    return getMedian(sizes);
 }
 
 void updateMatrixCounts(matrixCounts_t &matrixCounts, positions_t &positions, indicesChr_t &indicesChr) {
@@ -391,9 +391,8 @@ List parseBamFileCpp(String fileName, int32_t binSize) {
 
 
 // [[Rcpp::export]]
-List parseBamFileCpp(String fileName, int32_t binSize) {
+DataFrame parseBamFileCpp(String fileName, int32_t binSize) {
     unsigned int minCount = 2;
-    //ProfilerStart("/tmp/profile.out");
     Rcout << "Reading " << fileName.get_cstring() << "\n";
     samFile   *inputFile  = hts_open(fileName.get_cstring(), "r");
     DataFrame emptyDataFrame;
@@ -460,7 +459,9 @@ List parseBamFileCpp(String fileName, int32_t binSize) {
             ++nMatrices;
         }
     }
-    int moleculeSize = getMoleculeSize(umiMap);
+    //int moleculeSize = getMoleculeSize(umiMap);
+    //std::vector < int > moleculeSizeDistribution;
+    //getMoleculeSizeDistribution(umiMap, moleculeSizeDistribution);
     umiMap.clear();
     IntegerVector chrs1, chrs2;
     IntegerVector bins1, bins2, counts;
@@ -480,12 +481,9 @@ List parseBamFileCpp(String fileName, int32_t binSize) {
     for (size_t i = 0; i < sizes.size(); ++i) {
         chrSizes.push_back(sizes[i], as<std::string>(chrs[i]));
     }
-    DataFrame outputDataFrame = DataFrame::create(_["ref1"]  = chrs1,
-                                                  _["bin1"]  = bins1,
-                                                  _["ref2"]  = chrs2,
-                                                  _["bin2"]  = bins2,
-                                                  _["count"] = counts);
-    return List::create(_["data"]  = outputDataFrame,
-                        _["size"]  = moleculeSize,
-                        _["sizes"] = chrSizes);
+    return DataFrame::create(_["ref1"]  = chrs1,
+                             _["bin1"]  = bins1,
+                             _["ref2"]  = chrs2,
+                             _["bin2"]  = bins2,
+                             _["count"] = counts);
 }

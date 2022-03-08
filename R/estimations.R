@@ -8,7 +8,7 @@
     if (nrow(d) == 0) {
         message(paste0("Dataset '", object@name, "': Cannot estimate background count: there is no count outside diagonal matrices.\n\tSetting it as 1."))
         object@parameters@minCount <- 1
-        return(object)
+        return(invisible(object))
     }
     sampleSize <- min(object@parameters@sampleSize, nrow(d))
     d <- d %>%
@@ -21,7 +21,7 @@
     threshold <- as.integer(levels(threshold))[threshold]
     object@parameters@minCount <- threshold
     message(paste0("Dataset '", object@name, "': Estimated background count: ", threshold, "."))
-    return(object)
+    return(invisible(object))
 }
 
 estimateBackgroundCounts <- function(object) {
@@ -29,77 +29,81 @@ estimateBackgroundCounts <- function(object) {
         stop("Parameter should be a tenxcheckerClass.")
     }
     object@data <- purrr::map(object@data, .estimateBackgroundCounts)
-    return(object)
+    return(invisible(object))
 }
 
-.estimateMoleculeSize <- function(object) {
+.estimateMoleculeSize <- function(object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    if (is.null(object@parameters@maxLinkRange)) {
-        # Rearrange into bin1/distance matrix
-        diagMatrices <- object@interactionMatrix %>%
-            dplyr::filter(ref2 == ref1) %>%
-            dplyr::mutate(distance = bin1 - bin2) %>%
-            dplyr::arrange(ref1, bin1, distance)
-        # A block is a contiguous stretch of non-zero cells
-        blocks <- diagMatrices %>%
-            dplyr::group_by(ref1, bin1) %>%
-            # compute groups of contiguous values
-            dplyr::mutate(diffDist = distance - dplyr::lag(distance) - 1) %>%
-            tidyr::replace_na(list(diffDist = 0)) %>%
-            dplyr::mutate(diffDist = if_else(diffDist > 1, 1, diffDist)) %>%
-            dplyr::mutate(group = cumsum(diffDist)) %>%
-            # find start/end/size
-            dplyr::group_by(ref1, bin1, group) %>%
-            dplyr::summarise(groupStart = min(distance), groupEnd = max(distance), .groups = "drop") %>%
-            dplyr::select(-group) %>%
-            dplyr::mutate(groupSize = as.integer(groupEnd - groupStart + 1))
-        # A hole is a contiguous stretch of zero cells
-        holes <- diagMatrices %>%
-            dplyr::group_by(ref1, bin1) %>%
-            dplyr::mutate(diffDist = as.integer(distance - lag(distance))) %>%
-            dplyr::slice(-1) %>%
-            dplyr::ungroup() %>%
-            dplyr::filter(diffDist != 1) %>%
-            dplyr::mutate(groupEnd = distance - diffDist, groupStart = distance) %>%
-            dplyr::mutate(holeSize = as.integer(diffDist - 1)) %>%
-            # compute size, and end/start positions of flanking groups
-            dplyr::select(ref1, bin1, groupEnd, groupStart, holeSize)
-        # An empty diagonal is a hole which starts at the diagonal, and is larger than the first block
-        notEmptyDiag <- blocks %>%
-            dplyr::group_by(ref1, bin1) %>%
-            dplyr::arrange(groupStart) %>%
-            dplyr::summarise(groupStart = dplyr::first(groupStart), groupSize = dplyr::first(groupSize), .groups = "drop") %>%
-            dplyr::filter(groupSize >= groupStart) %>%
-            dplyr::select(ref1, bin1)
-        # A true hole should have size greater than flanking groups
-        firstHoles <- holes %>%
-            dplyr::left_join(blocks, by = c("ref1", "bin1", "groupEnd"), suffix = c("", "_group")) %>%
-            dplyr::rename(groupSizeLeft = groupSize) %>%
-            dplyr::select(ref1, bin1, groupEnd, groupStart, holeSize, groupSizeLeft) %>%
-            dplyr::left_join(blocks, by = c("ref1", "bin1", "groupStart"), suffix = c("", "_group")) %>%
-            dplyr::rename(groupSizeRight = groupSize) %>%
-            dplyr::select(ref1, bin1, groupEnd, groupSizeLeft, holeSize, groupSizeRight) %>%
-            dplyr::filter(holeSize > groupSizeLeft & holeSize > groupSizeRight) %>%
-            # take the first true hole
-            dplyr::group_by(ref1, bin1) %>%
-            dplyr::summarise(groupEnd = min(groupEnd), .groups = "drop") 
-        # Compute the most distant point
-        lastPoints <- diagMatrices %>%
-            dplyr::group_by(ref1, bin1) %>%
-            dplyr::summarise(last = max(distance), .groups = "drop")
-        # The molecule should be at the beginning of the first true hole.
-        #    If it does not exist, it is the most distant point.
-        #    Empty diagonals are discarded.
-        object@parameters@maxLinkRange <- notEmptyDiag %>%
-            dplyr::left_join(lastPoints, by = c("ref1", "bin1")) %>%
-            dplyr::left_join(firstHoles, by = c("ref1", "bin1")) %>%
-            dplyr::mutate(size = dplyr::if_else(is.na(groupEnd), last, groupEnd)) %>%
-            dplyr::slice_max(size, prop = 0.1) %>%
-            dplyr::arrange(size) %>%
-            dplyr::slice(1) %>%
-            dplyr::pull(size)
+    if (! is.null(object@parameters@maxLinkRange)) {
+        return(invisible(object))
+    }
+    message(paste0(object@name, ":"))
+    object@parameters@maxLinkRange <- estimateMoleculeSizeCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@metaSize, object@parameters@minCount)
+#   # Rearrange into bin1/distance matrix
+#   diagMatrices <- object@interactionMatrix %>%
+#       dplyr::filter(ref2 == ref1) %>%
+#       dplyr::mutate(distance = bin1 - bin2) %>%
+#       dplyr::arrange(ref1, bin1, distance)
+#   # A block is a contiguous stretch of non-zero cells
+#   blocks <- diagMatrices %>%
+#       dplyr::group_by(ref1, bin1) %>%
+#       # compute groups of contiguous values
+#       dplyr::mutate(diffDist = distance - dplyr::lag(distance) - 1) %>%
+#       tidyr::replace_na(list(diffDist = 0)) %>%
+#       dplyr::mutate(diffDist = if_else(diffDist > 1, 1, diffDist)) %>%
+#       dplyr::mutate(group = cumsum(diffDist)) %>%
+#       # find start/end/size
+#       dplyr::group_by(ref1, bin1, group) %>%
+#       dplyr::summarise(groupStart = min(distance), groupEnd = max(distance), .groups = "drop") %>%
+#       dplyr::select(-group) %>%
+#       dplyr::mutate(groupSize = as.integer(groupEnd - groupStart + 1))
+#   # A hole is a contiguous stretch of zero cells
+#   holes <- diagMatrices %>%
+#       dplyr::group_by(ref1, bin1) %>%
+#       dplyr::mutate(diffDist = as.integer(distance - lag(distance))) %>%
+#       dplyr::slice(-1) %>%
+#       dplyr::ungroup() %>%
+#       dplyr::filter(diffDist != 1) %>%
+#       dplyr::mutate(groupEnd = distance - diffDist, groupStart = distance) %>%
+#       dplyr::mutate(holeSize = as.integer(diffDist - 1)) %>%
+#       # compute size, and end/start positions of flanking groups
+#       dplyr::select(ref1, bin1, groupEnd, groupStart, holeSize)
+#   # An empty diagonal is a hole which starts at the diagonal, and is larger than the first block
+#   notEmptyDiag <- blocks %>%
+#       dplyr::group_by(ref1, bin1) %>%
+#       dplyr::arrange(groupStart) %>%
+#       dplyr::summarise(groupStart = dplyr::first(groupStart), groupSize = dplyr::first(groupSize), .groups = "drop") %>%
+#       dplyr::filter(groupSize >= groupStart) %>%
+#       dplyr::select(ref1, bin1)
+#   # A true hole should have size greater than flanking groups
+#   firstHoles <- holes %>%
+#       dplyr::left_join(blocks, by = c("ref1", "bin1", "groupEnd"), suffix = c("", "_group")) %>%
+#       dplyr::rename(groupSizeLeft = groupSize) %>%
+#       dplyr::select(ref1, bin1, groupEnd, groupStart, holeSize, groupSizeLeft) %>%
+#       dplyr::left_join(blocks, by = c("ref1", "bin1", "groupStart"), suffix = c("", "_group")) %>%
+#       dplyr::rename(groupSizeRight = groupSize) %>%
+#       dplyr::select(ref1, bin1, groupEnd, groupSizeLeft, holeSize, groupSizeRight) %>%
+#       dplyr::filter(holeSize > groupSizeLeft & holeSize > groupSizeRight) %>%
+#       # take the first true hole
+#       dplyr::group_by(ref1, bin1) %>%
+#       dplyr::summarise(groupEnd = min(groupEnd), .groups = "drop") 
+#   # Compute the most distant point
+#   lastPoints <- diagMatrices %>%
+#       dplyr::group_by(ref1, bin1) %>%
+#       dplyr::summarise(last = max(distance), .groups = "drop")
+#   # The molecule should be at the beginning of the first true hole.
+#   #    If it does not exist, it is the most distant point.
+#   #    Empty diagonals are discarded.
+#   object@parameters@maxLinkRange <- notEmptyDiag %>%
+#       dplyr::left_join(lastPoints, by = c("ref1", "bin1")) %>%
+#       dplyr::left_join(firstHoles, by = c("ref1", "bin1")) %>%
+#       dplyr::mutate(size = dplyr::if_else(is.na(groupEnd), last, groupEnd)) %>%
+#       dplyr::slice_max(size, prop = 0.1) %>%
+#       dplyr::arrange(size) %>%
+#       dplyr::slice(1) %>%
+#       dplyr::pull(size)
 
 
 #       selectedBins <- object@interactionMatrix %>%
@@ -154,35 +158,83 @@ estimateBackgroundCounts <- function(object) {
 #           filter(loess > object@parameters@minCount) %>%
 #           tail(n = 1) %>%
 #           pull(distance)
-        message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, "."))
-    }
-    return(object)
+    message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, " (meta-bin size: ", object@parameters@metaSize, ")."))
+    return(invisible(object))
 }
 
 estimateMoleculeSize <- function(object) {
     if (! is(object, "tenxcheckerClass")) {
         stop("Parameter should be a tenxcheckerClass.")
     }
-    object@data <- purrr::map(object@data, .estimateMoleculeSize)
-    return(object)
+    object@data <- purrr::map(object@data, .estimateMoleculeSize, sizes = object@sizes)
+    return(invisible(object))
 }
+
+.estimateMetaBinsMoleculeSize <- function(object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    nMeta <- 10
+    minCount <- 5
+    moleculeSize <- (! is.null(object@parameters@maxLinkRange))
+    l <- estimateMetaBinsMoleculeSizeCpp(object@interactionMatrix, sizes, minCount, nMeta, moleculeSize)
+    if (l$metaSize == 0) {
+        stop(paste0("Error!  Data '", object@name, "' is almost empty.  Cannot analyze it."))
+    }
+    object@parameters@metaSize <- l$metaSize
+    if (object@parameters@metaSize > 1) {
+        message(paste0("Dataset '", object@name, "': Estimated metabin size: ", object@parameters@metaSize, "."))
+    }
+    if (! moleculeSize) {
+        object@parameters@maxLinkRange <- l$maxLinkRange
+        message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, "."))
+    }
+    return(invisible(object))
+}
+
+estimateMetaBinsMoleculeSize <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- purrr::map(object@data, .estimateMetaBinsMoleculeSize, sizes = object@sizes)
+    return(invisible(object))
+}
+
 
 .estimateRowCount <- function(object, sizes) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
-    colSums <- object@interactionMatrix %>%
-        computeSymmetricColSum(sizes) %>%
-        as_tibble()
+    if (object@parameters@metaSize > 1) {
+        colSums <- object@interactionMatrix %>%
+            computeSymmetricColSumMeta(sizes, object@parameters@metaSize) %>%
+            as_tibble() %>%
+            # do not use the last bin of the ref
+            dplyr::mutate(size = sizes[ref]) %>%
+            dplyr::filter(size - bin >= object@parameters@metaSize)
+    }
+    else {
+        colSums <- object@interactionMatrix %>%
+            computeSymmetricColSum(sizes) %>%
+            as_tibble()
+    }
     tmp <- colSums %>%
         dplyr::filter(sum > 0) %>%
         dplyr::pull(sum)
     quartiles <- quantile(tmp, prob = c(.25, .75))
-    outlierThreshold <- quartiles[[2]] + 1.5 * (quartiles[[2]] - quartiles[[1]])
-    tmp <- tmp %>% keep(~ .x <= outlierThreshold)
+    iqr       <- quartiles[[2]] - quartiles[[1]]
+message(str(quartiles))
+    firstOutlier <- quartiles[[1]] - 1.5 * iqr
+    lastOutlier  <- quartiles[[2]] + 1.5 * iqr
+message(str(firstOutlier))
+message(str(lastOutlier))
+    tmp <- tmp %>%
+        keep(~ .x >= firstOutlier) %>%
+        keep(~ .x <= lastOutlier)
 
     tryCatch({
             fitNB <- fitdistr(tmp, "negative binomial")
+message(str(fitNB))
             t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.01]
             if (length(t) > 0) {
                 object@parameters@minRowCount <- max(t)
@@ -210,7 +262,7 @@ estimateMoleculeSize <- function(object) {
         dplyr::filter(sum < object@parameters@minRowCount | sum > object@parameters@maxRowCount) %>%
         dplyr::select(- sum)
     message(paste0("\t", nrow(object@outlierBins), "/", nRows, " outlier bins."))
-    return(object)
+    return(invisible(object))
 }
 
 estimateRowCount <- function(object) {
@@ -218,20 +270,50 @@ estimateRowCount <- function(object) {
         stop("Parameter should be a tenxcheckerClass.")
     }
     object@data <- purrr::map(object@data, .estimateRowCount, sizes = object@sizes)
-    return(object)
+    return(invisible(object))
+}
+
+.estimateMetaSizes <- function(object, sizes) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Parameter should be a tenxcheckerExp.")
+    }
+    metaSize <- estimateMetaSizeCpp(object@interactionMatrix, object@outlierBins, sizes)
+    if (metaSize == 0) {
+        stop(paste0("Error!  Data '", object@name, "' is almost empty.  Cannot analyze it."))
+    }
+    object@parameters@metaSize <- metaSize
+    message(paste0("Dataset '", object@name, "': Estimated metabin size: ", metaSize, "."))
+    return(invisible(object))
+}
+
+
+estimateMetaSizes <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Parameter should be a tenxcheckerClass.")
+    }
+    object@data <- purrr::map(object@data, .estimateMetaSizes, sizes = object@sizes)
+    return(invisible(object))
 }
 
 # Smoothen a (distance, count) distribution
 smoothenDistribution <- function(corner) {
-    corner %>%
-        # replace loess with mean?
-        dplyr::select(distance, count) %>%
-        dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
-        dplyr::arrange(distance) %>%
-        dplyr::distinct()
-        # dplyr::group_by(distance) %>%
-        # dplyr::summarise(count = mean(count), .groups = "drop") %>%
-        # dplyr::arrange(distance)
+    # Window can be too small, use median instead
+    tryCatch(
+        corner %>%
+            dplyr::select(distance, count) %>%
+            dplyr::mutate(count = predict(loess(count ~ distance, data = .))) %>%
+            dplyr::arrange(distance) %>%
+            dplyr::distinct() %>%
+            return(),
+        error = function(e) {
+            corner %>%
+                dplyr::select(distance, count) %>%
+                dplyr::group_by(distance) %>%
+                dplyr::summarise(count = median(count), .groups = "drop") %>%
+                dplyr::arrange(distance) %>%
+                return()
+        }
+    )
 }
 
 estimateDistanceCount <- function(object, sizes) {
@@ -274,10 +356,13 @@ estimateDistanceCount <- function(object, sizes) {
 #       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
 #       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
 #       tidyr::replace_na(list(count = 0))
-    distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange) %>%
-        dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
-        dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
-        tidyr::replace_na(list(count = 0))
+
+#   distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange) %>%
+#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
+#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+#       tidyr::replace_na(list(count = 0))
+    distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, object@parameters@sampleSize) %>%
+        as_tibble()
     object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
 }
@@ -393,30 +478,43 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
+    message("\t\tEstimating distance/count variance.")
     nSamples <- 10 / pvalueThreshold
-    points   <- findRandomCornerPoints(object, sizes, nSamples) %>%
-        purrr::transpose()
-    message("\t\tExtracting random matrices.")
-    pb       <- progress_bar$new(total = length(points))
-    corners  <- purrr::map(points, extractCornerFromPoint, object, pb) %>%
-    	purrr::map(~ dplyr::bind_cols(.x %>% dplyr::select(distance) %>% dplyr::sample_n(nrow(.)),
-    	                              .x %>% dplyr::select(count)))
-    message("\t\tComputing stats.")
-    pb       <- progress_bar$new(total = length(points))
+    pb <- progress_bar$new(total = nSamples)
+    object@parameters@cornerScores <- sampleTriangles(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, nSamples) %>%
+        as_tibble() %>%
+        dplyr::group_by(index) %>%
+        dplyr::group_split() %>%
+        purrr::map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
+        dplyr::group_by(distance) %>%
+        # This parameter should be tuned!
+        dplyr::slice_min(score, prop = 0.5, with_ties = FALSE) %>%
+        dplyr::slice_max(score, n = 1, with_ties = FALSE) %>%
+        dplyr::ungroup()
+
+#   points   <- findRandomCornerPoints(object, sizes, nSamples) %>%
+#       purrr::transpose()
+#   message("\t\tExtracting random matrices.")
+#   pb       <- progress_bar$new(total = length(points))
+#   corners  <- purrr::map(points, extractCornerFromPoint, object, pb) %>%
+#   	purrr::map(~ dplyr::bind_cols(.x %>% dplyr::select(distance) %>% dplyr::sample_n(nrow(.)),
+#   	                              .x %>% dplyr::select(count)))
+#   message("\t\tComputing stats.")
+#   pb       <- progress_bar$new(total = length(points))
 #message("distance count")
 #message(str(object@parameters@distanceCount))
 #message("corner[1]")
 #message(str(corners[[1]]))
 #message("max link range")
 #message(str(object@parameters@maxLinkRange))
-    object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
-        group_by(distance) %>%
-        # This parameter should be tuned!
-        slice_min(score, prop = 0.5, with_ties = FALSE) %>%
-        # slice_max(score, prop = pvalueThreshold, with_ties = FALSE) %>%
-        slice_max(score, n = 1, with_ties = FALSE) %>%
-        ungroup()
-    return(object)
+#   object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
+#       group_by(distance) %>%
+#       # This parameter should be tuned!
+#       slice_min(score, prop = 0.5, with_ties = FALSE) %>%
+#       # slice_max(score, prop = pvalueThreshold, with_ties = FALSE) %>%
+#       slice_max(score, n = 1, with_ties = FALSE) %>%
+#       ungroup()
+    return(invisible(object))
 }
 
 # Find offset where corner detection is not significant
@@ -449,7 +547,7 @@ estimateCornerLimits <- function(object, minNBins) {
     object   <- estimateDistanceCount(object, sizes)
     object   <- estimateCornerVariance(object, sizes, pvalueThreshold)
     object@parameters@cornerLimit <- estimateCornerLimits(object, minNBins)
-    return(object)
+    return(invisible(object))
 }
 
 estimateCorners <- function(object, pvalueThreshold) {
@@ -458,7 +556,7 @@ estimateCorners <- function(object, pvalueThreshold) {
     }
     message("Join shape estimations.")
     object@data <- purrr::map(object@data, .estimateCorners, object@sizes, pvalueThreshold, object@minNBins)
-    return(object)
+    return(invisible(object))
 }
 
 estimateDistributions <- function(object) {
@@ -466,7 +564,7 @@ estimateDistributions <- function(object) {
         stop("Parameter should be a tenxcheckerClass.")
     }
     object <- estimateBackgroundCounts(object)
-    object <- estimateMoleculeSize(object)
+    object <- estimateMetaBinsMoleculeSize(object)
     object <- estimateRowCount(object)
     return(invisible(object))
 }

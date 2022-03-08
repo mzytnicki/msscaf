@@ -12,7 +12,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // parseBamFileCpp
-List parseBamFileCpp(String fileName, int32_t binSize);
+DataFrame parseBamFileCpp(String fileName, int32_t binSize);
 RcppExport SEXP _tenxchecker_parseBamFileCpp(SEXP fileNameSEXP, SEXP binSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -24,16 +24,17 @@ BEGIN_RCPP
 END_RCPP
 }
 // computeMeanTrianglesCpp
-DataFrame computeMeanTrianglesCpp(DataFrame& data, int distance, IntegerVector sizes, DataFrame outliers);
-RcppExport SEXP _tenxchecker_computeMeanTrianglesCpp(SEXP dataSEXP, SEXP distanceSEXP, SEXP sizesSEXP, SEXP outliersSEXP) {
+DataFrame computeMeanTrianglesCpp(DataFrame& data, int distance, int metaSize, IntegerVector sizes, DataFrame outliers);
+RcppExport SEXP _tenxchecker_computeMeanTrianglesCpp(SEXP dataSEXP, SEXP distanceSEXP, SEXP metaSizeSEXP, SEXP sizesSEXP, SEXP outliersSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
     Rcpp::traits::input_parameter< int >::type distance(distanceSEXP);
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type outliers(outliersSEXP);
-    rcpp_result_gen = Rcpp::wrap(computeMeanTrianglesCpp(data, distance, sizes, outliers));
+    rcpp_result_gen = Rcpp::wrap(computeMeanTrianglesCpp(data, distance, metaSize, sizes, outliers));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -63,21 +64,22 @@ BEGIN_RCPP
 END_RCPP
 }
 // filterCornersCpp
-DataFrame filterCornersCpp(DataFrame data, IntegerVector sizes, int cornerSize);
-RcppExport SEXP _tenxchecker_filterCornersCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP) {
+DataFrame filterCornersCpp(DataFrame data, IntegerVector sizes, int cornerSize, int metaSize);
+RcppExport SEXP _tenxchecker_filterCornersCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type data(dataSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
     Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(filterCornersCpp(data, sizes, cornerSize));
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(filterCornersCpp(data, sizes, cornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
 // extractCornersCpp
-DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize);
-RcppExport SEXP _tenxchecker_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP) {
+DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize, int metaSize);
+RcppExport SEXP _tenxchecker_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -85,7 +87,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< DataFrame >::type selectedRefs(selectedRefsSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
     Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, sizes, cornerSize));
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, sizes, cornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -104,16 +107,77 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimateDistanceCountCpp
-DataFrame estimateDistanceCountCpp(DataFrame& data, DataFrame& outliers, IntegerVector& sizes, int distance);
-RcppExport SEXP _tenxchecker_estimateDistanceCountCpp(SEXP dataSEXP, SEXP outliersSEXP, SEXP sizesSEXP, SEXP distanceSEXP) {
+DataFrame estimateDistanceCountCpp(DataFrame& data, DataFrame& outliers, IntegerVector& sizesIn, int distance, int metaSize, int nOutputElements);
+RcppExport SEXP _tenxchecker_estimateDistanceCountCpp(SEXP dataSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP distanceSEXP, SEXP metaSizeSEXP, SEXP nOutputElementsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
     Rcpp::traits::input_parameter< DataFrame& >::type outliers(outliersSEXP);
-    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizesIn(sizesInSEXP);
     Rcpp::traits::input_parameter< int >::type distance(distanceSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimateDistanceCountCpp(data, outliers, sizes, distance));
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    Rcpp::traits::input_parameter< int >::type nOutputElements(nOutputElementsSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateDistanceCountCpp(data, outliers, sizesIn, distance, metaSize, nOutputElements));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sampleTriangles
+DataFrame sampleTriangles(DataFrame& data, DataFrame& outliers, IntegerVector& sizesIn, int distance, int metaSize, int nOutputElements);
+RcppExport SEXP _tenxchecker_sampleTriangles(SEXP dataSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP distanceSEXP, SEXP metaSizeSEXP, SEXP nOutputElementsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< DataFrame& >::type outliers(outliersSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizesIn(sizesInSEXP);
+    Rcpp::traits::input_parameter< int >::type distance(distanceSEXP);
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    Rcpp::traits::input_parameter< int >::type nOutputElements(nOutputElementsSEXP);
+    rcpp_result_gen = Rcpp::wrap(sampleTriangles(data, outliers, sizesIn, distance, metaSize, nOutputElements));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateMetaSizeCpp
+int estimateMetaSizeCpp(std::vector < double >& rowAvg, int maxDistance, int nMeta, int minCount);
+RcppExport SEXP _tenxchecker_estimateMetaSizeCpp(SEXP rowAvgSEXP, SEXP maxDistanceSEXP, SEXP nMetaSEXP, SEXP minCountSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector < double >& >::type rowAvg(rowAvgSEXP);
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    Rcpp::traits::input_parameter< int >::type nMeta(nMetaSEXP);
+    Rcpp::traits::input_parameter< int >::type minCount(minCountSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateMetaSizeCpp(rowAvg, maxDistance, nMeta, minCount));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateMoleculeSizeCpp
+int estimateMoleculeSizeCpp(std::vector < double >& rowAvg, int maxDistance, int minCount, int metaSize);
+RcppExport SEXP _tenxchecker_estimateMoleculeSizeCpp(SEXP rowAvgSEXP, SEXP maxDistanceSEXP, SEXP minCountSEXP, SEXP metaSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector < double >& >::type rowAvg(rowAvgSEXP);
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    Rcpp::traits::input_parameter< int >::type minCount(minCountSEXP);
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateMoleculeSizeCpp(rowAvg, maxDistance, minCount, metaSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateMetaBinsMoleculeSizeCpp
+List estimateMetaBinsMoleculeSizeCpp(DataFrame& data, IntegerVector& sizes, int minCount, int nMeta, bool moleculeSize);
+RcppExport SEXP _tenxchecker_estimateMetaBinsMoleculeSizeCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP minCountSEXP, SEXP nMetaSEXP, SEXP moleculeSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type minCount(minCountSEXP);
+    Rcpp::traits::input_parameter< int >::type nMeta(nMetaSEXP);
+    Rcpp::traits::input_parameter< bool >::type moleculeSize(moleculeSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateMetaBinsMoleculeSizeCpp(data, sizes, minCount, nMeta, moleculeSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -204,6 +268,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// computeSymmetricColSumMeta
+DataFrame computeSymmetricColSumMeta(DataFrame& data, IntegerVector& sizes, int metaSize);
+RcppExport SEXP _tenxchecker_computeSymmetricColSumMeta(SEXP dataSEXP, SEXP sizesSEXP, SEXP metaSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DataFrame& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector& >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeSymmetricColSumMeta(data, sizes, metaSize));
+    return rcpp_result_gen;
+END_RCPP
+}
 // removeLowCountRowsCpp
 List removeLowCountRowsCpp(DataFrame& data, IntegerVector& sizes, int threshold);
 RcppExport SEXP _tenxchecker_removeLowCountRowsCpp(SEXP dataSEXP, SEXP sizesSEXP, SEXP thresholdSEXP) {
@@ -267,7 +344,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // parsePafCpp
-List parsePafCpp(std::string& fname, uint32_t resolution, int minAlnLen, int minCount, int minNCells);
+DataFrame parsePafCpp(std::string& fname, uint32_t resolution, int minAlnLen, int minCount, int minNCells);
 RcppExport SEXP _tenxchecker_parsePafCpp(SEXP fnameSEXP, SEXP resolutionSEXP, SEXP minAlnLenSEXP, SEXP minCountSEXP, SEXP minNCellsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -348,13 +425,17 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_parseBamFileCpp", (DL_FUNC) &_tenxchecker_parseBamFileCpp, 2},
-    {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 4},
+    {"_tenxchecker_computeMeanTrianglesCpp", (DL_FUNC) &_tenxchecker_computeMeanTrianglesCpp, 5},
     {"_tenxchecker_removeNearEqualBreaksCpp", (DL_FUNC) &_tenxchecker_removeNearEqualBreaksCpp, 2},
     {"_tenxchecker_computeCornerSize", (DL_FUNC) &_tenxchecker_computeCornerSize, 3},
-    {"_tenxchecker_filterCornersCpp", (DL_FUNC) &_tenxchecker_filterCornersCpp, 3},
-    {"_tenxchecker_extractCornersCpp", (DL_FUNC) &_tenxchecker_extractCornersCpp, 4},
+    {"_tenxchecker_filterCornersCpp", (DL_FUNC) &_tenxchecker_filterCornersCpp, 4},
+    {"_tenxchecker_extractCornersCpp", (DL_FUNC) &_tenxchecker_extractCornersCpp, 5},
     {"_tenxchecker_classifyCornerPointsCpp", (DL_FUNC) &_tenxchecker_classifyCornerPointsCpp, 4},
-    {"_tenxchecker_estimateDistanceCountCpp", (DL_FUNC) &_tenxchecker_estimateDistanceCountCpp, 4},
+    {"_tenxchecker_estimateDistanceCountCpp", (DL_FUNC) &_tenxchecker_estimateDistanceCountCpp, 6},
+    {"_tenxchecker_sampleTriangles", (DL_FUNC) &_tenxchecker_sampleTriangles, 6},
+    {"_tenxchecker_estimateMetaSizeCpp", (DL_FUNC) &_tenxchecker_estimateMetaSizeCpp, 4},
+    {"_tenxchecker_estimateMoleculeSizeCpp", (DL_FUNC) &_tenxchecker_estimateMoleculeSizeCpp, 4},
+    {"_tenxchecker_estimateMetaBinsMoleculeSizeCpp", (DL_FUNC) &_tenxchecker_estimateMetaBinsMoleculeSizeCpp, 5},
     {"_tenxchecker_keepScaffoldsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsCpp, 2},
     {"_tenxchecker_keepScaffoldsPairsCpp", (DL_FUNC) &_tenxchecker_keepScaffoldsPairsCpp, 2},
     {"_tenxchecker_extractLines", (DL_FUNC) &_tenxchecker_extractLines, 3},
@@ -362,6 +443,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_tenxchecker_computeRefSizesCpp", (DL_FUNC) &_tenxchecker_computeRefSizesCpp, 1},
     {"_tenxchecker_computeNRrows", (DL_FUNC) &_tenxchecker_computeNRrows, 2},
     {"_tenxchecker_computeSymmetricColSum", (DL_FUNC) &_tenxchecker_computeSymmetricColSum, 2},
+    {"_tenxchecker_computeSymmetricColSumMeta", (DL_FUNC) &_tenxchecker_computeSymmetricColSumMeta, 3},
     {"_tenxchecker_removeLowCountRowsCpp", (DL_FUNC) &_tenxchecker_removeLowCountRowsCpp, 3},
     {"_tenxchecker_normalizeHighCountRowsCpp", (DL_FUNC) &_tenxchecker_normalizeHighCountRowsCpp, 2},
     {"_tenxchecker_parseHicCpp", (DL_FUNC) &_tenxchecker_parseHicCpp, 2},

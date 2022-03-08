@@ -40,7 +40,7 @@ int computeCornerSize(int size1, int size2, int maxDistance) {
 //   stores the number of non-zero for each corner,
 //   output the non-near-empty corners.
 // [[Rcpp::export]]
-DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize) {
+DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize, int metaSize) {
     IntegerVector refs1  = data["ref1"];
     IntegerVector refs2  = data["ref2"];
     IntegerVector bins1  = data["bin1"];
@@ -53,6 +53,7 @@ DataFrame filterCornersCpp (DataFrame data, IntegerVector sizes, int cornerSize)
     std::vector < int > cornerRefs2;
     std::vector < int > cornerTypes;
     int minCount = cornerSize * (cornerSize + 1) / 4; // This will be our threshold
+    cornerSize *= metaSize;
     for (int refId = 0; refId < nRefs + 1; ++refId) {
         cornerCounts[refId] = std::vector < std::array < int, nCornerType > > (refId);
     }
@@ -157,7 +158,7 @@ int getCornerDistanceCpp(int bin1, int bin2, CornerType ct, int size1, int size2
 // Read interaction matrix and a set of pairs of references
 //   output the corners.
 // [[Rcpp::export]]                                                                                                                                                                                                
-DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize) {
+DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize, int metaSize) {
     IntegerVector refs1  = interactions["ref1"];
     IntegerVector refs2  = interactions["ref2"];
     IntegerVector bins1  = interactions["bin1"];
@@ -191,7 +192,7 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Int
         int size2 = sizes[ref2-1];
         if (selectedRefsBool[ref1][ref2]) {
             CornerType ct = classifyCornerPoint(bin1, bin2, size1, size2, cornerSize);
-            int        distance = getCornerDistanceCpp(bin1, bin2, ct, size1, size2);
+            int        distance = getCornerDistanceCpp(bin1, bin2, ct, size1, size2) / metaSize;
             outputRefs1.push_back(ref1);
             outputRefs2.push_back(ref2);
             outputDistances.push_back(distance);

@@ -587,7 +587,6 @@ allObject <- addExp(allObject, bamData, "10X")
 #saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
 #allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
 allObject <- estimateDistributions(allObject)
-allObject@data[[3]]@parameters@maxLinkRange <- 50
 allObject <- cleanData(allObject)
 #saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 #allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
@@ -604,6 +603,22 @@ allObject@breaks %>% select(ref, bin) %>% mutate(bin = bin * resolution) %>% wri
 allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
 ```
 
+```{r}
+p <- allObject@data[[2]]@interactionMatrix %>%
+    filter(ref1 == ref2) %>%
+    mutate(distance = bin1 - bin2) %>%
+    filter(distance <= 100000) %>%
+    select(ref1, bin1, distance, count) %>%
+    mutate(meta = distance %/% 1000) %>%
+    group_by(ref1, bin1, meta) %>%
+    summarize(count = sum(count), .groups = "drop") %>%
+    ggplot(aes(x = meta, y = count)) +
+        xlim(1, 50) +
+        geom_bin2d(binwidth = c(1, 1)) +
+        geom_smooth(formula = y ~ x)
+ggsave("tmp.png", p)
+```
+
 ```{bash}
 ../CheckScaffolding/verifyJoins /Scratch/mazytnicki/Mother_1/mapping.paf 100000 10000 joins.tsv
 ../CheckScaffolding/checkJoins /Scratch/mazytnicki/Mother_1/mapping.paf outJoins.txt 1000 1000
@@ -613,6 +628,15 @@ allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FA
 ~/Desktop/Apps/quast-5.0.2/quast-lg.py -t 15 -r /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz -t 6 -o /home/mazytnicki/Desktop/Projects/Other/Assembly/Quast/Test1 /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa wtdbg2_trio1_mother_37165_arcs_links.fa sequences.fa sequences_ONT_HiC.fa
 # From genologin
 ```
+
+```{bash}
+scp /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa wtdbg2_trio1_mother_37165_arcs_links.fa sequences.fa sequences_ONT_HiC.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker
+scp sequences.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker
+# From genologin
+module load system/Miniconda3
+module load bioinfo/Inspector-v1.2
+cd /home/mzytnicki/work/Projects/tenxChecker
+srun --mem=10G -c 8 inspector.py -c mother_raw.cgt.fa -r /work/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz -d nanopore --ref GCF_002263795.1_ARS-UCD1.2_genomic.fna -o inspector_raw/ --skip_base_error --skip_structural_error -t 8
 
 ```{r}
 library("MASS")

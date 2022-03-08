@@ -183,7 +183,7 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 # }
 
 # Extract the counts from the current join, and perform test.
-testJoin <- function(parameters, counts, sizes, maxDistance) {
+testJoin <- function(parameters, counts, sizes, maxDistance, pb) {
     counts <- counts %>%
         dplyr::mutate(ref1 = as.numeric(ref1)) %>%
         dplyr::mutate(ref2 = as.numeric(ref2)) %>%
@@ -194,6 +194,7 @@ testJoin <- function(parameters, counts, sizes, maxDistance) {
     samples       <- computeAllSamples(counts, size1, size2, maxDistance, sampleSize = 10000)
     testedCorner  <- samples[[parameters$corner]]
     samples[[parameters$corner]]  <- NULL
+    pb$tick()
     min(purrr::map_dbl(samples, computeTest, testedCorner))
 }
 
@@ -218,10 +219,11 @@ getJoinInfo <- function(object, parameters) {
         stop("Parameter should be a tenxcheckerExp.")
     }
     message(paste0("\tDataset '", object@name, "'."))
-    selectedRefs   <- filterCornersCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange) %>% as_tibble()
+    selectedRefs   <- filterCornersCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% as_tibble()
     message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
-    selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange) %>% as_tibble()
-    minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange)
+    pb <- progress_bar$new(total = nrow(selectedRefs))
+    selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% as_tibble()
+    minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange, pb = pb)
     selectedRefs   <- selectedRefs %>%
         dplyr::mutate(pvalue = minPValues) %>%
         dplyr::filter(pvalue <= pvalueThreshold) %>%
@@ -233,13 +235,13 @@ getJoinInfo <- function(object, parameters) {
         dplyr::mutate(after2 = (stringr::str_sub(corner, 2, 2) == "E")) %>%
         dplyr::select(ref1, ref2, after1, after2, pvalue)
     message(paste0("\t\tKeeping ", nrow(selectedRefs), " of them."))
-    selectedCounts <- keepScaffoldsPairsCpp(object@interactionMatrix, selectedRefs) %>% as_tibble()
-    objects        <- splitBy2RefFromMatrix(object, selectedCounts, sizes)
-    joinInfo       <- purrr::map2(objects, purrr::transpose(selectedRefs), getJoinInfo) %>% purrr::transpose()
+#   selectedCounts <- keepScaffoldsPairsCpp(object@interactionMatrix, selectedRefs) %>% as_tibble()
+#   objects        <- splitBy2RefFromMatrix(object, selectedCounts, sizes)
+#   joinInfo       <- purrr::map2(objects, purrr::transpose(selectedRefs), getJoinInfo) %>% purrr::transpose()
     joinsObject <- new("tenxcheckerJoins")
     joinsObject@data <- selectedRefs
-    joinsObject@testPlots <- joinInfo$testPlot
-    joinsObject@mapPlots <- joinInfo$mapPlot
+#   joinsObject@testPlots <- joinInfo$testPlot
+#   joinsObject@mapPlots <- joinInfo$mapPlot
     object@joins <- joinsObject
     return(object)
 
@@ -360,7 +362,8 @@ removeDuplicateJoins <- function(object) {
 ..checkCorners <- function(parameters, object, sizes, pb) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
-    values    <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
+    background <- object@parameters@distanceCount
+    values    <- computeCornerDifferenceOffsets(corner, background, object@parameters@maxLinkRange, FALSE, pb) %>%
         dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
         dplyr::filter(score_corner <= score_background)
     if (nrow(values) == 0) return(-1)

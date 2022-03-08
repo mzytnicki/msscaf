@@ -5,8 +5,8 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
 }
 
-computeMeanTrianglesCpp <- function(data, distance, sizes, outliers) {
-    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance, sizes, outliers)
+computeMeanTrianglesCpp <- function(data, distance, metaSize, sizes, outliers) {
+    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance, metaSize, sizes, outliers)
 }
 
 removeNearEqualBreaksCpp <- function(breaks, distance) {
@@ -17,20 +17,36 @@ computeCornerSize <- function(size1, size2, maxDistance) {
     .Call('_tenxchecker_computeCornerSize', PACKAGE = 'tenxchecker', size1, size2, maxDistance)
 }
 
-filterCornersCpp <- function(data, sizes, cornerSize) {
-    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizes, cornerSize)
+filterCornersCpp <- function(data, sizes, cornerSize, metaSize) {
+    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizes, cornerSize, metaSize)
 }
 
-extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize) {
-    .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize)
+extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize, metaSize) {
+    .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize, metaSize)
 }
 
 classifyCornerPointsCpp <- function(interactions, size1, size2, maxDistance) {
     .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, maxDistance)
 }
 
-estimateDistanceCountCpp <- function(data, outliers, sizes, distance) {
-    .Call('_tenxchecker_estimateDistanceCountCpp', PACKAGE = 'tenxchecker', data, outliers, sizes, distance)
+estimateDistanceCountCpp <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
+    .Call('_tenxchecker_estimateDistanceCountCpp', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nOutputElements)
+}
+
+sampleTriangles <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
+    .Call('_tenxchecker_sampleTriangles', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nOutputElements)
+}
+
+estimateMetaSizeCpp <- function(rowAvg, maxDistance, nMeta, minCount) {
+    .Call('_tenxchecker_estimateMetaSizeCpp', PACKAGE = 'tenxchecker', rowAvg, maxDistance, nMeta, minCount)
+}
+
+estimateMoleculeSizeCpp <- function(rowAvg, maxDistance, minCount, metaSize) {
+    .Call('_tenxchecker_estimateMoleculeSizeCpp', PACKAGE = 'tenxchecker', rowAvg, maxDistance, minCount, metaSize)
+}
+
+estimateMetaBinsMoleculeSizeCpp <- function(data, sizes, minCount, nMeta, moleculeSize) {
+    .Call('_tenxchecker_estimateMetaBinsMoleculeSizeCpp', PACKAGE = 'tenxchecker', data, sizes, minCount, nMeta, moleculeSize)
 }
 
 keepScaffoldsCpp <- function(data, keptRefs) {
@@ -59,6 +75,10 @@ computeNRrows <- function(data, sizes) {
 
 computeSymmetricColSum <- function(data, sizes) {
     .Call('_tenxchecker_computeSymmetricColSum', PACKAGE = 'tenxchecker', data, sizes)
+}
+
+computeSymmetricColSumMeta <- function(data, sizes, metaSize) {
+    .Call('_tenxchecker_computeSymmetricColSumMeta', PACKAGE = 'tenxchecker', data, sizes, metaSize)
 }
 
 removeLowCountRowsCpp <- function(data, sizes, threshold) {

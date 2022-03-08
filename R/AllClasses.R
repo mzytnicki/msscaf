@@ -33,7 +33,8 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             breakNCells     = "ANY", 
                                             maxLinkRange    = "ANY", 
                                             nRandomizations = "ANY", 
-                                            nBinZoom        = "ANY")
+                                            nBinZoom        = "ANY",
+                                            metaSize        = "ANY")
 )
 
 
@@ -310,6 +311,7 @@ addExp <- function(object, data, expName) {
     parameters@cornerLimit     <- NULL
     parameters@nRandomizations <- 10
     parameters@nBinZoom        <- 100
+    parameters@metaSize        <- 1
 
     newData <- new("tenxcheckerExp")
     newData@interactionMatrix <- data@inputMatrix
@@ -322,7 +324,7 @@ addExp <- function(object, data, expName) {
     # Check whether some bins are out of range
     overSized <- checkBinDifference(newData, object@sizes)
     if (nrow(overSized) > 0) {
-        warning(paste("Some bins are beyong the reference sizes:",
+        warning(paste("Some bins are beyond the reference sizes:",
             str(overSized),
             "The reference sequences and bins may be uncompatible.",
             "Removing the bins."))

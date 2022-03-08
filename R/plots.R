@@ -1,4 +1,4 @@
-computeScaleFactor <- function(object, sizes) {
+computeScaleFactor<- function(object, sizes) {
     if (is.null(object)) {
         length <- sizes[[2]] - sizes[[1]]
     }
@@ -63,6 +63,9 @@ plotMoleculeSizeDistribution <- function(object) {
 }
 
 .plotDiagonalStrengthFit <- function(object) {
+    if (! is(object, "tenxcheckerExp")) {
+        stop("Object should be a 'tenxcheckerExp'.")
+    }
     tmp <- object@breaks@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
         dplyr::filter(fcMeanCount >= 0) %>%
@@ -78,8 +81,31 @@ plotMoleculeSizeDistribution <- function(object) {
 
 # This plot shows how triangles (near the diagonal) are fitted.
 plotDiagonalStrengthFit <- function(object) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Object should be a 'tenxcheckerClass'.")
+    }
     plots <- purrr::map(object@data, .plotDiagonalStrengthFit)
     return(do.call("plot_grid", c(plots, ncol = length(plots))))
+}
+
+plotBreakStats <- function(object, dataName, refName, bins = NULL) {
+    if (! is(object, "tenxcheckerClass")) {
+        stop("Object should be a 'tenxcheckerClass'.")
+    }
+    p <- getDataset(object, dataName)@breaks@data %>%
+        dplyr::filter(ref == refName) %>%
+        tidyr::gather(key = "type", value = "value", fcMeanCount, nCells) %>%
+        ggplot(aes(x = bin, y = value)) +
+            geom_line() +
+            facet_grid(rows = vars(type), scales = "free_y")
+    if (!is.null(bins)) {
+        for (bin in bins) {
+          p <- p + geom_vline(xintercept = bin,
+                              colour = "red",
+                              linetype = "longdash")
+        }
+    }
+    p
 }
 
 plotBackgroundCountDistribution <- function(object) {
@@ -207,25 +233,41 @@ plotInsertions2 <- function(object, bin, distance) {
 
 
 .plotRowCountFit <- function(object, sizes) {
-    colSums <- object@interactionMatrix %>%
-        computeSymmetricColSum(sizes) %>%
-        as_tibble()
+    if (object@parameters@metaSize > 1) {                                                                                                                                                                          
+        colSums <- object@interactionMatrix %>%                                                                                                                                                                    
+            computeSymmetricColSumMeta(sizes, object@parameters@metaSize) %>%                                                                                                                                      
+            as_tibble() %>%                                                                                                                                                                                        
+            # do not use the last bin of the ref                                                                                                                                                                   
+            dplyr::mutate(size = sizes[ref]) %>%                                                                                                                                                                   
+            dplyr::filter(size - bin >= object@parameters@metaSize)                                                                                                                                                
+    }                                                                                                                                                                                                              
+    else {
+        colSums <- object@interactionMatrix %>%
+            computeSymmetricColSum(sizes) %>%
+            as_tibble()
+    }
     tmp <- colSums %>%
         dplyr::filter(sum > 0) %>%
         dplyr::pull(sum)
     quartiles        <- quantile(tmp, prob = c(.25, .75))
-    outlierThreshold <- quartiles[[2]] + 1.5 * (quartiles[[2]] - quartiles[[1]])
-    tmp              <- tmp %>% keep(~ .x <= outlierThreshold)
+    iqr       <- quartiles[[2]] - quartiles[[1]]                                                                                                                                                                   
+    firstOutlier <- quartiles[[1]] - 1.5 * iqr                                                                                                                                                                     
+    lastOutlier  <- quartiles[[2]] + 1.5 * iqr                                                                                                                                                                     
+    tmp <- tmp %>%                                                                                                                                                                                                 
+        keep(~ .x >= firstOutlier) %>%                                                                                                                                                                             
+        keep(~ .x <= lastOutlier)                                                                                                                                                                                  
     fitNB            <- fitdistr(tmp, "negative binomial")
     size             <- fitNB$estimate[[1]]
     mu               <- fitNB$estimate[[2]]
     ggplot(colSums, aes(x = sum)) + 
         geom_density(aes(y = stat(density))) +
         stat_function(fun = function(x){dnbinom(round(x), size = size, mu = mu)}, col = "red") + 
-        xlim(0, max(outlierThreshold, object@parameters@maxRowCount)) +
+        xlim(0, max(lastOutlier, object@parameters@maxRowCount)) +
         xlab(object@name) +
         geom_vline(xintercept = object@parameters@minRowCount, linetype = "dashed") +
-        geom_vline(xintercept = object@parameters@maxRowCount, linetype = "dotted")
+        geom_vline(xintercept = object@parameters@maxRowCount, linetype = "dotted") +
+        geom_vline(xintercept = firstOutlier, linetype = "dashed", color = "red") +
+        geom_vline(xintercept = lastOutlier,  linetype = "dotted", color = "red")
 }
 
 # This plot shows how column sums are fitted
@@ -261,32 +303,62 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, bin1 = NULL, bin2 = NULL, bins = NULL, outliers = TRUE) {
-    if ((! is.null(bin1)) & (! is.null(bin2))) {
-        if (bin2 < bin1) {
-            stop(paste0("Second bin (", bin2, ") should be less than first bin (", bin1, ")."))
+# Agregate bins to meta bins
+transformMeta <- function(data, metaSize) {
+    if (metaSize == 1) return(data)
+    data <- data %>%
+        dplyr::mutate(metaBin1 = as.integer(trunc(bin1 / metaSize))) %>%
+        dplyr::mutate(metaBin2 = as.integer(trunc(bin2 / metaSize)))
+    if ("ref1" %in% colnames(data)) {
+        if ("ref2" %in% colnames(data)) {
+            data <- data %>%
+                dplyr::group_by(ref1, ref2, metaBin1, metaBin2)
+        }
+        else {
+            data <- data %>%
+                dplyr::group_by(ref1, metaBin1, metaBin2)
+        }
+    }
+    else {
+        data <- data %>%
+            dplyr::group_by(metaBin1, metaBin2)
+    }
+    data %>%
+        dplyr::summarise(count = sum(count), .groups = "drop") %>%
+        dplyr::mutate(metaBin1 = metaBin1 * metaSize) %>%
+        dplyr::mutate(metaBin2 = metaBin2 * metaSize) %>%
+        dplyr::rename(bin1 = metaBin1, bin2 = metaBin2)
+}
+
+plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, bins = NULL, outliers = TRUE, meta = FALSE) {
+    if ((! is.null(binMin)) & (! is.null(binMax))) {
+        if (binMax < binMin) {
+            stop(paste0("Second bin (", binMax, ") should be less than first bin (", binMin, ")."))
         }
     }
     if (length(bins) == 0) {
         bins <- NULL
     }
-    if (is.null(bin1)) {
+    if (is.null(binMin)) {
         scaleFactor <- computeScaleFactor(object)
     }
     else {
-        if (bin1 < 0) {
-            bin1 <- 0
+        if (binMin < 0) {
+            binMin <- 0
         }
-        if (bin2 > object@size) {
-            bin2 <- object@size
+        if (binMax > object@size) {
+            binMax <- object@size
         }
-        scaleFactor <- computeScaleFactor(NULL, c(bin1, bin2))
+        scaleFactor <- computeScaleFactor(NULL, c(binMin, binMax))
     }
     data     <- object@interactionMatrix %>%
-                    dplyr::filter(bin1 >= bin1, bin1 <= bin2) %>%
-                    dplyr::filter(bin2 >= bin1, bin2 <= bin2) %>%
+                    dplyr::filter(bin1 >= binMin, bin1 <= binMax) %>%
+                    dplyr::filter(bin2 >= binMin, bin2 <= binMax) %>%
                     rescale(scaleFactor)
     minCount <- data %>% pull(count) %>% min()
+    if (meta) {
+        data <- transformMeta(data, object@parameters@metaSize)
+    }
     if ((minCount < 0) & (logColor)) {
         stop("Trying to plot a map with negative count in log scale.")
     }
@@ -295,41 +367,31 @@ plot.10XRef <- function(object, logColor = TRUE, bin1 = NULL, bin2 = NULL, bins 
     }
     data %<>% makeSymmetric()
     if (! outliers) {
-        data %<>% removeOutliersRef(object@outlierBins, object@size, bin1, bin2)
+        data %<>% removeOutliersRef(object@outlierBins, object@size, binMin, binMax)
     }
-    # if (!is.na(bin)) {
-    #     xmin <- max(0, bin - object@parameters@nBinZoom)
-    #     xmax <- min(object@size, bin + object@parameters@nBinZoom)
-    #     tmp %<>% filter(bin1 >= xmin,
-    #                     bin1 <= xmax,
-    #                     bin2 >= xmin,
-    #                     bin2 <= xmax)
-    # }
     p <- data %>% 
         ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) +
-	    scale_x_continuous(lim = c(bin1, bin2), expand = c(0, 0)) +
-	    scale_y_reverse(lim = c(bin2, bin1), expand = c(0, 0)) +
+	    scale_x_continuous(lim = c(binMin, binMax), expand = c(0, 0)) +
+	    scale_y_reverse(lim = c(binMax, binMin), expand = c(0, 0)) +
             theme_bw() +
             theme(panel.spacing = unit(0, "lines")) +
             ggtitle(object@name) +
             xlab(object@chromosome) +
-            ylab("")
+            ylab(object@chromosome)
     if (logColor) {
         p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
     } else {
         p <- p + scale_fill_gradient2()
-        #p <- p + scale_fill_gradient(low = "blue", high = "red")
     }
     if (length(bins) > 100) {
+        message(paste0("Cannot display ", length(bins), " lines in the plots: too much RAM needed."))
         bins <- NULL
     }
     if (! is_null(bins)) {
-        for (bin in bins) {
-            p <- p +
-                geom_hline(yintercept = bin, linetype = "dotted") +
-                geom_vline(xintercept = bin, linetype = "dotted")
-        }
+        p <- p +
+            geom_hline(yintercept = bins, linetype = "dotted") +
+            geom_vline(xintercept = bins, linetype = "dotted")
     }    
     return(p)
 }
@@ -419,71 +481,74 @@ plot.10X2Ref <- function(object,
     return(p)
 }
 
-plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
+plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
     if (is.null(bin1) != is.null(bin2)) {
         stop("None, or both bins should be set.")
     }
-    if (! is.null(ref1)) {
-        if (! ref1 %in% levels(object@interactionMatrix$ref1)) {
-            message(paste0("Reference #1 '", ref1, "', is not a known reference in dataset '", object@name, "'."))
+    if (is.null(ref1)) {
+        scaleFactor <- computeScaleFactor(object, sizes)
+        # message(paste0("Scale factor: ", scaleFactor))
+        data        <- object@interactionMatrix %>% rescale(scaleFactor)
+        p <- data %>%
+            makeSymmetric() %>%
+            ggplot(aes(x = bin1, y = bin2)) + 
+            geom_raster(aes(fill = count)) + 
+            facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
+            scale_x_continuous(expand = c(0, 0)) +
+            scale_y_reverse(expand = c(0, 0)) +
+            theme_bw() +
+            theme(panel.spacing = unit(0, "lines")) +
+            ggtitle(object@name) +
+            xlab("") +
+            ylab("")
+        if (logColor) {
+            p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
         }
-        if ((! is.null(ref2)) & (ref1 != ref2)) {
-            if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
-                message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
-            }
-            if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
-               tmp <- ref1
-               ref1 <- ref2
-               ref2 <- tmp
-               tmp <- bin1
-               bin1 <- bin2
-               bin2 <- tmp
-            }
-            object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
-            return(plot.10X2Ref(object, outliers = outliers))
+        else {
+            p <- p + scale_fill_gradient(low = "blue", high = "red")
         }
+        return(p)
+    }
+    if (! ref1 %in% levels(object@interactionMatrix$ref1)) {
+        message(paste0("Reference #1 '", ref1, "', is not a known reference in dataset '", object@name, "'."))
+    }
+    if (is.null(ref2)) {
+        ref2 <- ref1
+    }
+    if (ref1 == ref2) {
         object <- extractRef(object, ref1, sizes[[ref1]])
-        return(plot.10XRef(object, bin1 = bin1, bin2 = bin2, outliers = outliers, bins = highlightedBins))
+        return(plot.10XRef(object, logColor = logColor, binMin = bin1, binMax = bin2, outliers = outliers, bins = highlightedBins, meta = meta))
     }
-    scaleFactor <- computeScaleFactor(object, sizes)
-    # message(paste0("Scale factor: ", scaleFactor))
-    data        <- object@interactionMatrix %>% rescale(scaleFactor)
-    p <- data %>%
-	makeSymmetric() %>%
-	ggplot(aes(x = bin1, y = bin2)) + 
-	geom_raster(aes(fill = count)) + 
-	facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
-	scale_x_continuous(expand = c(0, 0)) +
-	scale_y_reverse(expand = c(0, 0)) +
-	theme_bw() +
-	theme(panel.spacing = unit(0, "lines")) +
-        ggtitle(object@name) +
-        xlab("") +
-        ylab("")
-    if (logColor) {
-	p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+    if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
+        message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
     }
-    else {
-	p <- p + scale_fill_gradient(low = "blue", high = "red")
+    if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
+       tmp <- ref1
+       ref1 <- ref2
+       ref2 <- tmp
+       tmp <- bin1
+       bin1 <- bin2
+       bin2 <- tmp
     }
-    return(p)
+    object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
+    return(plot.10X2Ref(object, logColor = logColor, outliers = outliers))
 }
 
-plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c()) {
+plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE) {
     if (is(object, "tenxcheckerClass")) {
         sizes  <- object@sizes
         if (is.null(datasetName)) {
-             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins)
+             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta)
              return(do.call("plot_grid", c(plots, ncol = length(plots))))
         }
         else {
             datasetNames <- map(object@data, "name")
             if (datasetName %in% datasetNames) {
                 dataset <- object@data[datasetName == datasetNames][[1]]
-                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins))
+                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta))
             }
             else {
                 stop(paste0("Dataset name '", datasetName, "' is not known."))
@@ -493,11 +558,11 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, 
     else if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerClass' or 'tenxcheckerExp'.")
     }
-    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins))
+    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta))
 }
 
 # This will plot the region near a possible break
 plot.10XBreak <- function(object, ref, bin) {
     nBinZoom <- max(map_dbl(map(object@data, "parameters"), "nBinZoom"))
-    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = FALSE, highlightedBins = bin)
+    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = FALSE, highlightedBins = bin, meta = TRUE)
 }

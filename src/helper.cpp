@@ -101,6 +101,19 @@ void computeSymmetricColSum (DataFrame &data, IntegerVector &sizes, std::vector 
     }
 }
 
+void computeSymmetricColSumMeta (DataFrame &data, IntegerVector &sizes, std::vector < long int > &offsets, int nElements, int metaSize, std::vector < int > &sums) {
+    IntegerVector refs1  = data["ref1"];
+    IntegerVector refs2  = data["ref2"];
+    IntegerVector bins1  = data["bin1"];
+    IntegerVector bins2  = data["bin2"];
+    IntegerVector counts = data["count"];
+    sums = std::vector < int > (nElements, 0); // Col sums of all refs will be concatenated here.
+    for (int i = 0; i < refs1.size(); ++i) {
+        sums[offsets[refs1[i] - 1] + (bins1[i] / metaSize)] += counts[i]; // factors (such as 'refs') start with 1 in R
+        sums[offsets[refs2[i] - 1] + (bins2[i] / metaSize)] += counts[i];
+    }
+}
+
 /*
 DataFrame computeSymmetricColSum (DataFrame &data, IntegerVector &sizes, std::vector < int > &offsets, int nElements) {
     IntegerVector refs1  = data["ref1"];
@@ -130,12 +143,24 @@ DataFrame computeSymmetricColSum (DataFrame &data, IntegerVector &sizes, std::ve
 // [[Rcpp::export]]
 DataFrame computeSymmetricColSum (DataFrame &data, IntegerVector &sizes) {
     std::vector < long int > offsets (sizes.size());
-    long int nElements = computeOffsets(data, sizes, offsets);
+    long int nElements = computeOffsets(sizes, offsets);
     std::vector < int > sums;
     IntegerVector refs; // Output reference ids
     IntegerVector bins; // Output reference bins
     computeRefsBins(sizes, nElements, refs, bins);
     computeSymmetricColSum(data, sizes, offsets, nElements, sums);
+    return Rcpp::DataFrame::create(_["ref"] = refs, _["bin"] = bins, _["sum"] = wrap(sums));
+}
+
+// [[Rcpp::export]]
+DataFrame computeSymmetricColSumMeta (DataFrame &data, IntegerVector &sizes, int metaSize) {
+    std::vector < long int > offsets (sizes.size());
+    long int nElements = computeOffsetsMeta(sizes, metaSize, offsets);
+    std::vector < int > sums;
+    IntegerVector refs; // Output reference ids
+    IntegerVector bins; // Output reference bins
+    computeRefsBinsMeta(sizes, nElements, metaSize, true, refs, bins);
+    computeSymmetricColSumMeta(data, sizes, offsets, nElements, metaSize, sums);
     return Rcpp::DataFrame::create(_["ref"] = refs, _["bin"] = bins, _["sum"] = wrap(sums));
 }
 
@@ -148,7 +173,7 @@ List removeLowCountRowsCpp (DataFrame &data, IntegerVector &sizes, int threshold
     IntegerVector counts = data["count"];
     CharacterVector refNames = refs1.attr("levels");
     std::vector < long int > offsets (sizes.size());
-    long int nElements = computeOffsets(data, sizes, offsets);
+    long int nElements = computeOffsets(sizes, offsets);
     std::vector < int > colSums;
     computeSymmetricColSum(data, sizes, offsets, nElements, colSums);
     std::vector < bool > passedThreshold (colSums.size());
@@ -214,7 +239,7 @@ void normalizeHighCountRowsCpp (DataFrame &data, IntegerVector &sizes) {
     IntegerVector bins2  = data["bin2"];
     IntegerVector counts = data["count"];
     std::vector < long int > offsets (sizes.size());
-    long int nElements = computeOffsets(data, sizes, offsets);
+    long int nElements = computeOffsets(sizes, offsets);
     std::vector < int > colSums;
     computeSymmetricColSum(data, sizes, offsets, nElements, colSums);
     NumericVector colSumsR = wrap(colSums);
