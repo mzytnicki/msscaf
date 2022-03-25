@@ -90,6 +90,9 @@ computeRefSizes <- function(object) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Parameter should be a tenxcheckerExp.")
     }
+    object@outlierBins       <- object@outlierBins %>% 
+                                    dplyr::filter(ref %in% chromosomes) %>%
+                                    dplyr::mutate(ref = forcats::fct_relevel(ref, chromosomes))
     object@interactionMatrix <- as_tibble(keepScaffoldsCpp(object@interactionMatrix, chromosomes))
     return(object)
 }
@@ -101,7 +104,7 @@ keepScaffolds <- function(object, chromosomes) {
     chromosomes        <- mixedsort(unique(chromosomes))
     object@chromosomes <- chromosomes
     object@sizes       <- object@sizes[chromosomes]
-    object@data        <- map(object@data, .keepScaffolds, chromosomes = chromosomes)
+    object@data        <- purrr::map(object@data, .keepScaffolds, chromosomes = chromosomes)
     object@sequences   <- object@sequences[chromosomes]
     return(object)
 }

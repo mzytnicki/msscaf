@@ -161,11 +161,16 @@ plotCountDistribution <- function(object, log) {
 plotMD <- function(object, log) {
     samples    <- map_chr(object@data, "name")
     sampleSize <- sum(map_dbl(map(object@data, "parameters"), "sampleSize"))
-    p <- map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
-        filter(ref1 == ref2) %>%
-        sample_n(min(sampleSize, nrow(.))) %>%
-        mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
-        mutate(distance = abs(bin1 - bin2)) %>%
+    metaSizes  <- map_int(map(object@data, "parameters"), "metaSize")
+    p <- purrr::map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
+        dplyr::filter(ref1 == ref2) %>%
+        dplyr::mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
+        dplyr::mutate(metaSize = metaSizes[as.numeric(sample)]) %>%
+        dplyr::mutate(distance = abs(bin1 - bin2)) %>%
+        dplyr::mutate(distance = distance / metaSizes) %>%
+        dplyr::group_by(sample, ref1, bin1, distance) %>%
+        dplyr::summarize(count = sum(count), .groups = "drop") %>%
+        dplyr::sample_n(min(sampleSize, nrow(.))) %>%
         ggplot(aes(x = distance, y = count)) + 
             xlim(0, 100) + ylim(0, 50) +
             geom_bin2d(binwidth = c(1, 1)) +
@@ -207,6 +212,25 @@ plotDiagonalStrength <- function(object) {
                 geom_tile())
     names(p) <- n$ref
     return(p)
+}
+
+.plotBreakPvalueFit <- function(object) {
+    tmp <- object@breaks@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        dplyr::filter(fcMeanCount >= 0) %>%
+        dplyr::pull(fcMeanCount)
+    standardDev <- sd(c(tmp, -tmp))
+    object@breaks@data %>%
+        dplyr::filter(nCells >= object@parameters@breakNCells) %>%
+        ggplot(aes(fcMeanCount))+
+            geom_histogram(aes(y = ..density..)) +
+            stat_function(fun = dnorm, args = list(mean = 0, sd = standardDev)) +
+            ggtitle(object@name)
+}
+
+plotBreakPvalueFit <- function(object, pvalue) {
+    plots <- purrr::map(object@data, .plotBreakPvalueFit)
+    return(do.call("plot_grid", c(plots, ncol = length(plots))))
 }
 
 plotInsertions1 <- function(table, ref) {
@@ -398,9 +422,10 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
 
 plot.10X2Ref <- function(object,
 			 logColor = TRUE,
-			 circles = FALSE,
-			 center  = NULL,
-			 radius  = NULL,
+			 circles  = FALSE,
+			 b1       = NULL,
+			 b2       = NULL,
+			 radius   = NULL,
                          outliers = TRUE) {
     if (is.null(radius)) {
         scaleFactor <- computeScaleFactor(object)
@@ -413,14 +438,13 @@ plot.10X2Ref <- function(object,
     x2          <- rescaleValue(object@size1, scaleFactor)
     y1          <- 0
     y2          <- rescaleValue(object@size2, scaleFactor)
-    if (! is.null(center)) {
-	if (length(center) != 2) {
-	    stop(paste0("'center' parameter should have size 2 (size ", length(center), " found)."))
-	}
-	x1 <- max(x1, rescaleValue(center[[1]] - radius, scaleFactor))
-	x2 <- min(x2, rescaleValue(center[[1]] + radius, scaleFactor))
-	y1 <- max(y1, rescaleValue(center[[2]] - radius, scaleFactor))
-	y2 <- min(y2, rescaleValue(center[[2]] + radius, scaleFactor))
+    if (! is.null(b1)) {
+	x1 <- max(x1, rescaleValue(b1 - radius, scaleFactor))
+	x2 <- min(x2, rescaleValue(b1 + radius, scaleFactor))
+    }
+    if (! is.null(b2)) {
+	y1 <- max(y1, rescaleValue(b2 - radius, scaleFactor))
+	y2 <- min(y2, rescaleValue(b2 + radius, scaleFactor))
     }
     p <- data %>%
 	ggplot(aes(x = bin1, y = bin2)) + 
@@ -481,7 +505,7 @@ plot.10X2Ref <- function(object,
     return(p)
 }
 
-plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE) {
+plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
     if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerExp'.")
     }
@@ -525,7 +549,7 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
     if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
         message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
     }
-    if (match(ref1, object@chromosomes) < match(ref2, object@chromosomes)) {
+    if (match(ref1, levels(object@interactionMatrix$ref1)) < match(ref2, levels(object@interactionMatrix$ref1))) {
        tmp <- ref1
        ref1 <- ref2
        ref2 <- tmp
@@ -534,21 +558,21 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
        bin2 <- tmp
     }
     object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
-    return(plot.10X2Ref(object, logColor = logColor, outliers = outliers))
+    return(plot.10X2Ref(object, logColor = logColor, outliers = outliers, b1 = bin1, b2 = bin2, radius = radius))
 }
 
-plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE) {
+plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
     if (is(object, "tenxcheckerClass")) {
         sizes  <- object@sizes
         if (is.null(datasetName)) {
-             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta)
+             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius)
              return(do.call("plot_grid", c(plots, ncol = length(plots))))
         }
         else {
             datasetNames <- map(object@data, "name")
             if (datasetName %in% datasetNames) {
                 dataset <- object@data[datasetName == datasetNames][[1]]
-                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta))
+                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
             }
             else {
                 stop(paste0("Dataset name '", datasetName, "' is not known."))
@@ -558,7 +582,7 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, 
     else if (! is(object, "tenxcheckerExp")) {
         stop("Object should be a 'tenxcheckerClass' or 'tenxcheckerExp'.")
     }
-    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta))
+    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
 }
 
 # This will plot the region near a possible break

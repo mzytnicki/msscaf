@@ -187,6 +187,37 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
     return output;
 }
 
+
+// Update outlier bins, given the splits
+DataFrame splitOutlierBins (DataFrame outlierBins, List splits, IntegerVector sizes, PositionConvertor &convertor, CharacterVector newSequences) {
+    IntegerVector refs  = outlierBins["ref"];
+    IntegerVector bins  = outlierBins["bin"];
+    long long int nBins = refs.size();
+    std::vector < int > refsCpp;
+    std::vector < int > binsCpp;
+    refsCpp.reserve(nBins);
+    binsCpp.reserve(nBins);
+    for (long binId = 0; binId < nBins; ++binId) {
+        if (refs[binId] >= static_cast < int > (convertor.size())) {
+            Rcerr << "Error #1 in splitOutlierBins: " << refs[binId] << " >= " << convertor.size() << std::endl;
+        }
+        if (bins[binId] >= static_cast < int > (convertor[refs[binId]].size())) {
+            Rcerr << "Error #2 in splitOutlierBins: " << refs[binId] << ":"  << bins[binId] << " >= " << convertor[refs[binId]].size() << "/" << sizes[refs[binId]-1] << std::endl;
+        }
+        std::pair <int, int> p = convertor[refs[binId]][bins[binId]];
+        if (p.first >= 0) {
+            refsCpp.push_back(p.first);
+            binsCpp.push_back(p.second);
+        }
+    }
+    refs = refsCpp;
+    bins = binsCpp;
+    refs.attr("class") = "factor";
+    refs.attr("levels") = newSequences;
+    DataFrame output = DataFrame::create(_["ref"] = refs, _["bin"] = bins);
+    return output;
+}
+
 void splitSequence(CharacterVector &contigs, CharacterVector &oldContigs, CharacterVector &newContigs, int ref, int largestSubContig, int subContig, int prevSplit, int split, int binSize) {
     // Exclude the split points
     if (prevSplit != 0) ++prevSplit;
@@ -302,8 +333,11 @@ S4 splitCpp(S4 object) {
         S4 object = data[i];
         String name                      = wrap(object.slot("name"));
         DataFrame matrices               = wrap(object.slot("interactionMatrix"));
+        DataFrame outlierBins            = wrap(object.slot("outlierBins"));
         DataFrame newMatrices            = splitCountMatrices(name, matrices, splits, sizes, convertor, newSequences.names());
+        DataFrame newOutlierBins         = splitOutlierBins(outlierBins, splits, sizes, convertor, newSequences.names());
         object.slot("interactionMatrix") = newMatrices;
+        object.slot("outlierBins")       = newOutlierBins;
         data[i]                          = object;
     }
     object.slot("chromosomes") = newSequences.names();

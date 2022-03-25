@@ -603,21 +603,6 @@ allObject@breaks %>% select(ref, bin) %>% mutate(bin = bin * resolution) %>% wri
 allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
 ```
 
-```{r}
-p <- allObject@data[[2]]@interactionMatrix %>%
-    filter(ref1 == ref2) %>%
-    mutate(distance = bin1 - bin2) %>%
-    filter(distance <= 100000) %>%
-    select(ref1, bin1, distance, count) %>%
-    mutate(meta = distance %/% 1000) %>%
-    group_by(ref1, bin1, meta) %>%
-    summarize(count = sum(count), .groups = "drop") %>%
-    ggplot(aes(x = meta, y = count)) +
-        xlim(1, 50) +
-        geom_bin2d(binwidth = c(1, 1)) +
-        geom_smooth(formula = y ~ x)
-ggsave("tmp.png", p)
-```
 
 ```{bash}
 ../CheckScaffolding/verifyJoins /Scratch/mazytnicki/Mother_1/mapping.paf 100000 10000 joins.tsv
@@ -636,7 +621,9 @@ scp sequences.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Proj
 module load system/Miniconda3
 module load bioinfo/Inspector-v1.2
 cd /home/mzytnicki/work/Projects/tenxChecker
+sbatch inspector.sh
 srun --mem=10G -c 8 inspector.py -c mother_raw.cgt.fa -r /work/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz -d nanopore --ref GCF_002263795.1_ARS-UCD1.2_genomic.fna -o inspector_raw/ --skip_base_error --skip_structural_error -t 8
+```
 
 ```{r}
 library("MASS")
@@ -648,7 +635,7 @@ library("cowplot")
 devtools::load_all(".")
 #object <- makeSimObject(1, 1, 100, 20, 5, 0.2, c(1), c(50), c(), c(), c())
 #object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 2), c(25, 75), c(3, 4), c(4, 5), c(1, 5))
-object <- makeSimObject(2, 5, 100, 20, 10, 0.2, c(1, 1, 2, 2), c(25, 75, 75, 75), c(3, 4), c(4, 5), c(1, 5))
+object <- makeSimObject(2, 5, 100, 100, 20, 0.5, c(1, 1, 2, 2), c(25, 75, 75, 75), c(3, 4), c(4, 5), c(1, 10))
 #object <- makeSimObject(1, 2, 100, 20, 10, 0.2, c(), c(), c(1), c(2), c(5))
 #plot.10X(object)
 object <- estimateDistributions(object)
@@ -660,3 +647,28 @@ object <- splitChromosomes(object)
 object <- findJoins(object, 0.05)
 object <- scaffold(object)
 ```
+
+
+```{r}
+library("MASS")
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("Biostrings")
+library("cowplot")
+devtools::load_all(".")
+allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+splitObject <- generateSplit(allObject)
+splitObject <- findJoins(splitObject, 0.05)
+```
+
+tmp <- sampleTriangles(allObject@data[[3]]@interactionMatrix, allObject@data[[3]]@outlierBins, allObject@sizes, allObject@data[[3]]@parameters@maxLinkRange, allObject@data[[3]]@parameters@metaSize, 1000) %>% as_tibble()
+tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% mutate(distance = factor(distance)) %>% ggplot(aes(count, color = distance)) + geom_freqpoly()           
+tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% mutate(distance = factor(as.integer(trunc(distance / 2)))) %>% ggplot(aes(count, color = distance)) + geom_freqpoly()           
+tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% filter(count > 0) %>% group_by(distance) %>% group_split() %>% map("count") %>% map(as.integer()) %>% map(fitdistr, "negative binomial")
+tmp1 <- tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% filter(count > 0) %>% mutate(count = as.integer(round(count))) %>% group_by(distance) %>% group_split() %>% map("count")
+tmp2 <- tmp1 %>% map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb)
+tmp3 <- tmp2 %>% group_by(distance) %>% group_split()
+
+
+

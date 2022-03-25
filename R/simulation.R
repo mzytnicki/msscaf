@@ -94,7 +94,7 @@ makeSimData <- function(refs, refSize, maxNReads, diagSize, gaussianNoise, split
                     maxLinkRange = NULL)
 }
 
-makeSimObject <- function(nData = 1, nRefs = 1, refSize = 100, maxNReads = 20, diagSize = 5, gaussianNoise = 0.2, splitRefs = c(), splitPositions = c(), joinRef1 = c(), joinRef2 = c(), joinDistances = c()) {
+makeSimObject <- function(nData = 1, nRefs = 1, refSize = 100, maxNReads = 20, diagSize = 10, gaussianNoise = 0.2, splitRefs = c(), splitPositions = c(), joinRef1 = c(), joinRef2 = c(), joinDistances = c()) {
     if (length(splitRefs) != length(splitPositions)) {
         stop("# split references and # split positions should be equal.")
     }

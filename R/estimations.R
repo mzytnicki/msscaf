@@ -419,7 +419,13 @@ computeCornerDifferenceOffsets <- function(corner, background, distance, bothOff
     pb$tick()
     corner    <- smoothenDistribution(corner)
     offsets   <- seq.int(from = 0, to = distance - 1, by = 1)
-    distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffset, corner, background, distance, bothOffsets)
+    if (bothOffsets) {
+        distances <- purrr::map_dbl(offsets, computeCornerDifferenceBothOffsetCpp, corner, background, distance)
+    }
+    else {
+        distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffsetCpp, corner, background, distance)
+    }
+    #distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffset, corner, background, distance, bothOffsets)
     tibble(distance = offsets, score = distances)
 }
 
@@ -479,18 +485,31 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
         stop("Parameter should be a tenxcheckerExp.")
     }
     message("\t\tEstimating distance/count variance.")
+    fitTriangleDifference <- function(distribution) {
+        output <- tibble(shape = NA_real_, rate = NA_real_)
+        try({
+            f <- fitdistr(distribution$score, "gamma")
+            output <- tibble(shape = f$estimate[["shape"]], rate = f$estimate[["rate"]])}, silent = TRUE)
+        return(output)
+    }
     nSamples <- 10 / pvalueThreshold
     pb <- progress_bar$new(total = nSamples)
+    # Sample a few triangles
     object@parameters@cornerScores <- sampleTriangles(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, nSamples) %>%
         as_tibble() %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%
+        # Compute 
         purrr::map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
         dplyr::group_by(distance) %>%
-        # This parameter should be tuned!
-        dplyr::slice_min(score, prop = 0.5, with_ties = FALSE) %>%
-        dplyr::slice_max(score, n = 1, with_ties = FALSE) %>%
-        dplyr::ungroup()
+        dplyr::group_split() %>%
+        map_dfr(fitTriangleDifference, .id = "distance") %>%
+        dplyr::mutate(distance = as.integer(distance)) %>%
+        tidyr::drop_na()
+#       # This parameter should be tuned!
+#       dplyr::slice_min(score, prop = 0.5, with_ties = FALSE) %>%
+#       dplyr::slice_max(score, n = 1, with_ties = FALSE) %>%
+#       dplyr::ungroup()
 
 #   points   <- findRandomCornerPoints(object, sizes, nSamples) %>%
 #       purrr::transpose()

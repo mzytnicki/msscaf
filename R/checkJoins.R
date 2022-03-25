@@ -84,7 +84,7 @@ computeSample <- function(observed, nExpected, sampleSize = 10000) {
     # But only sample a part.
     nObserved <- length(observed)
     if (nObserved >= nExpected) {
-        return(nObserved)
+        return(observed)
     }
     nMissing <- nExpected - nObserved
     if (nExpected < sampleSize) {
@@ -189,13 +189,13 @@ testJoin <- function(parameters, counts, sizes, maxDistance, pb) {
         dplyr::mutate(ref2 = as.numeric(ref2)) %>%
         dplyr::filter(ref1 == parameters$ref1) %>%
         dplyr::filter(ref2 == parameters$ref2)
-    size1         <- sizes[parameters$ref1]
-    size2         <- sizes[parameters$ref2]
+    size1         <- as.numeric(sizes[[parameters$ref1]])
+    size2         <- as.numeric(sizes[[parameters$ref2]])
     samples       <- computeAllSamples(counts, size1, size2, maxDistance, sampleSize = 10000)
     testedCorner  <- samples[[parameters$corner]]
     samples[[parameters$corner]]  <- NULL
     pb$tick()
-    min(purrr::map_dbl(samples, computeTest, testedCorner))
+    max(purrr::map_dbl(samples, computeTest, testedCorner))
 }
 
 # Add plots to experiment
@@ -219,8 +219,31 @@ getJoinInfo <- function(object, parameters) {
         stop("Parameter should be a tenxcheckerExp.")
     }
     message(paste0("\tDataset '", object@name, "'."))
-    selectedRefs   <- filterCornersCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% as_tibble()
-    message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
+    cornerSums <- sumCornerCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
+        as_tibble() %>%
+        # Distribution is inflated in 0, remove it
+        dplyr::filter(count > 0) %>%
+        # Remove strange even/odd pattern
+        dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))
+    if (nrow(cornerSums) == 0) {
+        message("\t\tNo join found.")
+        joinsObject <- new("tenxcheckerJoins")
+        joinsObject@data <- tibble(ref1 = integer(), ref2 = integer(), after1 = logical(), after2 = logical(), pvalue = numeric(), pvalueCorner = numeric())
+        object@joins <- joinsObject
+        return(object)
+    }
+    # Select outlier corner sums
+    # Not meaningful if you have to few
+    if (nrow(cornerSums) >= 30) {
+        fitNB <- fitdistr(cornerSums$count, "negative binomial")
+        threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])
+        selectedRefs <- cornerSums %>%
+            dplyr::filter(count > threshold)
+        message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
+    }
+    else {
+        selectedRefs <- cornerSums
+    }
     pb <- progress_bar$new(total = nrow(selectedRefs))
     selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% as_tibble()
     minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange, pb = pb)
@@ -316,6 +339,9 @@ checkJoins <- function(object, pvalueThreshold) {
     message(paste0("\tDataset '", object@name, "'."))
     # Transform joins to before/after
     nJoins <- nrow(object@joins@data)
+    if (nJoins == 0) {
+        return(object)
+    }
 #   tmp <- object@joins@data
 #       dplyr::mutate(hor = as.character(hor)) %>%
 #       dplyr::mutate(vert = as.character(vert)) %>%
@@ -359,7 +385,7 @@ removeDuplicateJoins <- function(object) {
     return(invisible(object))
 }
 
-..checkCorners <- function(parameters, object, sizes, pb) {
+..checkCornersOld <- function(parameters, object, sizes, pb) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
     background <- object@parameters@distanceCount
@@ -373,7 +399,7 @@ removeDuplicateJoins <- function(object) {
         return()
 }
 
-.checkCorners <- function(object, sizes, pvalueThreshold) {
+.checkCornersOld <- function(object, sizes, pvalueThreshold) {
     message(paste0("\tDataset '", object@name, "'."))
     nJoins <- nrow(object@joins@data)
     pb     <- progress_bar$new(total = nrow(object@joins@data))
@@ -386,6 +412,43 @@ removeDuplicateJoins <- function(object) {
         dplyr::mutate(offset = values) %>%
         dplyr::filter(offset >= 0)
     message(paste0("\t\tKept ", nrow(object@joins@data), "/", nJoins, "."))
+    return(object)
+}
+
+..checkCorners <- function(corner, object, sizes, pb) {
+    values     <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
+        dplyr::filter(distance > 0) %>%
+        dplyr::left_join(object@parameters@cornerScores, by = "distance") %>%
+        dplyr::slice_min(score, n = 1, with_ties = FALSE) %>%
+        dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%
+        dplyr::select(distance, pvalueCorner) %>%
+        dplyr::mutate(distance = as.integer(distance))
+#   background <- object@parameters@distanceCount
+#   values     <- computeCornerDifferenceOffsets(corner, background, object@parameters@maxLinkRange, FALSE, pb) %>%
+#       dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
+#       dplyr::filter(score_corner <= score_background)
+#   if (nrow(values) == 0) return(-1)
+#   values %>%
+#       dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
+#       dplyr::pull(distance) %>%
+#       return()
+}
+
+.checkCorners <- function(object, sizes, pvalueThreshold) {
+    message(paste0("\tDataset '", object@name, "'."))
+    corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
+        as_tibble() %>%
+        dplyr::filter(count >= 0)
+    message(paste0("\t\tSelected ", nrow(object@joins@data), " joins."))
+    pb     <- progress_bar$new(total = nrow(object@joins@data))
+    values <- corners %>%
+        dplyr::group_by(index) %>%
+        dplyr::group_split() %>%
+        purrr::map_dfr(..checkCorners, object, sizes, pb)
+    object@joins@data <- object@joins@data %>%
+        dplyr::bind_cols(values) %>%
+        dplyr::filter(pvalueCorner < 1 - pvalueThreshold)
+    message(paste0("\t\tKept ", nrow(object@joins@data), "."))
     return(object)
 }
 

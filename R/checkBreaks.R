@@ -54,7 +54,6 @@ computeNCells <- function(object) {
         stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
     }
     message(paste0("\tDataset '", object@name , "'."))
-    # Half of the expected number
     tmp <- object@breaks@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
         dplyr::filter(fcMeanCount >= 0) %>%

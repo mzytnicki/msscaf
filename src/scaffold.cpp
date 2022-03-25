@@ -290,10 +290,10 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
     return scaffolds;
 }
 
-// Scaffold the count matrices
+// Scaffold the count matrices and the outlier bins
 // orders is a list of list. Each list contains the (1-based) id of a contig, * (-1) is the contig is reversed.
 // [[Rcpp::export]]
-DataFrame scaffoldCounts(DataFrame matrices, List groups, IntegerVector scaffoldRefs, List sizes) {
+List scaffoldCounts(DataFrame matrices, DataFrame outlierBins, List groups, IntegerVector scaffoldRefs, List sizes) {
     int nScaffolds = groups.size();
     if (scaffoldRefs.size() != nScaffolds) {
         Rcpp::stop("Problem in group sizes.");
@@ -335,6 +335,14 @@ DataFrame scaffoldCounts(DataFrame matrices, List groups, IntegerVector scaffold
         refs2[countId] = newRefs[refs2[countId]];
         p.increment();
     }
-    DataFrame output = DataFrame::create(_["ref1"] = refs1, _["bin1"] = bins1, _["ref2"] = refs2, _["bin2"] = bins2, _["count"] = counts);
-    return output;
+    IntegerVector refs = outlierBins["ref1"];
+    IntegerVector bins = outlierBins["bin1"];
+    long long int nBins = refs1.size();
+    for (long long binId = 0; binId < nBins; ++binId) {
+        bins[binId] = forwards[refs[binId]]? bins[binId] + offsets[refs[binId]]: sizes[refs[binId]-1] - bins[binId] + offsets[refs[binId]];
+        refs[binId] = newRefs[refs[binId]];
+    }
+    DataFrame outputMatrices    = DataFrame::create(_["ref1"] = refs1, _["bin1"] = bins1, _["ref2"] = refs2, _["bin2"] = bins2, _["count"] = counts);
+    DataFrame outputOutlierBins = DataFrame::create(_["ref"] = refs, _["bin"] = bins);
+    return List::create(_["interactionMatrix"] = outputMatrices, _["outlierBins"] = outputOutlierBins);
 }

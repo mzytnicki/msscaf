@@ -177,7 +177,9 @@ repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin)
 
 .scaffold <- function(object, orders, groupNames, sizes) {
     message(paste0("\tDataset '", object@name, "'."))
-    object@interactionMatrix <- scaffoldCounts(object@interactionMatrix, orders, groupNames, sizes) %>% as_tibble()
+    l <- scaffoldCounts(object@interactionMatrix, orders, groupNames, sizes)
+    object@interactionMatrix <- l$interationMatrix %>% as_tibble()
+    object@outlierBins       <- l$outlierBins %>% as_tibble()
     return(object)
 }
 
