@@ -31,7 +31,7 @@ bamData     <- parseBamFile(bamFileName, resolution)
 Load data:
 ```
 contigFileName <- "/path/to/contigs.fa"
-scaffolder     <- tenxchecker(contigFileName, resolution)
+scaffolder     <- msscaf(contigFileName, resolution)
 scaffolder     <- addExp(scaffolder, ontData, "ONT")
 scaffolder     <- addExp(scaffolder, hicData, "HiC")
 scaffolder     <- addExp(scaffolder, bamData, "10X")
