@@ -1,6 +1,6 @@
-Package: tenxchecker
+Package: msscaf
 Type: Package
-Title: 10X Data Checker
+Title: Multiple-source scaffolder
 Version: 0.1
 Date: 2019-09-18
 Author: Matthias Zytnicki
@@ -35,4 +35,4 @@ SystemRequirements:
     C++11,
     GNU make
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2

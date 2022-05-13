@@ -2,146 +2,86 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 parseBamFileCpp <- function(fileName, binSize) {
-    .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
-}
-
-computeMeanTrianglesCpp <- function(data, distance, metaSize, sizesIn, outliers) {
-    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance, metaSize, sizesIn, outliers)
-}
-
-removeNearEqualBreaksCpp <- function(breaks, distance) {
-    .Call('_tenxchecker_removeNearEqualBreaksCpp', PACKAGE = 'tenxchecker', breaks, distance)
+    .Call('_msscaf_parseBamFileCpp', PACKAGE = 'msscaf', fileName, binSize)
 }
 
 computeCornerSize <- function(size1, size2, maxDistance) {
-    .Call('_tenxchecker_computeCornerSize', PACKAGE = 'tenxchecker', size1, size2, maxDistance)
+    .Call('_msscaf_computeCornerSize', PACKAGE = 'msscaf', size1, size2, maxDistance)
 }
 
 filterCornersCpp <- function(data, sizesIn, cornerSize, metaSize) {
-    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizesIn, cornerSize, metaSize)
+    .Call('_msscaf_filterCornersCpp', PACKAGE = 'msscaf', data, sizesIn, cornerSize, metaSize)
 }
 
 sumCornerCpp <- function(interactions, sizes, cornerSize, metaSize) {
-    .Call('_tenxchecker_sumCornerCpp', PACKAGE = 'tenxchecker', interactions, sizes, cornerSize, metaSize)
+    .Call('_msscaf_sumCornerCpp', PACKAGE = 'msscaf', interactions, sizes, cornerSize, metaSize)
 }
 
 extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize, metaSize) {
-    .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize, metaSize)
+    .Call('_msscaf_extractCornersCpp', PACKAGE = 'msscaf', interactions, selectedRefs, sizes, cornerSize, metaSize)
 }
 
 classifyCornerPointsCpp <- function(interactions, size1, size2, metaSize, maxDistance) {
-    .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, metaSize, maxDistance)
+    .Call('_msscaf_classifyCornerPointsCpp', PACKAGE = 'msscaf', interactions, size1, size2, metaSize, maxDistance)
 }
 
 extractCornersFullCpp <- function(interactions, selectedCorners, sizesIn, cornerSize, metaSize) {
-    .Call('_tenxchecker_extractCornersFullCpp', PACKAGE = 'tenxchecker', interactions, selectedCorners, sizesIn, cornerSize, metaSize)
-}
-
-computeCornerDifferenceOffsetCpp <- function(offset, corner, background, maxDistance) {
-    .Call('_tenxchecker_computeCornerDifferenceOffsetCpp', PACKAGE = 'tenxchecker', offset, corner, background, maxDistance)
-}
-
-computeCornerDifferenceBothOffsetCpp <- function(offset, corner, background, maxDistance) {
-    .Call('_tenxchecker_computeCornerDifferenceBothOffsetCpp', PACKAGE = 'tenxchecker', offset, corner, background, maxDistance)
-}
-
-estimateDistanceCountCpp <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
-    .Call('_tenxchecker_estimateDistanceCountCpp', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nOutputElements)
-}
-
-sampleTriangles <- function(data, outliers, sizesIn, distance, metaSize, nSamples) {
-    .Call('_tenxchecker_sampleTriangles', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nSamples)
-}
-
-estimateMetaSizeCpp <- function(rowAvg, maxDistance, nMeta, minCount) {
-    .Call('_tenxchecker_estimateMetaSizeCpp', PACKAGE = 'tenxchecker', rowAvg, maxDistance, nMeta, minCount)
-}
-
-estimateMoleculeSizeCpp <- function(rowAvg, maxDistance, minCount, metaSize) {
-    .Call('_tenxchecker_estimateMoleculeSizeCpp', PACKAGE = 'tenxchecker', rowAvg, maxDistance, minCount, metaSize)
-}
-
-estimateMetaBinsMoleculeSizeCpp <- function(data, sizes, minCount, nMeta, moleculeSize) {
-    .Call('_tenxchecker_estimateMetaBinsMoleculeSizeCpp', PACKAGE = 'tenxchecker', data, sizes, minCount, nMeta, moleculeSize)
-}
-
-keepScaffoldsCpp <- function(data, keptRefs) {
-    .Call('_tenxchecker_keepScaffoldsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
-}
-
-keepScaffoldsPairsCpp <- function(data, keptRefs) {
-    .Call('_tenxchecker_keepScaffoldsPairsCpp', PACKAGE = 'tenxchecker', data, keptRefs)
-}
-
-extractLines <- function(matrix, lines, maxDistance) {
-    .Call('_tenxchecker_extractLines', PACKAGE = 'tenxchecker', matrix, lines, maxDistance)
+    .Call('_msscaf_extractCornersFullCpp', PACKAGE = 'msscaf', interactions, selectedCorners, sizesIn, cornerSize, metaSize)
 }
 
 splitChromosomeCpp <- function(data, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
-    invisible(.Call('_tenxchecker_splitChromosomeCpp', PACKAGE = 'tenxchecker', data, prevRef, newRef, shiftedRef, splitPoint, firstPart))
+    invisible(.Call('_msscaf_splitChromosomeCpp', PACKAGE = 'msscaf', data, prevRef, newRef, shiftedRef, splitPoint, firstPart))
 }
 
 computeRefSizesCpp <- function(data) {
-    .Call('_tenxchecker_computeRefSizesCpp', PACKAGE = 'tenxchecker', data)
+    .Call('_msscaf_computeRefSizesCpp', PACKAGE = 'msscaf', data)
 }
 
 computeNRrows <- function(data, sizes) {
-    .Call('_tenxchecker_computeNRrows', PACKAGE = 'tenxchecker', data, sizes)
+    .Call('_msscaf_computeNRrows', PACKAGE = 'msscaf', data, sizes)
 }
 
 computeSymmetricColSum <- function(data, sizes) {
-    .Call('_tenxchecker_computeSymmetricColSum', PACKAGE = 'tenxchecker', data, sizes)
+    .Call('_msscaf_computeSymmetricColSum', PACKAGE = 'msscaf', data, sizes)
 }
 
 computeSymmetricColSumMeta <- function(data, sizes, metaSize) {
-    .Call('_tenxchecker_computeSymmetricColSumMeta', PACKAGE = 'tenxchecker', data, sizes, metaSize)
+    .Call('_msscaf_computeSymmetricColSumMeta', PACKAGE = 'msscaf', data, sizes, metaSize)
 }
 
 removeLowCountRowsCpp <- function(data, sizes, threshold) {
-    .Call('_tenxchecker_removeLowCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes, threshold)
+    .Call('_msscaf_removeLowCountRowsCpp', PACKAGE = 'msscaf', data, sizes, threshold)
 }
 
 normalizeHighCountRowsCpp <- function(data, sizes) {
-    invisible(.Call('_tenxchecker_normalizeHighCountRowsCpp', PACKAGE = 'tenxchecker', data, sizes))
+    invisible(.Call('_msscaf_normalizeHighCountRowsCpp', PACKAGE = 'msscaf', data, sizes))
 }
 
 parseHicCpp <- function(fname, resolution) {
-    .Call('_tenxchecker_parseHicCpp', PACKAGE = 'tenxchecker', fname, resolution)
-}
-
-makeSymmetricRefCpp <- function(data) {
-    .Call('_tenxchecker_makeSymmetricRefCpp', PACKAGE = 'tenxchecker', data)
-}
-
-removeOutliersRefCpp <- function(data, outliersTibble, size, minLim = -1L, maxLim = -1L) {
-    .Call('_tenxchecker_removeOutliersRefCpp', PACKAGE = 'tenxchecker', data, outliersTibble, size, minLim, maxLim)
-}
-
-removeOutliersCpp <- function(data, outliersTibble, sizes) {
-    .Call('_tenxchecker_removeOutliersCpp', PACKAGE = 'tenxchecker', data, outliersTibble, sizes)
+    .Call('_msscaf_parseHicCpp', PACKAGE = 'msscaf', fname, resolution)
 }
 
 parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
-    .Call('_tenxchecker_parsePafCpp', PACKAGE = 'tenxchecker', fname, resolution, minAlnLen, minCount, minNCells)
+    .Call('_msscaf_parsePafCpp', PACKAGE = 'msscaf', fname, resolution, minAlnLen, minCount, minNCells)
 }
 
 getRefOrders <- function(joins, sizes) {
-    .Call('_tenxchecker_getRefOrders', PACKAGE = 'tenxchecker', joins, sizes)
+    .Call('_msscaf_getRefOrders', PACKAGE = 'msscaf', joins, sizes)
 }
 
 scaffoldSizes <- function(orders, orderIds, sizes) {
-    .Call('_tenxchecker_scaffoldSizes', PACKAGE = 'tenxchecker', orders, orderIds, sizes)
+    .Call('_msscaf_scaffoldSizes', PACKAGE = 'msscaf', orders, orderIds, sizes)
 }
 
 scaffoldContigs <- function(contigs, orders, sizes, binSize) {
-    .Call('_tenxchecker_scaffoldContigs', PACKAGE = 'tenxchecker', contigs, orders, sizes, binSize)
+    .Call('_msscaf_scaffoldContigs', PACKAGE = 'msscaf', contigs, orders, sizes, binSize)
 }
 
 scaffoldCounts <- function(matrices, outlierBins, groups, scaffoldRefs, sizes, metaSize) {
-    .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, outlierBins, groups, scaffoldRefs, sizes, metaSize)
+    .Call('_msscaf_scaffoldCounts', PACKAGE = 'msscaf', matrices, outlierBins, groups, scaffoldRefs, sizes, metaSize)
 }
 
 splitCpp <- function(object) {
-    .Call('_tenxchecker_splitCpp', PACKAGE = 'tenxchecker', object)
+    .Call('_msscaf_splitCpp', PACKAGE = 'msscaf', object)
 }
 
