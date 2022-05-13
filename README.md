@@ -30,33 +30,34 @@ bamData     <- parseBamFile(bamFileName, resolution)
 
 Load data:
 ```
-allObject   <- tenxchecker(resolution)
-allObject   <- addExp(allObject, ontData, "ONT")
-allObject   <- addExp(allObject, hicData, "HiC")
-allObject   <- addExp(allObject, bamData, "10X")
+contigFileName <- "/path/to/contigs.fa"
+scaffolder     <- tenxchecker(contigFileName, resolution)
+scaffolder     <- addExp(scaffolder, ontData, "ONT")
+scaffolder     <- addExp(scaffolder, hicData, "HiC")
+scaffolder     <- addExp(scaffolder, bamData, "10X")
 ```
 
 Estimate distributions:
 ```
-allObject <- estimateDistributions(allObject)
-allObject <- cleanData(allObject)
+scaffolder <- estimateDistributions(scaffolder)
+scaffolder <- cleanData(scaffolder)
 ```
 
 Find breaks:
 ```
-pvalue    <- 0.01
-allObject <- findBreaks(allObject, pvalue)
-allObject <- splitChromosomes(allObject)
+pvalue     <- 0.01
+scaffolder <- findBreaks(scaffolder, pvalue)
+scaffolder <- splitChromosomes(scaffolder)
 ```
 
 Find merges:
 ```
-allObject <- findJoins(allObject, pvalue)
-allObject <- scaffold(allObject)
+scaffolder <- findJoins(scaffolder, pvalue)
+scaffolder <- scaffold(scaffolder)
 ```
 
 Write scaffolds to file:
 ```
 outputFileName <- "/path/to/output/scaffolds.fa"
-Biostrings::writeXStringSet(Biostrings::DNAStringSet(allObject@sequences), outputFileName)
+Biostrings::writeXStringSet(Biostrings::DNAStringSet(scaffolder@sequences), outputFileName)
 ```
