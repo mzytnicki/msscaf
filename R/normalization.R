@@ -38,7 +38,7 @@ normalizeNotSquareICE <- function(object) {
     }
     mat <- sparseMatrix(data$bin1 + 1, data$bin2 + 1, x = data$count)
     mat <- summary(notSquareICE(mat))
-    object@interactionMatrix <- tibble(bin1  = mat$i - 1,
+    object@interactionMatrix <- tibble::tibble(bin1  = mat$i - 1,
                                        bin2  = mat$j - 1,
                                        count = mat$x)
     return(object)
@@ -154,10 +154,10 @@ KR <- function(A, tol = 1e-6, delta = 0.1, Delta = 3) {
 }
 
 normalizeKR <- function(object, sizes = NULL) {
-    if (is(object, "tenxcheckerExp")) {
+    if (is(object, "msscafExp")) {
         chromosome <- FALSE
     }
-    else if (is(object, "tenxcheckerRefExp")) {
+    else if (is(object, "msscafRefExp")) {
         chromosome <- TRUE
     }
     else {
@@ -263,38 +263,38 @@ normalizeMD <- function(object) {
     span <- optimizeSpan(l)
     l <- loess(count ~ sampledDistance, span = span, data = sampled)
     sampled %<>%
-        mutate(loess = predict(l)) %>%
-        mutate(loess = pmax(loess, 0)) %>%
+        dplyr::mutate(loess = predict(l)) %>%
+        dplyr::mutate(loess = pmax(loess, 0)) %>%
         dplyr::select(-count) %>%
         unique()
     sampledDistances <- unique(sort(sampled$sampledDistance))
     uniqueDistances <- unique(sort(data$distance))
-    valueMap <- tibble(distance = uniqueDistances,
+    valueMap <- tibble::tibble(distance = uniqueDistances,
                        sampledDistance =
                            sapply(uniqueDistances, function(x) {
                                sampledDistances[which.min(abs(x - sampledDistances))]
                            })) %>%
-        left_join(sampled, by = "sampledDistance") %>%
+        purrr::left_join(sampled, by = "sampledDistance") %>%
         dplyr::select(-sampledDistance)
-    data %<>% left_join(valueMap, by = "distance") %>%
-        mutate(count = log2((count + 0.0001) / (loess + 0.0001))) %>%
+    data %<>% purrr::left_join(valueMap, by = "distance") %>%
+        dplyr::mutate(count = log2((count + 0.0001) / (loess + 0.0001))) %>%
         dplyr::select(-c(distance, loess)) %>%
-        filter(count != 0)
+        dplyr::filter(count != 0)
     object@interactionMatrix <- data
     return(object)
 }
 
 .normalizeHighCountRows <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     message(paste0("\tDataset ", object@name))
     normalizeHighCountRowsCpp(object@interactionMatrix, sizes)
 }
 
 normalizeHighCountRows <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Trimming high count lines.")
     purrr::walk(object@data, .normalizeHighCountRows, sizes = object@sizes)
