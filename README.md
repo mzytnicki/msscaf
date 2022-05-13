@@ -23,9 +23,13 @@ resolution  <- 10000
 hicFileName <- "/path/to/hic/file.hic"
 hicData     <- parseHicFile(hicFileName, resolution)
 ontFileName <- "/path/to/long/reads.paf"
-ontData     <- parsePafFile(ontFileName, resolution, 500, 10, 10)
+ontData     <- parsePafFile(ontFileName, resolution)
 bamFileName <- "/path/to/long/10X.bam"
 bamData     <- parseBamFile(bamFileName, resolution)
+```
+
+Load data:
+```
 allObject   <- tenxchecker(resolution)
 allObject   <- addExp(allObject, ontData, "ONT")
 allObject   <- addExp(allObject, hicData, "HiC")
