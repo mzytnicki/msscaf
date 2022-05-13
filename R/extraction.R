@@ -1,15 +1,15 @@
 splitByRef <- function(object, chromosomes, sizes) {
     data <- object@interactionMatrix %>%
-        filter(ref1 == ref2) %>%
+        dplyr::filter(ref1 == ref2) %>%
         dplyr::select(-ref2) %>%
         split(.$ref1) %>%
-        map(~ dplyr::select(.x, -ref1))
+        purrr::map(~ dplyr::select(.x, -ref1))
     # There might be fewer chromosomes than expected.
     chromosomes <- names(data)
     sizes <- sizes[chromosomes]
     names <- rep.int(object@name, length(sizes))
-    pmap(list(data, chromosomes, sizes, names),
-         tenxcheckerRefExp,
+    purrr::pmap(list(data, chromosomes, sizes, names),
+         msscafRefExp,
          parameters = object@parameters)
 }
 
@@ -21,7 +21,7 @@ extractRef <- function(object, keptRef, size) {
     outlierBins <- object@outlierBins %>%
         dplyr::filter(ref == keptRef) %>%
         dplyr::select(bin)
-    return(tenxcheckerRefExp(data, keptRef, size, object@name, outlierBins, object@parameters))
+    return(msscafRefExp(data, keptRef, size, object@name, outlierBins, object@parameters))
 }
 
 extract2Ref <- function(object, r1, r2, size1, size2) {
@@ -30,18 +30,18 @@ extract2Ref <- function(object, r1, r2, size1, size2) {
 #       dplyr::mutate(ref2 = as.integer(ref2)) %>%
         dplyr::filter(ref1 == r1, ref2 == r2) %>%
         dplyr::select(-c(ref1, ref2))
-    return(tenxchecker2RefExp(data, r1, r2, size1, size2, object@name, object@parameters))
+    return(msscaf2RefExp(data, r1, r2, size1, size2, object@name, object@parameters))
 }
 
 create2Ref <- function(data, object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
     ref1  <- as.character(data$ref1[[1]])
     ref2  <- as.character(data$ref2[[1]])
     size1 <- sizes[[ref1]]
     size2 <- sizes[[ref2]]
-    return(tenxchecker2RefExp(data %>% dplyr::select(-c(ref1, ref2)),
+    return(msscaf2RefExp(data %>% dplyr::select(-c(ref1, ref2)),
                               ref1,
                               ref2,
                               size1,
@@ -51,8 +51,8 @@ create2Ref <- function(data, object, sizes) {
 }
 
 splitBy2Ref <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
     breakNCells <- ifelse(is.null(object@parameters@breakNCells), 0, object@parameters@breakNCells)
     pairs <- object@interactionMatrix %>%
@@ -75,8 +75,8 @@ splitBy2Ref <- function(object, sizes) {
 }
 
 splitBy2RefFromMatrix <- function(object, interactionMatrix, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
     data <- interactionMatrix %>%
         dplyr::filter(ref1 != ref2) %>%
@@ -88,8 +88,8 @@ splitBy2RefFromMatrix <- function(object, interactionMatrix, sizes) {
 }
 
 getDataset <- function(object, name) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Object should be a 'tenxcheckerClass'.")
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
     }
     index <- purrr::detect_index(object@data, function(d) d@name == name)
     if (index == 0) {
@@ -99,8 +99,8 @@ getDataset <- function(object, name) {
 }
 
 getDatasetRef <- function(object, datasetName, ref1, ref2 = NULL) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Object should be a 'tenxcheckerClass'.")
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
     }
     dataset <- getDataset(object, datasetName)
     if (is.null(ref2)) {

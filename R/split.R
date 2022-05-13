@@ -1,6 +1,6 @@
 # .splitChromosome <- function(object, refs, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
-#     if (! is(object, "tenxcheckerExp")) {
-# 	stop("First parameter should be a tenxcheckerExp.")
+#     if (! is(object, "msscafExp")) {
+# 	stop("First parameter should be a msscafExp.")
 #     }
 #     #newRef <- factor(newRef, levels = refs)
 #     levels(object@interactionMatrix$ref1) <- refs
@@ -12,16 +12,16 @@
 # #   message(str(object@interactionMatrix))
 #     splitChromosomeCpp(object@interactionMatrix, prevRef, newRef, shiftedRef, splitPoint, firstPart)
 # #   object@interactionMatrix <- object@interactionMatrix %>% 
-# #       dplyr::mutate(ref1 = if_else((ref1 == prevRef) & (!comparator(bin1)), newRef, ref1)) %>%
-# #       dplyr::mutate(ref2 = if_else((ref2 == prevRef) & (!comparator(bin2)), newRef, ref2)) %>%
-# #       dplyr::mutate(bin1 = if_else(ref1 == shiftedRef, as.integer(bin1 - splitPoint + 1), bin1)) %>%
-# #       dplyr::mutate(bin2 = if_else(ref2 == shiftedRef, as.integer(bin2 - splitPoint + 1), bin2))
+# #       dplyr::mutate(ref1 = dplyr::if_else((ref1 == prevRef) & (!comparator(bin1)), newRef, ref1)) %>%
+# #       dplyr::mutate(ref2 = dplyr::if_else((ref2 == prevRef) & (!comparator(bin2)), newRef, ref2)) %>%
+# #       dplyr::mutate(bin1 = dplyr::if_else(ref1 == shiftedRef, as.integer(bin1 - splitPoint + 1), bin1)) %>%
+# #       dplyr::mutate(bin2 = dplyr::if_else(ref2 == shiftedRef, as.integer(bin2 - splitPoint + 1), bin2))
 #     return(object)
 # }
 
 # splitChromosome <- function(object, parameters) {
-#     if (! is(object, "tenxcheckerClass")) {
-# 	stop("Parameter should be a tenxcheckerClass.")
+#     if (! is(object, "msscafClass")) {
+# 	stop("Parameter should be a msscafClass.")
 #     }
 #     prevRef    <- object@chromosomes[[parameters$ref]]
 #     splitPoint <- parameters$bin
@@ -43,7 +43,7 @@
 #     prevRefId    <- which(object@chromosomes == prevRef)
 #     newRefId     <- which(object@chromosomes == newRef)
 #     shiftedRefId <- which(object@chromosomes == shiftedRef)
-#     object@data <- map(object@data, .splitChromosome, object@chromosomes, prevRef = prevRefId, newRef = newRefId, shiftedRef = shiftedRefId, splitPoint = splitPoint, firstPart = firstPart)
+#     object@data <- purrr::map(object@data, .splitChromosome, object@chromosomes, prevRef = prevRefId, newRef = newRefId, shiftedRef = shiftedRefId, splitPoint = splitPoint, firstPart = firstPart)
 #     currentRef <- object@sequences[[prevRef]]
 #     if (firstPart) {
 # 	object@sizes[[prevRef]]     <- splitPoint
@@ -61,8 +61,8 @@
 # }
 
 splitChromosomes <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     nSplits <- nrow(object@breaks)
     if (nSplits == 0) {
@@ -70,10 +70,11 @@ splitChromosomes <- function(object) {
     }
     object <- splitCpp(object)
     for (i in seq_along(object@data)) {
-        object@data[[i]]@interactionMatrix <- as_tibble(object@data[[i]]@interactionMatrix)
+        object@data[[i]]@interactionMatrix <- tibble::as_tibble(object@data[[i]]@interactionMatrix)
     }
     checkSizeDifference(object)
     checkAllBinDifference(object)
+    checkAllOutlierBins(object)
     checkMatrices(object)
 #   newRefs            <- paste0("new_ref_", seq.int(nrow(object@breaks)))
 #   object@chromosomes <- c(object@chromosomes, newRefs)

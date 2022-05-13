@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# tenxchecker-package organization of R files
+# msscaf-package organization of R files
 #
 # AllClasses .... class definitions and object constructors
 # AllGenerics ... the generics defined in srnadiff-package
@@ -14,13 +14,13 @@
 # Note: not all of these functions are exported.
 #
 # --------------------------------
-# tenxchecker
+# msscaf
 # |- functions
 # --------------------------------
 #
 # --------------------------------
-# tenxchecker
-# |- tenxcheckercore
+# msscaf
+# |- msscafcore
 #    |- page
 #       |- function
 # --------------------------------
@@ -29,15 +29,15 @@
 
 #' Title...
 #'
-#' \code{tenxchecker} is a package...
+#' \code{msscaf} is a package...
 #' TODO
 
 #'
 #' @examples
 #'
 #' @docType package
-#' @name tenxchecker
-#' @aliases tenxchecker-package
+#' @name msscaf
+#' @aliases msscaf-package
 #'
 #' @author Matthias Zytnicki
 #'
@@ -56,7 +56,7 @@
 #' @import cowplot
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
-#' @useDynLib tenxchecker
+#' @useDynLib msscaf
 #'
 #' @keywords package
 NULL

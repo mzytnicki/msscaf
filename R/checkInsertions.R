@@ -32,7 +32,7 @@ computeInsertionBinDepth <- function(bin    = bin,
 }
 
 computeInsertionDepth <- function(depth, object = object) {
-    map_df(seq(from = max(1, depth), to = object@size - depth),
+    purrr::map_df(seq(from = max(1, depth), to = object@size - depth),
            computeInsertionBinDepth,
            object = object,
            depth = depth)

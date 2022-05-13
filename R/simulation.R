@@ -8,7 +8,7 @@ cleanMatrices <- function(interactionMatrices, refs) {
 
 generateCorner <- function(offset, r1, r2, refSize, maxNReads, diagSize, distance) {
     lambda <- as.integer(round(maxNReads * dgeom(distance + offset, prob = 1 / diagSize)))
-    tibble(bin1 = seq.int(from = refSize - offset - 1, to = refSize - 1),
+    tibble::tibble(bin1 = seq.int(from = refSize - offset - 1, to = refSize - 1),
            bin2 = seq.int(from = 0, to = offset),
            count = as.integer(round(rpois(offset + 1, lambda)))) %>%
         dplyr::select(bin1, bin2, count) %>%
@@ -55,7 +55,7 @@ addNoise <- function(interactionMatrices, gaussianNoise) {
 generateDiag <- function(distance, refs, refSize, maxNReads, diagSize) {
     nRefs  <- length(refs)
     lambda <- as.integer(round(maxNReads * dgeom(distance, prob = 1 / diagSize)))
-    tibble(bin1 = as.integer(rep(seq.int(refSize) - 1, nRefs)),
+    tibble::tibble(bin1 = as.integer(rep(seq.int(refSize) - 1, nRefs)),
            count = as.integer(round(rpois(refSize * nRefs, lambda)))) %>%
         dplyr::mutate(ref1 = rep(refs, each = refSize)) %>%
         dplyr::filter(count > 0) %>%
@@ -75,7 +75,7 @@ addDiagonalMatrices <- function(interactionMatrices, refs, refSize, maxNReads, d
 makeEmptyInteractionMatrices <- function(refs, refSize) {
     bins    <- as.integer(seq.int(refSize) - 1)
     refBins <- purrr::cross2(refs, bins)
-    tibble(ref1 = refBins %>% purrr::map(1) %>% purrr::flatten_chr(),
+    tibble::tibble(ref1 = refBins %>% purrr::map(1) %>% purrr::flatten_chr(),
            bin1 = refBins %>% purrr::map(2) %>% purrr::flatten_int()) %>%
          dplyr::mutate(ref2 = ref1) %>%
          dplyr::mutate(bin2 = bin1) %>%
@@ -90,7 +90,7 @@ makeSimData <- function(refs, refSize, maxNReads, diagSize, gaussianNoise, split
     interactionMatrices <- addJoins(interactionMatrices, refs, refSize, maxNReads, diagSize, joinRef1, joinRef2, joinDistances)
     interactionMatrices <- addNoise(interactionMatrices, gaussianNoise)
     interactionMatrices <- cleanMatrices(interactionMatrices, refs)
-    tenxcheckerData(inputMatrix  = interactionMatrices,
+    msscafData(inputMatrix  = interactionMatrices,
                     maxLinkRange = NULL)
 }
 
@@ -116,7 +116,7 @@ makeSimObject <- function(nData = 1, nRefs = 1, refSize = 100, maxNReads = 20, d
     names(sequences)    <- refs
     tmpFileName         <- tempfile()
     writeXStringSet(sequences, tmpFileName)
-    object              <- tenxchecker(tmpFileName, 1, 1)
+    object              <- msscaf(tmpFileName, 1, 1)
     unlink(tmpFileName)
     for (i in seq.int(nData)) {
         data   <- makeSimData(refs, refSize, maxNReads, diagSize, gaussianNoise, splitRefs, splitPositions, joinRef1, joinRef2, joinDistances)

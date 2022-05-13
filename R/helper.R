@@ -8,20 +8,20 @@ mergeRefs <- function(refs1, refs2) {
     if ((all(refs2 %in% refs1)) |
         (all(refs1 %in% refs2)) |
         (length(intersect(refs1, refs2)) >= 0.8 * length(refs1))) {
-        r <- tibble(all = mixedsort(unique(c(refs1, refs2)))) %>%
-            dplyr::mutate(name1 = if_else(all %in% refs1, all, NA_character_)) %>%
-            dplyr::mutate(name2 = if_else(all %in% refs2, all, NA_character_))
+        r <- tibble::tibble(all = gtools::mixedsort(unique(c(refs1, refs2)))) %>%
+            dplyr::mutate(name1 = dplyr::if_else(all %in% refs1, all, NA_character_)) %>%
+            dplyr::mutate(name2 = dplyr::if_else(all %in% refs2, all, NA_character_))
         return(r)
     }
     # Tweak the case
-    r1 <- tibble(name1 = refs1, key = str_to_lower(refs1))
-    r2 <- tibble(name2 = refs2, key = str_to_lower(refs2))
-    r <- full_join(r1, r2, by = "key")
+    r1 <- tibble::tibble(name1 = refs1, key = stringr::str_to_lower(refs1))
+    r2 <- tibble::tibble(name2 = refs2, key = stringr::str_to_lower(refs2))
+    r <- dplyr::full_join(r1, r2, by = "key")
     if (nrow(r) > 1.2 * length(refs1)) {
         stop("Cannot merge references.\nPlease check that chromosomes are similar.")
     }
     r %>%
-        dplyr::mutate(all = if_else(is.na(name1), name2, name1)) %>%
+        dplyr::mutate(all = dplyr::if_else(is.na(name1), name2, name1)) %>%
         dplyr::select(-key)
 }
 
@@ -32,38 +32,38 @@ mergeSizes <- function(sizes1, sizes2, refs) {
         return(sizes1)
     }
     sizes <- refs %>%
-        left_join(enframe(sizes1, name = "name1", value = "size1"), by = "name1") %>%
-        left_join(enframe(sizes2, name = "name2", value = "size2"), by = "name2") %>%
+        dplyr::left_join(tibble::enframe(sizes1, name = "name1", value = "size1"), by = "name1") %>%
+        dplyr::left_join(tibble::enframe(sizes2, name = "name2", value = "size2"), by = "name2") %>%
         dplyr::mutate(size = pmax(size1, size2, na.rm = TRUE)) %>%
 	dplyr::select(c("all", "size")) %>%
         tibble::deframe()
-    sizes <- sizes[mixedsort(names(sizes))]
+    sizes <- sizes[gtools::mixedsort(names(sizes))]
     return(sizes)
 }
 
 # Update refs in experiments, so that it matches the genome.
 updateRefs <- function(object, data) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Object should be a 'tenxcheckerClass'.")
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
     }
-    if (! is(data, "tenxcheckerData")) {
-        stop("Object should be a 'tenxcheckerData'.")
+    if (! is(data, "msscafData")) {
+        stop("Object should be a 'msscafData'.")
     }
     oldLevels <- levels(data@inputMatrix$ref1)
-    oldLevels <- tibble(old = oldLevels, key = str_to_lower(oldLevels))
+    oldLevels <- tibble::tibble(old = oldLevels, key = stringr::str_to_lower(oldLevels))
     newLevels <- object@chromosomes
-    newLevels <- tibble(new = newLevels, key = str_to_lower(newLevels))
-    if (! all(unlist(map(oldLevels$key, ~ .x %in% newLevels$key)))) {
+    newLevels <- tibble::tibble(new = newLevels, key = stringr::str_to_lower(newLevels))
+    if (! all(unlist(purrr::map(oldLevels$key, ~ .x %in% newLevels$key)))) {
         stop("Not all references are known references.")
     }
-    transLevels <- left_join(oldLevels, newLevels, by = "key") %>% pull(new)
-    addLevels   <- anti_join(newLevels, oldLevels, by = "key") %>% pull(new)
+    transLevels <- dplyr::left_join(oldLevels, newLevels, by = "key") %>% dplyr::pull(new)
+    addLevels   <- dplyr::anti_join(newLevels, oldLevels, by = "key") %>% dplyr::pull(new)
     levels(data@inputMatrix$ref1)         <- transLevels
-    data@inputMatrix$ref1                 <- fct_expand(data@inputMatrix$ref1, addLevels)
-    data@inputMatrix$ref1                 <- fct_relevel(data@inputMatrix$ref1, object@chromosomes)
+    data@inputMatrix$ref1                 <- forcats::fct_expand(data@inputMatrix$ref1, addLevels)
+    data@inputMatrix$ref1                 <- forcats::fct_relevel(data@inputMatrix$ref1, object@chromosomes)
     levels(data@inputMatrix$ref2)         <- transLevels
-    data@inputMatrix$ref2                 <- fct_expand(data@inputMatrix$ref2, addLevels)
-    data@inputMatrix$ref2                 <- fct_relevel(data@inputMatrix$ref2, object@chromosomes)
+    data@inputMatrix$ref2                 <- forcats::fct_expand(data@inputMatrix$ref2, addLevels)
+    data@inputMatrix$ref2                 <- forcats::fct_relevel(data@inputMatrix$ref2, object@chromosomes)
     # Modify the data, so that ref1 >= ref2
     inverted <- data@inputMatrix %>%
         dplyr::filter(as.integer(ref1) < as.integer(ref2)) %>%
@@ -87,21 +87,22 @@ computeRefSizes <- function(object) {
 }
 
 .keepScaffolds <- function(object, chromosomes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
-    object@outlierBins       <- object@outlierBins %>% 
-                                    dplyr::filter(ref %in% chromosomes) %>%
-                                    dplyr::mutate(ref = forcats::fct_relevel(ref, chromosomes))
-    object@interactionMatrix <- as_tibble(keepScaffoldsCpp(object@interactionMatrix, chromosomes))
+    object@outlierBins <- object@outlierBins %>%
+        dplyr::filter(ref %in% chromosomes) %>%
+        dplyr::mutate(ref = as.character(ref)) %>%
+        dplyr::mutate(ref = factor(ref, levels = chromosomes))
+    object@interactionMatrix <- tibble::as_tibble(keepScaffoldsCpp(object@interactionMatrix, chromosomes))
     return(object)
 }
 
 keepScaffolds <- function(object, chromosomes) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
-    chromosomes        <- mixedsort(unique(chromosomes))
+    chromosomes        <- gtools::mixedsort(unique(as.character(chromosomes)))
     object@chromosomes <- chromosomes
     object@sizes       <- object@sizes[chromosomes]
     object@data        <- purrr::map(object@data, .keepScaffolds, chromosomes = chromosomes)
@@ -119,7 +120,7 @@ fillCorner <- function(interactionMatrix, maxDistance, isCorner = FALSE) {
         }
         return(bin1 - bin2)
     }
-    tibble(bin1 = bins, bin2 = bins) %>%
+    tibble::tibble(bin1 = bins, bin2 = bins) %>%
         tidyr::expand(bin1, bin2) %>%
         dplyr::mutate(distance = d(bin1, bin2, isCorner)) %>%
         dplyr::filter(distance >= 0) %>%

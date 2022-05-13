@@ -121,7 +121,7 @@ void setConvertor (DataFrame splits, IntegerVector sizes, PositionConvertor &con
 }
 
 // Update the count matrices, given the splits
-DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, IntegerVector sizes, PositionConvertor &convertor, CharacterVector newSequences) {
+DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, PositionConvertor &convertor, CharacterVector newSequences) {
     IntegerVector refs1  = matrices["ref1"];
     IntegerVector refs2  = matrices["ref2"];
     IntegerVector bins1  = matrices["bin1"];
@@ -142,18 +142,10 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
     Rcout << "\tDataset '" << nameCpp << "'.\n";
     Progress progress (nCounts, true);
     for (long long countId = 0; countId < nCounts; ++countId) {
-        if (refs1[countId] >= static_cast < int > (convertor.size())) {
-            Rcerr << "Error #1 in splitCountMatrices: " << refs1[countId] << " >= " << convertor.size() << std::endl;
-        }
-        if (bins1[countId] >= static_cast < int > (convertor[refs1[countId]].size())) {
-            Rcerr << "Error #2 in splitCountMatrices: " << refs1[countId] << ":"  << bins1[countId] << " >= " << convertor[refs1[countId]].size() << "/" << sizes[refs1[countId]-1] << std::endl;
-        }
-        if (refs2[countId] >= static_cast < int > (convertor.size())) {
-            Rcerr << "Error #3 in splitCountMatrices: " << refs2[countId] << " >= " << convertor.size() << std::endl;
-        }
-        if (bins2[countId] >= static_cast < int > (convertor[refs2[countId]].size())) {
-            Rcerr << "Error #4 in splitCountMatrices: " << refs2[countId] << ":" << bins2[countId] << " >= " << convertor[refs2[countId]].size() << "/" << sizes[refs2[countId]-1] << std::endl;
-        }
+        assert(refs1[countId] < static_cast < int > (convertor.size()));
+        assert(bins1[countId] < static_cast < int > (convertor[refs1[countId]].size()));
+        assert(refs2[countId] < static_cast < int > (convertor.size()));
+        assert(bins2[countId] < static_cast < int > (convertor[refs2[countId]].size()));
         std::pair <int, int> p1 = convertor[refs1[countId]][bins1[countId]];
         std::pair <int, int> p2 = convertor[refs2[countId]][bins2[countId]];
         if ((p1.first >= 0) && (p2.first >= 0)) {
@@ -170,7 +162,7 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
                 bins2Cpp.push_back(p2.second);
             }
             countsCpp.push_back(counts[countId]);
-            if (refs1Cpp.back() < refs2Cpp.back()) Rcerr << "Error #5 in splitCountMatrices: " << p1.first << "-" << p1.second << " and " << p2.first << "-" << p2.second << "\n";
+            assert(refs1Cpp.back() >= refs2Cpp.back());
         }
         progress.increment();
     }
@@ -189,7 +181,7 @@ DataFrame splitCountMatrices (String name, DataFrame matrices, List splits, Inte
 
 
 // Update outlier bins, given the splits
-DataFrame splitOutlierBins (DataFrame outlierBins, List splits, IntegerVector sizes, PositionConvertor &convertor, CharacterVector newSequences) {
+DataFrame splitOutlierBins (DataFrame outlierBins, PositionConvertor &convertor, CharacterVector newSequences, int metaSize, IntegerVector newSizes) {
     IntegerVector refs  = outlierBins["ref"];
     IntegerVector bins  = outlierBins["bin"];
     long long int nBins = refs.size();
@@ -198,16 +190,14 @@ DataFrame splitOutlierBins (DataFrame outlierBins, List splits, IntegerVector si
     refsCpp.reserve(nBins);
     binsCpp.reserve(nBins);
     for (long binId = 0; binId < nBins; ++binId) {
-        if (refs[binId] >= static_cast < int > (convertor.size())) {
-            Rcerr << "Error #1 in splitOutlierBins: " << refs[binId] << " >= " << convertor.size() << std::endl;
-        }
-        if (bins[binId] >= static_cast < int > (convertor[refs[binId]].size())) {
-            Rcerr << "Error #2 in splitOutlierBins: " << refs[binId] << ":"  << bins[binId] << " >= " << convertor[refs[binId]].size() << "/" << sizes[refs[binId]-1] << std::endl;
-        }
-        std::pair <int, int> p = convertor[refs[binId]][bins[binId]];
+        assert(refs[binId] < static_cast < int > (convertor.size()));
+        assert(bins[binId] * metaSize < static_cast < int > (convertor[refs[binId]].size()));
+        std::pair <int, int> p = convertor[refs[binId]][bins[binId] * metaSize];
         if (p.first >= 0) {
             refsCpp.push_back(p.first);
-            binsCpp.push_back(p.second);
+            binsCpp.push_back(p.second / metaSize);
+if (p.second > newSizes[p.first-1]) Rcerr << refs[binId] << ":" << (bins[binId] * metaSize) << " -> " << p.first << ":" << p.second << "  (" << metaSize << ")" << "\n";
+            assert(p.first <= newSequences.size());
         }
     }
     refs = refsCpp;
@@ -334,8 +324,10 @@ S4 splitCpp(S4 object) {
         String name                      = wrap(object.slot("name"));
         DataFrame matrices               = wrap(object.slot("interactionMatrix"));
         DataFrame outlierBins            = wrap(object.slot("outlierBins"));
-        DataFrame newMatrices            = splitCountMatrices(name, matrices, splits, sizes, convertor, newSequences.names());
-        DataFrame newOutlierBins         = splitOutlierBins(outlierBins, splits, sizes, convertor, newSequences.names());
+        S4        parameters             = wrap(object.slot("parameters"));
+        int       metaSize               = parameters.slot("metaSize");
+        DataFrame newMatrices            = splitCountMatrices(name, matrices, splits, convertor, newSequences.names());
+        DataFrame newOutlierBins         = splitOutlierBins(outlierBins, convertor, newSequences.names(), metaSize, newSizes);
         object.slot("interactionMatrix") = newMatrices;
         object.slot("outlierBins")       = newOutlierBins;
         data[i]                          = object;

@@ -25,7 +25,7 @@ inline int boolToNext(bool isNext) {
 //    the values are ordered (first element is left of second element)
 //    the opposite of the ids of the contigs are used, if the contigs is reversed
 // [[Rcpp::export]]
-List getRefOrders (DataFrame &joins, List sizes) {
+List getRefOrders (DataFrame &joins, IntegerVector sizes) {
     CharacterVector refNames = sizes.names();
     IntegerVector references = joins["ref1"];
     IntegerVector otherRefs  = joins["ref2"];
@@ -68,9 +68,7 @@ List getRefOrders (DataFrame &joins, List sizes) {
                 // Main ref is in a group
                 else if (groupIdOther == -1) {
                     refIdToGroupId[otherRefId] = groupIdRef;
-                    if (groupIdRef >= static_cast<int>(groupIdToRefIds.size())) {
-                        Rcerr << "Error #1 in getRefOrder: looking for a group #" << groupIdRef << " in a vector of size " << groupIdToRefIds.size() << "\n";
-                    }
+                    assert(groupIdRef < static_cast<int>(groupIdToRefIds.size()));
                     groupIdToRefIds[groupIdRef].push_back(otherRefId);
 // Rcout << "  case B: " << groupIdRef << "\n";
                 }
@@ -78,21 +76,15 @@ List getRefOrders (DataFrame &joins, List sizes) {
                 else if (groupIdRef == -1) {
 // Rcout << "  case C\n";
                     refIdToGroupId[referenceId] = groupIdOther;
-                    if (groupIdOther >= static_cast<int>(groupIdToRefIds.size())) {
-                        Rcerr << "Error #2 in getRefOrder: looking for a group #" << groupIdOther << " in a vector of size " << groupIdToRefIds.size() << "\n";
-                    }
+                    assert(groupIdOther < static_cast<int>(groupIdToRefIds.size()));
                     groupIdToRefIds[groupIdOther].push_back(referenceId);
 // Rcout << "  case B: " << groupIdOther << "\n";
                 }
                 // Both refs are in a group: merge them
                 // Do not merge contigs from the same group, in order to avoid cycles
                 else if (groupIdRef != groupIdOther) {
-                    if (groupIdRef >= static_cast<int>(groupIdToRefIds.size())) {
-                        Rcerr << "Error #3 in getRefOrder: looking for a group #" << groupIdRef << " in a vector of size " << groupIdToRefIds.size() << "\n";
-                    }
-                    if (groupIdOther >= static_cast<int>(groupIdToRefIds.size())) {
-                        Rcerr << "Error #4 in getRefOrder: looking for a group #" << groupIdOther << " in a vector of size " << groupIdToRefIds.size() << "\n";
-                    }
+                    assert(groupIdRef < static_cast<int>(groupIdToRefIds.size()));
+                    assert(groupIdOther < static_cast<int>(groupIdToRefIds.size()));
                     for (int otherRefId: groupIdToRefIds[groupIdOther]) {
                         refIdToGroupId[otherRefId] = groupIdRef;
                     }
@@ -214,15 +206,15 @@ void reverseComplement(std::string &s) {
 // Compute the size of the scaffolds after scaffolding
 // Outputs the new sizes for the "main" contigs.
 // [[Rcpp::export]]
-List scaffoldSizes(List orders, IntegerVector orderIds, List sizes) {
+IntegerVector scaffoldSizes(List orders, IntegerVector orderIds, IntegerVector sizes) {
     std::vector<int> sizesVector (sizes.size());
     std::vector<int> newSizesVector (orders.size(), 0);
-    List             newSizes;
+    IntegerVector    newSizes;
     CharacterVector  orderNames = orders.names();
     // Transform list to vector (to do arithmetics on the sizes)
     for (int sizeId = 0; sizeId < sizes.size(); ++sizeId) {
         // size is actually the last element
-        sizesVector[sizeId] = as<int>(sizes[sizeId]) + 1;
+        sizesVector[sizeId] = sizes[sizeId] + 1;
     }
     // Set main contig sizes
     for (int orderId = 0; orderId < orders.size(); ++orderId) {
@@ -243,7 +235,7 @@ List scaffoldSizes(List orders, IntegerVector orderIds, List sizes) {
 // orders is a list of list. Each list contains the (1-based) id of a contig, * (-1) is the contig is reversed.
 // Do not preserve order of the contigs
 // [[Rcpp::export]]
-CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes, int binSize) {
+CharacterVector scaffoldContigs(CharacterVector contigs, List orders, IntegerVector sizes, int binSize) {
     CharacterVector scaffolds;
     CharacterVector chromosomeNames = contigs.names();
     int nScaffolds = orders.size();
@@ -276,11 +268,7 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
             int nBins = sizes[contigId-1];
             int nMissingNts = (nBins+1) * binSize - contigSize;
 // Rcout << "# missing nts: " << nMissingNts << "\n";
-            if (nMissingNts < 0) {
-                CharacterVector refNames = contigs.names();
-                std::string refName = Rcpp::as<std::string>(refNames[contigId - 1]);
-                Rcerr << "Problem while creating filler for " << refName << ".  Got contig with " << nBins << " bins (bin size " << binSize << "), but the contig size is " << contigSize << "\n";
-            }
+            assert(nMissingNts >= 0);
             filler = std::string(nMissingNts, 'N');
         }
 // Rcout << "  scaffold id: " << scaffoldId << "\n";
@@ -293,7 +281,7 @@ CharacterVector scaffoldContigs(CharacterVector contigs, List orders, List sizes
 // Scaffold the count matrices and the outlier bins
 // orders is a list of list. Each list contains the (1-based) id of a contig, * (-1) is the contig is reversed.
 // [[Rcpp::export]]
-List scaffoldCounts(DataFrame matrices, DataFrame outlierBins, List groups, IntegerVector scaffoldRefs, List sizes) {
+List scaffoldCounts(DataFrame matrices, DataFrame outlierBins, List groups, IntegerVector scaffoldRefs, IntegerVector sizes, int metaSize) {
     int nScaffolds = groups.size();
     if (scaffoldRefs.size() != nScaffolds) {
         Rcpp::stop("Problem in group sizes.");
@@ -333,13 +321,16 @@ List scaffoldCounts(DataFrame matrices, DataFrame outlierBins, List groups, Inte
         bins2[countId] = forwards[refs2[countId]]? bins2[countId] + offsets[refs2[countId]]: sizes[refs2[countId]-1] - bins2[countId] + offsets[refs2[countId]];
         refs1[countId] = newRefs[refs1[countId]];
         refs2[countId] = newRefs[refs2[countId]];
+        if ((refs1[countId] == refs2[countId]) && (bins1[countId] < bins2[countId])) {
+            std::swap<int>(bins1[countId], bins2[countId]);
+        }
         p.increment();
     }
-    IntegerVector refs = outlierBins["ref1"];
-    IntegerVector bins = outlierBins["bin1"];
-    long long int nBins = refs1.size();
+    IntegerVector refs = outlierBins["ref"];
+    IntegerVector bins = outlierBins["bin"];
+    long long int nBins = refs.size();
     for (long long binId = 0; binId < nBins; ++binId) {
-        bins[binId] = forwards[refs[binId]]? bins[binId] + offsets[refs[binId]]: sizes[refs[binId]-1] - bins[binId] + offsets[refs[binId]];
+        bins[binId] = forwards[refs[binId]]? bins[binId] + offsets[refs[binId]] / metaSize: sizes[refs[binId]-1] - bins[binId] + offsets[refs[binId]] / metaSize;
         refs[binId] = newRefs[refs[binId]];
     }
     DataFrame outputMatrices    = DataFrame::create(_["ref1"] = refs1, _["bin1"] = bins1, _["ref2"] = refs2, _["bin2"] = bins2, _["count"] = counts);

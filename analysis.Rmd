@@ -561,16 +561,10 @@ allObject@joins %>% select(-pvalue) %>% write_tsv("joins_100k.tsv", col_names = 
 ~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg100.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg100
 ~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg90.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg90
 ~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg188.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg188
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg37.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg37
+Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg37.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg37
 ```
 
 ```{r}
-library("MASS")
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-library("cowplot")
 devtools::load_all(".")
 resolution  <- 1000
 bamFileName <- "/Scratch/mazytnicki/Mother_1/possorted_bam2.bam"
@@ -580,33 +574,33 @@ hicData     <- parseHicFile(hicFileName, resolution)
 ontFileName <- "/Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf"
 ontData     <- parsePafFile(ontFileName, resolution, 500, 10, 10)
 contigFileName <- "/Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa"
-allObject <- tenxchecker(contigFileName, resolution)
-allObject <- addExp(allObject, ontData, "ONT")
-allObject <- addExp(allObject, hicData, "HiC")
-allObject <- addExp(allObject, bamData, "10X")
-#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
-#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
-allObject <- estimateDistributions(allObject)
-allObject <- cleanData(allObject)
-#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-allObject <- findBreaks(allObject, 0.01)
-allObject <- splitChromosomes(allObject)
-#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
-#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
-allObject <- findJoins(allObject, 0.05)
-#saveRDS(allObject, file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
-#allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
-allObject <- scaffold(allObject)
-writeXStringSet(DNAStringSet(allObject@sequences), "sequences.fa")
-allObject@breaks %>% select(ref, bin) %>% mutate(bin = bin * resolution) %>% write_tsv("breaks.tsv", col_names = FALSE)
-allObject@joins %>% select(ref1, ref2) %>% write_tsv("joins.tsv", col_names = FALSE)
+scaffolder <- tenxchecker(contigFileName, resolution)
+scaffolder <- addExp(scaffolder, ontData, "ONT")
+scaffolder <- addExp(scaffolder, hicData, "HiC")
+scaffolder <- addExp(scaffolder, bamData, "10X")
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject0.rds")
+scaffolder <- estimateDistributions(scaffolder)
+scaffolder <- cleanData(scaffolder)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+scaffolder <- findBreaks(scaffolder, 0.01)
+scaffolder <- splitChromosomes(scaffolder)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject1.rds")
+scaffolder <- findJoins(scaffolder, 0.05)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject2.rds")
+scaffolder <- scaffold(scaffolder)
+Biostrings::writeXStringSet(Biostrings::DNAStringSet(scaffolder@sequences), "sequences.fa")
+scaffolder@breaks %>% dplyr::select(ref, bin) %>% dplyr::mutate(bin = bin * resolution) %>% readr::write_tsv("breaks.tsv", col_names = FALSE)
+scaffolder@joins %>% dplyr::arrange(pvalue) %>% dplyr::select(ref1, ref2) %>% readr::write_tsv("joins.tsv", col_names = FALSE)
 ```
 
 
 ```{bash}
 ../CheckScaffolding/verifyJoins /Scratch/mazytnicki/Mother_1/mapping.paf 100000 10000 joins.tsv
-../CheckScaffolding/checkJoins /Scratch/mazytnicki/Mother_1/mapping.paf outJoins.txt 1000 1000
+../CheckScaffolding/checkJoins /Scratch/mazytnicki/Mother_1/mapping.paf outJoins.tsv 1000 1000 joins.tsv
 ../CheckScaffolding/checkBreaks /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len 100000 10000 predicted.out breaks.tsv putative.out > difference_breaks.txt
 
 # From tapou
@@ -622,7 +616,6 @@ module load system/Miniconda3
 module load bioinfo/Inspector-v1.2
 cd /home/mzytnicki/work/Projects/tenxChecker
 sbatch inspector.sh
-srun --mem=10G -c 8 inspector.py -c mother_raw.cgt.fa -r /work/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz -d nanopore --ref GCF_002263795.1_ARS-UCD1.2_genomic.fna -o inspector_raw/ --skip_base_error --skip_structural_error -t 8
 ```
 
 ```{r}
@@ -659,16 +652,21 @@ library("cowplot")
 devtools::load_all(".")
 allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 splitObject <- generateSplit(allObject)
+splitObject <- estimateDistributions(splitObject)
 splitObject <- findJoins(splitObject, 0.05)
 ```
 
-tmp <- sampleTriangles(allObject@data[[3]]@interactionMatrix, allObject@data[[3]]@outlierBins, allObject@sizes, allObject@data[[3]]@parameters@maxLinkRange, allObject@data[[3]]@parameters@metaSize, 1000) %>% as_tibble()
-tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% mutate(distance = factor(distance)) %>% ggplot(aes(count, color = distance)) + geom_freqpoly()           
-tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% mutate(distance = factor(as.integer(trunc(distance / 2)))) %>% ggplot(aes(count, color = distance)) + geom_freqpoly()           
-tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% filter(count > 0) %>% group_by(distance) %>% group_split() %>% map("count") %>% map(as.integer()) %>% map(fitdistr, "negative binomial")
-tmp1 <- tmp %>% group_by(index) %>% group_split() %>% map_dfr(smoothenDistribution) %>% filter(count > 0) %>% mutate(count = as.integer(round(count))) %>% group_by(distance) %>% group_split() %>% map("count")
-tmp2 <- tmp1 %>% map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb)
-tmp3 <- tmp2 %>% group_by(distance) %>% group_split()
 
-
-
+```{r}
+library("MASS")
+library("devtools")
+library("magrittr")
+library("tidyverse")
+library("Biostrings")
+library("cowplot")
+devtools::load_all(".")
+allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+mergedObject <- generateJoin(allObject)
+mergedObject <- estimateDistributions(mergedObject)
+mergedObject <- findBreaks(mergedObject, 0.05)
+```

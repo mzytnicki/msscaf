@@ -1,26 +1,26 @@
 ###############################################################################
-### tenxcheckerParameters S4 class definition
+### msscafParameters S4 class definition
 ###############################################################################
-#' Infrastructure for tenxchecker experiment and differential interaction
+#' Infrastructure for msscaf experiment and differential interaction
 #'
-#' \code{tenxcheckerParameters} is an S4 class providing the infrastructure (slots)
+#' \code{msscafParameters} is an S4 class providing the infrastructure (slots)
 #' to store the input data, methods parameters, intermediate calculations
 #' and results of a differential interaction pipeline
 #'
-#' @details \code{tenxcheckerParameters} does this and that...
+#' @details \code{msscafParameters} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerExp
-#' @rdname tenxcheckerExp
+#' @name msscafExp
+#' @rdname msscafExp
 #' @docType class
-#' @aliases tenxcheckerParameters tenxcheckerParameters-class
+#' @aliases msscafParameters msscafParameters-class
 #'
 #' @slot inputMatrix  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
+setClass("msscafParameters", slots = c(minCount        = "ANY",
                                             minRowCount     = "ANY",
                                             maxRowCount     = "ANY",
                                             binSize         = "ANY",
@@ -34,24 +34,26 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
                                             maxLinkRange    = "ANY", 
                                             nRandomizations = "ANY", 
                                             nBinZoom        = "ANY",
-                                            metaSize        = "ANY")
+                                            metaSize        = "ANY",
+                                            rowCountSize    = "ANY",
+                                            rowCountMu      = "ANY")
 )
 
 
 ###############################################################################
-### tenxcheckerData S4 class definition
+### msscafData S4 class definition
 ###############################################################################
-#' Infrastructure for tenxchecker data
+#' Infrastructure for msscaf data
 #'
-#' \code{tenxcheckerData} is an S4 class providing the ...
+#' \code{msscafData} is an S4 class providing the ...
 #'
-#' @details \code{tenxcheckerData} does this and that...
+#' @details \code{msscafData} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerData
-#' @rdname tenxcheckerData
+#' @name msscafData
+#' @rdname msscafData
 #' @docType class
-#' @aliases tenxcheckerData tenxcheckerData-class
+#' @aliases msscafData msscafData-class
 #'
 #' @slot inputMatrix  The input matrix
 #' @slot binSize      The resolution
@@ -59,25 +61,25 @@ setClass("tenxcheckerParameters", slots = c(minCount        = "ANY",
 #' @slot sizes        The reference sizes
 #'
 #' @export
-setClass("tenxcheckerData", slots = c(inputMatrix  = "ANY",
+setClass("msscafData", slots = c(inputMatrix  = "ANY",
                                       maxLinkRange = "ANY") 
 )
 
 
-##- tenxcheckerData S4 class constructor --------------------------------------#
+##- msscafData S4 class constructor --------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname tenxcheckerData
+#' @rdname msscafData
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{tenxcheckerExp} constructor returns an \code{tenxcheckerExp}
+#' @return \code{msscafExp} constructor returns an \code{msscafExp}
 #'         object of class S4.
 #'
 #' @examples
 #'
 #' @export
-tenxcheckerData <- function(inputMatrix  = NULL,
+msscafData <- function(inputMatrix  = NULL,
                             maxLinkRange = NULL) {
     
     ##- checking general input arguments -------------------------------------#
@@ -87,7 +89,7 @@ tenxcheckerData <- function(inputMatrix  = NULL,
     if (is.null(inputMatrix)) {
         stop("'inputMatrix' must be specified", call. = FALSE)
     }
-    if (!is_tibble(inputMatrix)) {
+    if (!tibble::is_tibble(inputMatrix)) {
         stop("'inputMatrix' should be a tibble", call. = FALSE)
     }
     if (ncol(inputMatrix) != 5) {
@@ -123,55 +125,55 @@ tenxcheckerData <- function(inputMatrix  = NULL,
         dplyr::bind_rows(diagonalData) %>%
         dplyr::arrange(ref1, ref2, bin1, bin2)
     
-    object <- new("tenxcheckerData")
+    object <- new("msscafData")
     
     object@inputMatrix  <- inputMatrix
     object@maxLinkRange <- maxLinkRange
 
-    chromosomes <- mixedsort(levels(object@inputMatrix$ref1))
+    chromosomes <- gtools::mixedsort(levels(object@inputMatrix$ref1))
     object@inputMatrix <- object@inputMatrix %>%
-        mutate(ref1 = fct_relevel(ref1, chromosomes)) %>%
-        mutate(ref2 = fct_relevel(ref2, chromosomes))
+        dplyr::mutate(ref1 = forcats::fct_relevel(ref1, chromosomes)) %>%
+        dplyr::mutate(ref2 = forcats::fct_relevel(ref2, chromosomes))
     
     return(invisible(object))
 }
 
-setClass("tenxcheckerBreaks", slots = c(data            = "ANY",
+setClass("msscafBreaks", slots = c(data            = "ANY",
                                         filteredData    = "ANY",
                                         changePlots     = "ANY",
                                         changeDistPlots = "ANY",
                                         mapPlots        = "ANY")
 )
 
-setClass("tenxcheckerJoins", slots = c(data      = "ANY",
+setClass("msscafJoins", slots = c(data      = "ANY",
                                        testPlots = "ANY",
                                        mapPlots  = "ANY")
 )
 
 
 ###############################################################################
-### tenxchecker S4 class definition
+### msscaf S4 class definition
 ###############################################################################
-#' Infrastructure for tenxchecker experiment and differential interaction
+#' Infrastructure for msscaf experiment and differential interaction
 #'
-#' \code{tenxchecker} is an S4 class providing the infrastructure (slots)
+#' \code{msscaf} is an S4 class providing the infrastructure (slots)
 #' to store the input data, methods parameters, intermediate calculations
 #' and results of a differential interaction pipeline
 #'
-#' @details \code{tenxchecker} does this and that...
+#' @details \code{msscaf} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerExp
-#' @rdname tenxcheckerExp
+#' @name msscafExp
+#' @rdname msscafExp
 #' @docType class
-#' @aliases tenxcheckerExp tenxcheckerExp-class
+#' @aliases msscafExp msscafExp-class
 #'
 #' @slot data  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerExp", slots = c(interactionMatrix = "ANY",
+setClass("msscafExp", slots = c(interactionMatrix = "ANY",
                                      name              = "ANY",
                                      parameters        = "ANY",
                                      breaks            = "ANY",
@@ -182,28 +184,28 @@ setClass("tenxcheckerExp", slots = c(interactionMatrix = "ANY",
 
 
 ###############################################################################
-### tenxchecker S4 class definition
+### msscaf S4 class definition
 ###############################################################################
-#' Infrastructure for tenxchecker experiment and differential interaction
+#' Infrastructure for msscaf experiment and differential interaction
 #'
-#' \code{tenxchecker} is an S4 class providing the infrastructure (slots)
+#' \code{msscaf} is an S4 class providing the infrastructure (slots)
 #' to store the input data, methods parameters, intermediate calculations
 #' and results of a differential interaction pipeline
 #'
-#' @details \code{tenxchecker} does this and that...
+#' @details \code{msscaf} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerExp
-#' @rdname tenxcheckerExp
+#' @name msscafExp
+#' @rdname msscafExp
 #' @docType class
-#' @aliases tenxcheckerExp tenxcheckerExp-class
+#' @aliases msscafExp msscafExp-class
 #'
 #' @slot data  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerClass", slots = c(data               = "ANY",
+setClass("msscafClass", slots = c(data               = "ANY",
                                        sequences          = "ANY",
                                        binSize            = "ANY",
                                        minNBins           = "ANY",
@@ -218,20 +220,20 @@ setClass("tenxcheckerClass", slots = c(data               = "ANY",
 )
 
 
-##- tenxcheckerExp S4 class constructor --------------------------------------#
+##- msscafExp S4 class constructor --------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname tenxcheckerExp
+#' @rdname msscafExp
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{tenxcheckerExp} constructor returns an \code{tenxcheckerExp}
+#' @return \code{msscafExp} constructor returns an \code{msscafExp}
 #'         object of class S4.
 #'
 #' @examples
 #'
 #' @export
-tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
+msscaf <- function(sequenceFileName, binSize, minNBins = 20) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -244,7 +246,7 @@ tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
     
     ##- end checking ---------------------------------------------------------#
     
-    object                   <- new("tenxcheckerClass")
+    object                   <- new("msscafClass")
     object@binSize           <- binSize
     object@minNBins          <- minNBins
     object@data              <- c()
@@ -256,8 +258,8 @@ tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
     object@mergedChromosomes <- c()
 
     object@sequences         <- readDNAStringSet(sequenceFileName) %>% as.character()
-    names(object@sequences)  <- unlist(map(str_split(names(object@sequences), " "), 1))
-    object@chromosomes       <- mixedsort(names(object@sequences))
+    names(object@sequences)  <- unlist(purrr::map(stringr::str_split(names(object@sequences), " "), 1))
+    object@chromosomes       <- gtools::mixedsort(names(object@sequences))
     object@sizes             <- ceiling(nchar(object@sequences) / object@binSize) - 1
     names(object@sizes)      <- object@chromosomes
     return(invisible(object))
@@ -265,9 +267,9 @@ tenxchecker <- function(sequenceFileName, binSize, minNBins = 20) {
 
 ##- add experiment -----------------------------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @param data A \code{tenxcheckerData}
+#' @param data A \code{msscafData}
 #'
-#' @return An \code{tenxcheckerExp}
+#' @return An \code{msscafExp}
 #'
 #' @examples
 #'
@@ -276,11 +278,11 @@ addExp <- function(object, data, expName) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Input should be 'tenxcheckerClass'.")
+    if (! is(object, "msscafClass")) {
+        stop("Input should be 'msscafClass'.")
     }
-    if (! is(data, "tenxcheckerData")) {
-        stop("Input should be 'tenxcheckerData'.")
+    if (! is(data, "msscafData")) {
+        stop("Input should be 'msscafData'.")
     }
     if (! is.character(expName)) {
         stop("Name should be character.")
@@ -296,7 +298,7 @@ addExp <- function(object, data, expName) {
 
     data <- updateRefs(object, data)
 
-    parameters <- new("tenxcheckerParameters")
+    parameters <- new("msscafParameters")
     parameters@binSize         <- object@binSize
     parameters@maxLinkRange    <- data@maxLinkRange
     parameters@sampleSize      <- 10000
@@ -313,13 +315,13 @@ addExp <- function(object, data, expName) {
     parameters@nBinZoom        <- 100
     parameters@metaSize        <- 1
 
-    newData <- new("tenxcheckerExp")
+    newData <- new("msscafExp")
     newData@interactionMatrix <- data@inputMatrix
     newData@name              <- expName
     newData@parameters        <- parameters
     newData@breaks            <- NULL
     newData@joins             <- NULL
-    newData@outlierBins       <- tibble(ref = factor(), bin = integer())
+    newData@outlierBins       <- tibble::tibble(ref = factor(), bin = integer())
 
     # Check whether some bins are out of range
     overSized <- checkBinDifference(newData, object@sizes)
@@ -341,28 +343,28 @@ addExp <- function(object, data, expName) {
 }
 
 ###############################################################################
-### tenxcheckerRef S4 class definition
+### msscafRef S4 class definition
 ###############################################################################
 #' Infrastructure for 1 reference
 #'
-#' \code{tenxchecker} is an S4 class providing the infrastructure (slots)
+#' \code{msscaf} is an S4 class providing the infrastructure (slots)
 #' to store the input data, methods parameters, intermediate calculations
 #' and results of a differential interaction pipeline
 #'
-#' @details \code{tenxchecker} does this and that...
+#' @details \code{msscaf} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerExp
-#' @rdname tenxcheckerExp
+#' @name msscafExp
+#' @rdname msscafExp
 #' @docType class
-#' @aliases tenxcheckerRefExp tenxcheckerRefExp-class
+#' @aliases msscafRefExp msscafRefExp-class
 #'
 #' @slot inputMatrix  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
+setClass("msscafRefExp", slots = c(interactionMatrix  = "ANY",
                                         chromosome         = "ANY",
                                         size               = "ANY",
                                         name               = "ANY",
@@ -371,20 +373,20 @@ setClass("tenxcheckerRefExp", slots = c(interactionMatrix  = "ANY",
 )
 
 
-##- tenxchecker S4 class constructor -----------------------------------------#
+##- msscaf S4 class constructor -----------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname tenxchecker
+#' @rdname msscaf
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{tenxchecker} constructor returns an \code{tenxcheckerExp}
+#' @return \code{msscaf} constructor returns an \code{msscafExp}
 #'         object of class S4.
 #'
 #' @examples
 #'
 #' @export
-tenxcheckerRefExp <- function(matrix      = NULL,
+msscafRefExp <- function(matrix      = NULL,
                               chromosome  = NULL,
                               size        = NULL,
                               name        = NULL,
@@ -398,7 +400,7 @@ tenxcheckerRefExp <- function(matrix      = NULL,
     if (is.null(matrix)) {
         stop("'matrix' must be specified", call. = FALSE)
     }
-    if (!is_tibble(matrix)) {
+    if (!tibble::is_tibble(matrix)) {
         stop("'matrix' should be a tibble", call. = FALSE)
     }
     if (is.null(chromosome) | is.na(chromosome)) {
@@ -410,11 +412,11 @@ tenxcheckerRefExp <- function(matrix      = NULL,
     if (is.null(name) | is.na(name)) {
         stop("'name' must be specified", call. = FALSE)
     }
-    if (! is_tibble(outlierBins)) {
+    if (! tibble::is_tibble(outlierBins)) {
         stop("'outlierBins' should be a tibble", call. = FALSE)
     }
-    if (!is(parameters, "tenxcheckerParameters")) {
-        stop("'parameters' should be 'tenxcheckerParameters' class instance", call. = FALSE)
+    if (!is(parameters, "msscafParameters")) {
+        stop("'parameters' should be 'msscafParameters' class instance", call. = FALSE)
     }
     
     ##- parameters
@@ -422,7 +424,7 @@ tenxcheckerRefExp <- function(matrix      = NULL,
     
     ##- end checking ---------------------------------------------------------#
     
-    object <- new("tenxcheckerRefExp")
+    object <- new("msscafRefExp")
 
     object@chromosome        <- chromosome
     object@size              <- size
@@ -436,28 +438,28 @@ tenxcheckerRefExp <- function(matrix      = NULL,
 
 
 ###############################################################################
-### tenxchecker2Ref S4 class definition
+### msscaf2Ref S4 class definition
 ###############################################################################
 #' Infrastructure for 1 reference
 #'
-#' \code{tenxchecker} is an S4 class providing the infrastructure (slots)
+#' \code{msscaf} is an S4 class providing the infrastructure (slots)
 #' to store the input data, methods parameters, intermediate calculations
 #' and results of a differential interaction pipeline
 #'
-#' @details \code{tenxchecker} does this and that...
+#' @details \code{msscaf} does this and that...
 #' TODO
 #'
-#' @name tenxcheckerExp
-#' @rdname tenxcheckerExp
+#' @name msscafExp
+#' @rdname msscafExp
 #' @docType class
-#' @aliases tenxcheckerRefExp tenxcheckerRefExp-class
+#' @aliases msscafRefExp msscafRefExp-class
 #'
 #' @slot inputMatrix  The input matrix
 #' @slot parameters   An named \code{list}. The parameters for the
 #'                    segmentation methods. See \code{\link{parameters}}.
 #'
 #' @export
-setClass("tenxchecker2RefExp", slots = c(interactionMatrix  = "ANY",
+setClass("msscaf2RefExp", slots = c(interactionMatrix  = "ANY",
                                          chromosome1        = "ANY",
                                          chromosome2        = "ANY",
                                          size1              = "ANY",
@@ -467,20 +469,20 @@ setClass("tenxchecker2RefExp", slots = c(interactionMatrix  = "ANY",
 )
 
 
-##- tenxcheckerExp S4 class constructor --------------------------------------#
+##- msscafExp S4 class constructor --------------------------------------#
 ##----------------------------------------------------------------------------#
-#' @rdname tenxcheckerExp
+#' @rdname msscafExp
 #' @docType class
 #'
 #' @param inputMatrix A matrix with the data.
 #'
-#' @return \code{tenxcheckerExp} constructor returns an \code{tenxcheckerExp}
+#' @return \code{msscafExp} constructor returns an \code{msscafExp}
 #'         object of class S4.
 #'
 #' @examples
 #'
 #' @export
-tenxchecker2RefExp <- function(matrix      = NULL,
+msscaf2RefExp <- function(matrix      = NULL,
                                chromosome1 = NULL,
                                chromosome2 = NULL,
                                size1       = NULL,
@@ -495,7 +497,7 @@ tenxchecker2RefExp <- function(matrix      = NULL,
     if (is.null(matrix)) {
         stop("'matrix' must be specified", call. = FALSE)
     }
-    if (!is_tibble(matrix)) {
+    if (!tibble::is_tibble(matrix)) {
         stop("'matrix' should be a tibble", call. = FALSE)
     }
     if (is.null(name) | is.na(name)) {
@@ -507,7 +509,7 @@ tenxchecker2RefExp <- function(matrix      = NULL,
     
     ##- end checking ---------------------------------------------------------#
     
-    object <- new("tenxchecker2RefExp")
+    object <- new("msscaf2RefExp")
     
     object@chromosome1       <- chromosome1
     object@chromosome2       <- chromosome2

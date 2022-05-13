@@ -1,9 +1,9 @@
 .estimateBackgroundCounts <- function(object) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     d <- object@interactionMatrix %>%
-        filter(ref1 != ref2) %>%
+        dplyr::filter(ref1 != ref2) %>%
         dplyr::select(count)
     if (nrow(d) == 0) {
         message(paste0("Dataset '", object@name, "': Cannot estimate background count: there is no count outside diagonal matrices.\n\tSetting it as 1."))
@@ -11,13 +11,14 @@
         return(invisible(object))
     }
     sampleSize <- min(object@parameters@sampleSize, nrow(d))
-    d <- d %>%
-        sample_n(sampleSize)
-    threshold <- transform(table(d), cum_freq = cumsum(Freq)) %>%
-        mutate(relative = cum_freq / sampleSize) %>%
-        filter(relative >= 0.5) %>%
-        head(1) %>%
-        pull(d)
+    threshold <- d %>%
+        dplyr::sample_n(sampleSize) %>%
+        table() %>%
+        transform(cum_freq = cumsum(Freq)) %>%
+        dplyr::mutate(relative = cum_freq / sampleSize) %>%
+        dplyr::filter(relative >= 0.5) %>%
+        dplyr::slice(1:1) %>%
+        dplyr::pull(count)
     threshold <- as.integer(levels(threshold))[threshold]
     object@parameters@minCount <- threshold
     message(paste0("Dataset '", object@name, "': Estimated background count: ", threshold, "."))
@@ -25,16 +26,16 @@
 }
 
 estimateBackgroundCounts <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object@data <- purrr::map(object@data, .estimateBackgroundCounts)
     return(invisible(object))
 }
 
 .estimateMoleculeSize <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     if (! is.null(object@parameters@maxLinkRange)) {
         return(invisible(object))
@@ -52,7 +53,7 @@ estimateBackgroundCounts <- function(object) {
 #       # compute groups of contiguous values
 #       dplyr::mutate(diffDist = distance - dplyr::lag(distance) - 1) %>%
 #       tidyr::replace_na(list(diffDist = 0)) %>%
-#       dplyr::mutate(diffDist = if_else(diffDist > 1, 1, diffDist)) %>%
+#       dplyr::mutate(diffDist = dplyr::if_else(diffDist > 1, 1, diffDist)) %>%
 #       dplyr::mutate(group = cumsum(diffDist)) %>%
 #       # find start/end/size
 #       dplyr::group_by(ref1, bin1, group) %>%
@@ -163,16 +164,16 @@ estimateBackgroundCounts <- function(object) {
 }
 
 estimateMoleculeSize <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object@data <- purrr::map(object@data, .estimateMoleculeSize, sizes = object@sizes)
     return(invisible(object))
 }
 
 .estimateMetaBinsMoleculeSize <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     nMeta <- 10
     minCount <- 5
@@ -193,8 +194,8 @@ estimateMoleculeSize <- function(object) {
 }
 
 estimateMetaBinsMoleculeSize <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object@data <- purrr::map(object@data, .estimateMetaBinsMoleculeSize, sizes = object@sizes)
     return(invisible(object))
@@ -202,13 +203,13 @@ estimateMetaBinsMoleculeSize <- function(object) {
 
 
 .estimateRowCount <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     if (object@parameters@metaSize > 1) {
         colSums <- object@interactionMatrix %>%
             computeSymmetricColSumMeta(sizes, object@parameters@metaSize) %>%
-            as_tibble() %>%
+            tibble::as_tibble() %>%
             # do not use the last bin of the ref
             dplyr::mutate(size = sizes[ref]) %>%
             dplyr::filter(size - bin >= object@parameters@metaSize)
@@ -216,33 +217,32 @@ estimateMetaBinsMoleculeSize <- function(object) {
     else {
         colSums <- object@interactionMatrix %>%
             computeSymmetricColSum(sizes) %>%
-            as_tibble()
+            tibble::as_tibble()
     }
     tmp <- colSums %>%
         dplyr::filter(sum > 0) %>%
         dplyr::pull(sum)
     quartiles <- quantile(tmp, prob = c(.25, .75))
     iqr       <- quartiles[[2]] - quartiles[[1]]
-message(str(quartiles))
     firstOutlier <- quartiles[[1]] - 1.5 * iqr
+    firstOutlier <- 0
     lastOutlier  <- quartiles[[2]] + 1.5 * iqr
-message(str(firstOutlier))
-message(str(lastOutlier))
     tmp <- tmp %>%
-        keep(~ .x >= firstOutlier) %>%
-        keep(~ .x <= lastOutlier)
+        purrr::keep(~ .x >= firstOutlier) %>%
+        purrr::keep(~ .x <= lastOutlier)
 
     tryCatch({
-            fitNB <- fitdistr(tmp, "negative binomial")
-message(str(fitNB))
-            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.01]
+            fitNB                          <- fitdistrplus::fitdist(tmp, "nbinom")
+            object@parameters@rowCountSize <- fitNB$estimate[[1]]
+            object@parameters@rowCountMu   <- fitNB$estimate[[2]]
+            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.001]
             if (length(t) > 0) {
                 object@parameters@minRowCount <- max(t)
             }
             else {
                 object@parameters@minRowCount <- object@parameters@minCount
             }
-            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]], lower.tail = FALSE) < 0.01]
+            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]], lower.tail = FALSE) < 0.001]
             if (length(t) > 0) {
                 object@parameters@maxRowCount <- min(t)
             }
@@ -266,16 +266,16 @@ message(str(fitNB))
 }
 
 estimateRowCount <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object@data <- purrr::map(object@data, .estimateRowCount, sizes = object@sizes)
     return(invisible(object))
 }
 
 .estimateMetaSizes <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     metaSize <- estimateMetaSizeCpp(object@interactionMatrix, object@outlierBins, sizes)
     if (metaSize == 0) {
@@ -288,8 +288,8 @@ estimateRowCount <- function(object) {
 
 
 estimateMetaSizes <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object@data <- purrr::map(object@data, .estimateMetaSizes, sizes = object@sizes)
     return(invisible(object))
@@ -317,8 +317,8 @@ smoothenDistribution <- function(corner) {
 }
 
 estimateDistanceCount <- function(object, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     message("\t\tEstimating distance/count distribution.")
     # Set genome to (ref1, bin1, distance), and transform missing values to 0
@@ -344,7 +344,7 @@ estimateDistanceCount <- function(object, sizes) {
 #           dplyr::select(ref, bin) %>%
 #           dplyr::mutate(ref = factor(ref, levels = names(sizes)))
 #       distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) %>%
-#           as_tibble()
+#           tibble::as_tibble()
 #   }
 #   distanceCount <- object@interactionMatrix %>%
 #       dplyr::filter(ref1 == ref2) %>%
@@ -362,7 +362,7 @@ estimateDistanceCount <- function(object, sizes) {
 #       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
 #       tidyr::replace_na(list(count = 0))
     distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, object@parameters@sampleSize) %>%
-        as_tibble()
+        tibble::as_tibble()
     object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
 }
@@ -426,7 +426,7 @@ computeCornerDifferenceOffsets <- function(corner, background, distance, bothOff
         distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffsetCpp, corner, background, distance)
     }
     #distances <- purrr::map_dbl(offsets, computeCornerDifferenceOffset, corner, background, distance, bothOffsets)
-    tibble(distance = offsets, score = distances)
+    tibble::tibble(distance = offsets, score = distances)
 }
 
 extractCornerFromPoint <- function(parameters, object, pb) {
@@ -481,29 +481,29 @@ findRandomCornerPoints <- function(object, sizes, nSamples) {
 }
 
 estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     message("\t\tEstimating distance/count variance.")
     fitTriangleDifference <- function(distribution) {
-        output <- tibble(shape = NA_real_, rate = NA_real_)
+        output <- tibble::tibble(shape = NA_real_, rate = NA_real_)
         try({
-            f <- fitdistr(distribution$score, "gamma")
-            output <- tibble(shape = f$estimate[["shape"]], rate = f$estimate[["rate"]])}, silent = TRUE)
+            f <- MASS::fitdistr(distribution$score, "gamma")
+            output <- tibble::tibble(shape = f$estimate[["shape"]], rate = f$estimate[["rate"]])}, silent = TRUE)
         return(output)
     }
     nSamples <- 10 / pvalueThreshold
     pb <- progress_bar$new(total = nSamples)
     # Sample a few triangles
     object@parameters@cornerScores <- sampleTriangles(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, nSamples) %>%
-        as_tibble() %>%
+        tibble::as_tibble() %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%
         # Compute 
         purrr::map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
         dplyr::group_by(distance) %>%
         dplyr::group_split() %>%
-        map_dfr(fitTriangleDifference, .id = "distance") %>%
+        purrr::map_dfr(fitTriangleDifference, .id = "distance") %>%
         dplyr::mutate(distance = as.integer(distance)) %>%
         tidyr::drop_na()
 #       # This parameter should be tuned!
@@ -559,8 +559,8 @@ estimateCornerLimits <- function(object, minNBins) {
 }
 
 .estimateCorners <- function(object, sizes, pvalueThreshold, minNBins) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     message(paste0("\tDataset '", object@name, "':"))
     object   <- estimateDistanceCount(object, sizes)
@@ -570,8 +570,8 @@ estimateCornerLimits <- function(object, minNBins) {
 }
 
 estimateCorners <- function(object, pvalueThreshold) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Join shape estimations.")
     object@data <- purrr::map(object@data, .estimateCorners, object@sizes, pvalueThreshold, object@minNBins)
@@ -579,8 +579,8 @@ estimateCorners <- function(object, pvalueThreshold) {
 }
 
 estimateDistributions <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object <- estimateBackgroundCounts(object)
     object <- estimateMetaBinsMoleculeSize(object)

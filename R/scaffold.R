@@ -27,7 +27,7 @@ selectJoins <- function(object, joins) {
 #   # Remove possible duplicates
 #   while (nrow(filteredJoins) > 0) {
 #       bestLine <- filteredJoins %>% dplyr::arrange(pvalue) %>% dplyr::slice(1) %>% as.list()
-#       merges <- dplyr::bind_rows(merges, as_tibble(bestLine))
+#       merges <- dplyr::bind_rows(merges, tibble::as_tibble(bestLine))
 #       filteredJoins <- filteredJoins %>%
 #           dplyr::filter((ref1  != bestLine$ref1) |
 #                         (ref2  != bestLine$ref2) |
@@ -58,7 +58,7 @@ orderJoins <- function(object, joins) {
     forwardDirection <- scaffoldPlaces %>%
         dplyr::filter(ref == join$reference) %>%
         dplyr::slice(1) %>%
-        pull(forward)
+        dplyr::pull(forward)
     if (join$after & join$collinear & forwardDirection) {
         scaffoldPlaces <- scaffoldPlaces %>%
             dplyr::mutate(offset  = dplyr::if_else(newRef == join$other, as.integer(join$refSize + offset), offset)) %>%
@@ -147,7 +147,7 @@ stitchChromosomePair <- function(object, reference, other, after, collinear) {
     firstSize   <- if (after) object@sizes[[reference]]     else object@sizes[[other]]
     nMissingNts <- firstSize * object@binSize - length(firstSeq)
     if (nMissingNts > 0) {
-        filler   <- DNAString(str_c(rep("N", nMissingNts), collapse = ""))
+        filler   <- DNAString(stringr::str_c(rep("N", nMissingNts), collapse = ""))
         firstSeq <- xscat(firstSeq, filler)
     }
     object@sequences[[reference]]   <- xscat(firstSeq, secondSeq)
@@ -177,9 +177,9 @@ repairJoins <- function(joins, referenceRef, otherRef, afterJoin, collinearJoin)
 
 .scaffold <- function(object, orders, groupNames, sizes) {
     message(paste0("\tDataset '", object@name, "'."))
-    l <- scaffoldCounts(object@interactionMatrix, orders, groupNames, sizes)
-    object@interactionMatrix <- l$interationMatrix %>% as_tibble()
-    object@outlierBins       <- l$outlierBins %>% as_tibble()
+    l <- scaffoldCounts(object@interactionMatrix, object@outlierBins, orders, groupNames, sizes, object@parameters@metaSize)
+    object@interactionMatrix <- l$interactionMatrix %>% tibble::as_tibble()
+    object@outlierBins       <- l$outlierBins %>% tibble::as_tibble()
     return(object)
 }
 

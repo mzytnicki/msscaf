@@ -1,7 +1,7 @@
 # Are the number of bins consistent with the sequence size?
 checkSizeDifference <- function(object) {
-    sizeDiff <- tibble(binSize = unlist(object@sizes),
-        strSize = purrr::map_int(object@sequences, str_length),
+    sizeDiff <- tibble::tibble(binSize = unlist(object@sizes),
+        strSize = purrr::map_int(object@sequences, stringr::str_length),
         binnedStrSize = strSize %/% object@binSize -
             dplyr::if_else(strSize %% object@binSize == 0, 1, 0)) %>%
         dplyr::filter(binSize != binnedStrSize)
@@ -23,6 +23,7 @@ checkBinDifference <- function(object, sizes) {
             dplyr::distinct()) %>%
         dplyr::distinct() %>%
         dplyr::mutate(size = sizes[ref]) %>%
+        dplyr::mutate(ref = as.character(ref)) %>%
         dplyr::filter(bin > size)
 }
 
@@ -34,6 +35,25 @@ checkAllBinDifference <- function(object) {
         purrr::every(isTRUE)
     if (! empty) {
         stop(paste("Error! Bin of interaction matrix exceeds sizes.",
+            str(differences), sep = "\n"))
+    }
+}
+
+checkOutlierBins <- function(object, sizes) {
+    object@outlierBins %>%
+        dplyr::mutate(size = sizes[ref] / object@parameters@metaSize) %>%
+        dplyr::mutate(ref = as.character(ref)) %>%
+        dplyr::filter(bin > size)
+}
+
+# Are the outlier bins consistent with the sequence size?
+checkAllOutlierBins <- function(object) {
+    differences <- purrr::map(object@data, checkOutlierBins, sizes = object@sizes)
+    empty <- differences %>%
+        purrr::map(~ nrow(.x) == 0) %>%
+        purrr::every(isTRUE)
+    if (! empty) {
+        stop(paste("Error! Outlier bins exceeds sizes.",
             str(differences), sep = "\n"))
     }
 }

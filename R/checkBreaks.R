@@ -1,8 +1,8 @@
 .checkBreaks <- function(object, chromosomes, sizes) {
     message(paste0("\tDataset '", object@name , "'.\n\t\tComputing stats."))
-    breaksObject                 <- new("tenxcheckerBreaks")
+    breaksObject                 <- new("msscafBreaks")
     breaksObject@data            <- computeMeanTrianglesCpp(object@interactionMatrix, object@parameters@maxLinkRange, object@parameters@metaSize, sizes, object@outlierBins) %>%
-                                        as_tibble()
+                                        tibble::as_tibble()
     # Possibly rescale by ref
     factors <- breaksObject@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
@@ -22,11 +22,11 @@
 }
 
 checkBreaks <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Finding statistics.")
-    object@data <- map(object@data, .checkBreaks, chromosomes = object@chromosomes, sizes = object@sizes)
+    object@data <- purrr::map(object@data, .checkBreaks, chromosomes = object@chromosomes, sizes = object@sizes)
     return(invisible(object))
 }
 
@@ -41,17 +41,17 @@ checkBreaks <- function(object) {
 }
 
 computeNCells <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Estimating break thresholds")
-    object@data <- map(object@data, .computeNCells)
+    object@data <- purrr::map(object@data, .computeNCells)
     return(invisible(object))
 }
 
-.computeBreakPvalue <- function(object, pvalue) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
+.computeBreakPvalue <- function(object, pvalue, sizes) {
+    if (! is(object, "msscafExp")) {
+        stop(paste0("Parameter should be a msscafExp, it is a ", is(object), " ."))
     }
     message(paste0("\tDataset '", object@name , "'."))
     tmp <- object@breaks@data %>%
@@ -73,15 +73,27 @@ computeNCells <- function(object) {
                                          pvalue, NA_real_)) %>%
         dplyr::mutate(padj = p.adjust(testedPvalue, method = "BH", n = nTestedPvalues)) %>%
         dplyr::select(-testedPvalue)
+    # Fill holes if use meta bins
+    if (object@parameters@metaSize > 1) {
+        object@breaks@data <- tibble::enframe(sizes, name = "ref", value = "bin") %>%
+            dplyr::mutate(ref = factor(ref, levels = names(sizes))) %>%
+            dplyr::mutate(bin = purrr::map(bin, ~ seq.int(from = 1, to = .x))) %>%
+            tidyr::unchop(bin) %>%
+            dplyr::left_join(object@breaks@data %>%
+                    dplyr::mutate(padj = dplyr::if_else(is.na(padj), -1, padj)),
+                by = c("ref", "bin")) %>%
+            tidyr::fill(fcMeanCount, nCells, pvalue, padj) %>%
+             dplyr::mutate(padj = dplyr::if_else(padj == -1, NA_real_, padj))
+    }
     return(object)
 }
 
 computeBreakPvalue <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Estimating break thresholds")
-    object@data <- map(object@data, .computeBreakPvalue)
+    object@data <- purrr::map(object@data, .computeBreakPvalue, sizes = object@sizes)
     return(invisible(object))
 }
 
@@ -127,13 +139,17 @@ filterBreak <- function(parameters, pvalueThreshold, pb) {
 }
 
 .filterBreaks <- function(object, pvalueThreshold, chromosomes, sizes) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop(paste0("Parameter should be a tenxcheckerExp, it is a ", is(object), " ."))
+    if (! is(object, "msscafExp")) {
+        stop(paste0("Parameter should be a msscafExp, it is a ", is(object), " ."))
     }
     message(paste0("\tDataset '", object@name, "'..."))
-    object@breaks@filteredData <- removeNearEqualBreaksCpp(object@breaks@data %>%
-                                      dplyr::filter(padj <= pvalueThreshold) %>%
-                                      dplyr::arrange(padj), object@parameters@maxLinkRange) %>% tibble::as_tibble()
+    object@breaks@filteredData <- object@breaks@data %>%
+                                          dplyr::filter(padj <= pvalueThreshold)
+#   object@breaks@filteredData <- removeNearEqualBreaksCpp(object@breaks@data %>%
+#                                         dplyr::filter(padj <= pvalueThreshold) %>%
+#                                         dplyr::arrange(padj),
+#                                     object@parameters@maxLinkRange * object@parameters@metaSize) %>%
+#       tibble::as_tibble()
     object@breaks@changePlots  <- c()
     object@breaks@mapPlots     <- c()
 #   object@breaks@filteredData <- object@breaks@data %>% slice_head(n = 0)
@@ -165,20 +181,20 @@ filterBreak <- function(parameters, pvalueThreshold, pb) {
 }
 
 filterBreaks <- function(object, pvalue) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Filtering results.")
-    object@data <- map(object@data, .filterBreaks, pvalue = pvalue, chromosomes = object@chromosomes, sizes = object@sizes)
+    object@data <- purrr::map(object@data, .filterBreaks, pvalue = pvalue, chromosomes = object@chromosomes, sizes = object@sizes)
     return(invisible(object))
 }
 
 ..compareBreaks <- function(object1, object2) {
-    if (! is(object1, "tenxcheckerExp")) {
-        stop("Parameter 1 should be a tenxcheckerExp.")
+    if (! is(object1, "msscafExp")) {
+        stop("Parameter 1 should be a msscafExp.")
     }
-    if (! is(object2, "tenxcheckerExp")) {
-        stop("Parameter 2 should be a tenxcheckerExp.")
+    if (! is(object2, "msscafExp")) {
+        stop("Parameter 2 should be a msscafExp.")
     }
     if (object1@name == object2@name) {
         return(object1)
@@ -190,7 +206,7 @@ filterBreaks <- function(object, pvalue) {
     newData <- object1@breaks@filteredData %>%
         dplyr::left_join(object2@breaks@data, by = c("ref", "bin"), suffix = c("", "_other")) %>%
         dplyr::filter(is.na(fcMeanCount_other) | (fcMeanCount_other <= 0)) %>%
-        dplyr::filter(is.na(pvalue_other) | (pvalue_other < 0.5)) %>%
+        dplyr::filter(is.na(pvalue_other) | (pvalue_other < 0.5) | (nCells_other <= object2@parameters@breakNCells)) %>%
         #dplyr::filter(nCells < object2@parameters@breakNCells | fcMeanCount <= 0) %>%
         dplyr::select(ref, bin, nCells, fcMeanCount, pvalue, padj)
     object1@breaks@filteredData <- newData
@@ -199,28 +215,48 @@ filterBreaks <- function(object, pvalue) {
 }
 
 .compareBreaks <- function(object1, objects) {
-    if (! is(object1, "tenxcheckerExp")) {
-        stop("Parameter 1 should be a tenxcheckerExp.")
+    if (! is(object1, "msscafExp")) {
+        stop("Parameter 1 should be a msscafExp.")
     }
     object1 <- purrr::reduce(objects, ..compareBreaks, .init = object1)
     return(object1)
 }
 
 compareBreaks <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Comparing breaks")
     object@data <- purrr::map(object@data, .compareBreaks, objects = object@data)
     return(invisible(object))
 }
 
+.mergeBreaks <- function(object, pvalueThreshold) {
+    object@breaks@filteredData <- object@breaks@filteredData %>%
+        dplyr::arrange(padj) %>%
+        removeNearEqualBreaksCpp(object@parameters@maxLinkRange * object@parameters@metaSize) %>%
+        tibble::as_tibble()
+}
+
 mergeBreaks <- function(object, pvalueThreshold) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
-    minMaxLinkRange <- min(unlist(map(map(object@data, "parameters"), "maxLinkRange")))
-#   breaks          <- dplyr::bind_rows(map(map(object@data, "breaks"), "filteredData")) %>% group_by(ref)
+    linkRanges      <- unlist(purrr::map(purrr::map(object@data, "parameters"), "maxLinkRange"))
+    metaSizes       <- unlist(purrr::map(purrr::map(object@data, "parameters"), "metaSize"))
+    maxRange        <- max(linkRanges * metaSizes)
+    # object@breaks   <- purrr::map_dfr(object@data, .mergeBreaks) %>%
+    object@breaks   <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "breaks"), "filteredData")) %>%
+        dplyr::select(ref, bin, pvalue)
+    object@breaks <- object@breaks %>%
+        dplyr::group_by(ref, bin) %>%
+        dplyr::summarize(pvalue = exp(sum(log(pvalue))), .groups = "drop") %>%
+        dplyr::arrange(pvalue) %>%
+        removeNearEqualBreaksCpp(maxRange) %>%
+        tibble::as_tibble() %>%
+        dplyr::mutate(padj = p.adjust(pvalue, method = "BH", n = nrow(.))) %>%
+        dplyr::arrange(ref, bin)
+#   breaks          <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "breaks"), "filteredData")) %>% group_by(ref)
 #   refs            <- dplyr::group_keys(breaks) %>% tibble::deframe()
 #   breaks          <- dplyr::group_split(breaks)
 #   sizes           <- object@sizes[refs]
@@ -228,13 +264,16 @@ mergeBreaks <- function(object, pvalueThreshold) {
 #   minMaxLinkRange <- rep(minMaxLinkRange, nGroups)
 #   pvalueThreshold <- rep(pvalueThreshold, nGroups)
 #   breaks          <- pmap(list(refs, breaks, minMaxLinkRange, sizes, pvalueThreshold), removeNearEqualBreaks)
-    breaks          <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "breaks"), "filteredData"))
-    object@breaks   <- removeNearEqualBreaksCpp(breaks %>% dplyr::arrange(padj), minMaxLinkRange) %>% tibble::as_tibble()
+#   breaks          <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "breaks"), "filteredData"))
+#   object@breaks   <- removeNearEqualBreaksCpp(breaks %>% dplyr::arrange(padj), minMaxLinkRange) %>% tibble::as_tibble()
     # object@breaks   <- breaks %>% bind_rows()
     if (nrow(object@breaks) == 0) {
         object@breaks <- dplyr::slice_head(object@data[[1]]@breaks@data, n = 0)
+        message("No break found.")
     }
-    object@breaks   <- object@breaks %>% dplyr::arrange(ref, bin)
+    else {
+        message(paste0("\t", nrow(object@breaks), " breaks found."))
+    }
     return(invisible(object))
 }
 
@@ -247,26 +286,26 @@ mergeBreaks <- function(object, pvalueThreshold) {
 .addBreakPlots <- function(parameters, object, pb) {
     ref               <- parameters$ref
     bin               <- parameters$bin
-    breakPlots        <- map(object@data, ..addBreakPlots, ref = ref, bin = bin, size = object@sizes[[ref]])
-    names(breakPlots) <- map(object@data, "name")
+    breakPlots        <- purrr::map(object@data, ..addBreakPlots, ref = ref, bin = bin, size = object@sizes[[ref]])
+    names(breakPlots) <- purrr::map(object@data, "name")
     pb$tick()
     return(breakPlots)
 }
 
 addBreakPlots <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message(paste0("Computing plots."))
     pb                       <- progress_bar$new(total = nrow(object@breaks))
-    object@breakPlots        <- map(object@breaks %>% dplyr::mutate(ref = as.character(ref)) %>% transpose(), .addBreakPlots, object = object, pb = pb)
+    object@breakPlots        <- purrr::map(object@breaks %>% dplyr::mutate(ref = as.character(ref)) %>% transpose(), .addBreakPlots, object = object, pb = pb)
     names(object@breakPlots) <- object@breaks %>% unite("name", c(ref, bin), sep = "_") %>% pull(name)
     return(object)                                                                                                                                                                                      
 }
 
 findBreaks <- function(object, pvalue = 0.05) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object <- computeNCells(object)
     object <- checkBreaks(object)

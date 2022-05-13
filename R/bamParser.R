@@ -1,3 +1,3 @@
 parseBamFile <- function(fileName, binSize) {
-    tenxcheckerData(inputMatrix = as_tibble(parseBamFileCpp(fileName, binSize)))
+    msscafData(inputMatrix = tibble::as_tibble(parseBamFileCpp(fileName, binSize)))
 }

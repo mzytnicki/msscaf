@@ -34,8 +34,8 @@ computeTest <- function(background, data) {
 # #  - count:       the counts
 # #  - type:        the corner names, or "interior"
 # checkJoin <- function(object, counts, progressBar) {
-#     if (! is(object, "tenxchecker2RefExp")) {
-# 	stop("Parameter should be a 'tenxchecker2RefExp'.")
+#     if (! is(object, "msscaf2RefExp")) {
+# 	stop("Parameter should be a 'msscaf2RefExp'.")
 #     }
 #     counts     <- counts %>%
 # 		      dplyr::filter(chromosome1 == object@chromosome1,
@@ -163,7 +163,7 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 #     }
 #     tmp <- counts %>%
 # 	dplyr::filter(type != "interior") %>%
-# 	dplyr::mutate(zeros = if_else(count == 0, 1, 0)) %>%
+# 	dplyr::mutate(zeros = dplyr::if_else(count == 0, 1, 0)) %>%
 # 	dplyr::group_by(type) %>%
 # 	dplyr::summarize(nZeros    = sum(zeros),
 # 			 nNonZeros = sum(1 - zeros),
@@ -201,7 +201,7 @@ testJoin <- function(parameters, counts, sizes, maxDistance, pb) {
 # Add plots to experiment
 getJoinInfo <- function(object, parameters) {
     testPlot <- classifyCornerPointsCpp(object@interactionMatrix, object@size1, object@size2, object@parameters@maxLinkRange) %>%
-        as_tibble() %>%
+        tibble::as_tibble() %>%
         computeAllSamples(object@size1, object@size2, object@parameters@maxLinkRange) %>%
         tibble::enframe(name = "type", value = "count") %>%
         tidyr::unnest(count) %>%
@@ -215,41 +215,45 @@ getJoinInfo <- function(object, parameters) {
 }
 
 .checkJoins <- function(object, sizes, pvalueThreshold) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
+    if (! is(object, "msscafExp")) {
+        stop("Parameter should be a msscafExp.")
     }
     message(paste0("\tDataset '", object@name, "'."))
     cornerSums <- sumCornerCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
-        as_tibble() %>%
+        tibble::as_tibble() %>%
         # Distribution is inflated in 0, remove it
         dplyr::filter(count > 0) %>%
         # Remove strange even/odd pattern
         dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))
     if (nrow(cornerSums) == 0) {
         message("\t\tNo join found.")
-        joinsObject <- new("tenxcheckerJoins")
-        joinsObject@data <- tibble(ref1 = integer(), ref2 = integer(), after1 = logical(), after2 = logical(), pvalue = numeric(), pvalueCorner = numeric())
+        joinsObject <- new("msscafJoins")
+        joinsObject@data <- tibble::tibble(ref1 = integer(), ref2 = integer(), after1 = logical(), after2 = logical(), pvalue = numeric(), pvalueCorner = numeric())
         object@joins <- joinsObject
         return(object)
     }
     # Select outlier corner sums
-    # Not meaningful if you have to few
+    # Not meaningful if you have too few
     if (nrow(cornerSums) >= 30) {
-        fitNB <- fitdistr(cornerSums$count, "negative binomial")
+        fitNB <- fitdistrplus::fitdist(cornerSums$count, "nbinom")
         threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])
         selectedRefs <- cornerSums %>%
             dplyr::filter(count > threshold)
-        message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     }
     else {
         selectedRefs <- cornerSums
     }
+    message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     pb <- progress_bar$new(total = nrow(selectedRefs))
-    selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% as_tibble()
+    selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% tibble::as_tibble()
     minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange, pb = pb)
     selectedRefs   <- selectedRefs %>%
         dplyr::mutate(pvalue = minPValues) %>%
-        dplyr::filter(pvalue <= pvalueThreshold) %>%
+        dplyr::mutate(size1 = sizes[ref1]) %>%
+        dplyr::mutate(size2 = sizes[ref2]) %>%
+        dplyr::mutate(minSize = pmin(size1, size2)) %>%
+        # Do not apply p-value filter if refs are too short: corners overlap
+        dplyr::filter((pvalue <= pvalueThreshold) | (minSize <= 3 * object@parameters@maxLinkRange)) %>%
         dplyr::group_by(ref1, ref2) %>% # Possible 2 joins for the same pairs of refs?
         dplyr::slice_min(pvalue, n = 1, with_ties = FALSE) %>%
         dplyr::ungroup() %>%
@@ -258,10 +262,10 @@ getJoinInfo <- function(object, parameters) {
         dplyr::mutate(after2 = (stringr::str_sub(corner, 2, 2) == "E")) %>%
         dplyr::select(ref1, ref2, after1, after2, pvalue)
     message(paste0("\t\tKeeping ", nrow(selectedRefs), " of them."))
-#   selectedCounts <- keepScaffoldsPairsCpp(object@interactionMatrix, selectedRefs) %>% as_tibble()
+#   selectedCounts <- keepScaffoldsPairsCpp(object@interactionMatrix, selectedRefs) %>% tibble::as_tibble()
 #   objects        <- splitBy2RefFromMatrix(object, selectedCounts, sizes)
 #   joinInfo       <- purrr::map2(objects, purrr::transpose(selectedRefs), getJoinInfo) %>% purrr::transpose()
-    joinsObject <- new("tenxcheckerJoins")
+    joinsObject <- new("msscafJoins")
     joinsObject@data <- selectedRefs
 #   joinsObject@testPlots <- joinInfo$testPlot
 #   joinsObject@mapPlots <- joinInfo$mapPlot
@@ -281,7 +285,7 @@ getJoinInfo <- function(object, parameters) {
 #   joins <- purrr::map(objects, checkJoin, counts, progressBar = pb)
 #   if (length(joins) == 0) {
 #       message("\tNo join found.")
-#       joinsObject <- new("tenxcheckerJoins")
+#       joinsObject <- new("msscafJoins")
 #       joinsObject@data <- tibble(ref1   = character(),
 #                                  ref2   = character(),
 #                                  vert   = character(),
@@ -292,23 +296,23 @@ getJoinInfo <- function(object, parameters) {
 #       object@joins <- joinsObject
 #       return(object)
 #   }
-#   joins <- tibble(ref1     = map_chr(joins, "ref1"),
-#                   ref2     = map_chr(joins, "ref2"),
-#                   tUL      = map(joins, "tUL"),
-#                   tUR      = map(joins, "tUR"),
-#                   tBL      = map(joins, "tBL"),
-#                   tBR      = map(joins, "tBR"),
-#                   testPlot = map(joins, "testPlot"),
-#                   mapPlot  = map(joins, "mapPlot")) %>%
+#   joins <- tibble(ref1     = purrr::map_chr(joins, "ref1"),
+#                   ref2     = purrr::map_chr(joins, "ref2"),
+#                   tUL      = purrr::map(joins, "tUL"),
+#                   tUR      = purrr::map(joins, "tUR"),
+#                   tBL      = purrr::map(joins, "tBL"),
+#                   tBR      = purrr::map(joins, "tBR"),
+#                   testPlot = purrr::map(joins, "testPlot"),
+#                   mapPlot  = purrr::map(joins, "mapPlot")) %>%
 #       tidyr::gather(key = "key", value = "test", tUL, tUR, tBL, tBR) %>%
-#       dplyr::filter(!unlist(map(test, is_null))) %>%
+#       dplyr::filter(!unlist(purrr::map(test, rlang::is_null))) %>%
 #       dplyr::mutate(pvalue = unlist(test)) %>%
 #       tidyr::separate(key, c(1, 2), into = c(NA, "vert", "hor")) %>%
 #       dplyr::mutate(vert = factor(vert)) %>%
 #       dplyr::mutate(hor = factor(hor)) %>%
 #       dplyr::filter(pvalue <= pvalueThreshold) %>%
 #       dplyr::arrange(pvalue)
-#   joinsObject <- new("tenxcheckerJoins")
+#   joinsObject <- new("msscafJoins")
 #   joinsObject@data <- joins %>%
 #       dplyr::select(-c(test, testPlot, mapPlot))
 #   joinsObject@testPlots <- joins %>%
@@ -324,65 +328,89 @@ getJoinInfo <- function(object, parameters) {
 }
 
 checkJoins <- function(object, pvalueThreshold) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Finding putative joins.")
-    object@data <- map(object@data, .checkJoins, sizes = object@sizes, pvalueThreshold)
+    object@data <- purrr::map(object@data, .checkJoins, sizes = object@sizes, pvalueThreshold)
     return(invisible(object))
 }
 
-.removeDuplicateJoins <- function(object) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Parameter should be a tenxcheckerExp.")
-    }
-    message(paste0("\tDataset '", object@name, "'."))
-    # Transform joins to before/after
-    nJoins <- nrow(object@joins@data)
-    if (nJoins == 0) {
-        return(object)
-    }
-#   tmp <- object@joins@data
-#       dplyr::mutate(hor = as.character(hor)) %>%
-#       dplyr::mutate(vert = as.character(vert)) %>%
-    ambiguousJoins <- dplyr::bind_rows(object@joins@data %>%
-                                           dplyr::select(ref1, after1, pvalue) %>%
-                                           dplyr::rename(ref = ref1, after = after1),
-                                       object@joins@data %>%
-                                           dplyr::select(ref2, after2, pvalue) %>%
-                                           dplyr::rename(ref = ref2, after = after2)) %>%
-    # Find duplicates
-        dplyr::group_by(ref, after) %>%
-        dplyr::slice_min(order_by = pvalue, n = 2, with_ties = FALSE) %>%
-        dplyr::mutate(logPvalue = -log10(pvalue)) %>%
-        dplyr::summarize(pvalueDiff = max(logPvalue) - min(logPvalue), n = n(), .groups = "drop") %>%
-    # Select duplicates
-        dplyr::filter(n > 1, pvalueDiff <= 2) %>%
-        dplyr::select(ref, after)
+transformRefAfterToRefRef <- function(joins) {
+    dplyr::bind_rows(joins %>%
+            dplyr::select(ref1, after1, pvalue) %>%
+            dplyr::rename(ref = ref1, after = after1),
+        joins %>%
+            dplyr::select(ref2, after2, pvalue) %>%
+            dplyr::rename(ref = ref2, after = after2))
+}
+
+discardJoinsFromRefRef <- function(joins, toDiscard) {
     # Transform to ref1/bin1
-    refBin1 <- ambiguousJoins %>%
+    refBin1 <- toDiscard %>%
         dplyr::rename(ref1 = ref) %>%
         dplyr::rename(after1 = after) %>%
         dplyr::select(ref1, after1)
     # Transform to ref2/bin2
-    refBin2 <- ambiguousJoins %>%
+    refBin2 <- toDiscard %>%
         dplyr::rename(ref2 = ref) %>%
         dplyr::rename(after2 = after) %>%
         dplyr::select(ref2, after2)
-    object@joins@data <- object@joins@data %>%
+    joins %>%
         dplyr::anti_join(refBin1, by = c("ref1", "after1")) %>%
         dplyr::anti_join(refBin2, by = c("ref2", "after2"))
-    message(paste0("\t\tKept ", nrow(object@joins@data), "/", nJoins, "."))
-    return(object)
 }
 
-removeDuplicateJoins <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+.removeAmbiguousJoins <- function(joins, name = NULL) {
+    if (! is.null(name)) {
+        message(paste0("\tData '", name, "'."))
+    }
+    # Transform joins to before/after
+    nJoins <- nrow(joins)
+    if (nJoins == 0) {
+        return(joins)
+    }
+    ambiguousJoins <- joins %>%
+        transformRefAfterToRefRef() %>%
+    # Find duplicates
+        dplyr::group_by(ref, after) %>%
+        dplyr::slice_min(order_by = pvalue, n = 2, with_ties = FALSE) %>%
+        dplyr::mutate(logPvalue = -log10(pvalue)) %>%
+        dplyr::summarize(pvalueDiff = max(logPvalue) - min(logPvalue), n = dplyr::n(), .groups = "drop") %>%
+    # Select duplicates
+        dplyr::filter(n > 1, pvalueDiff <= 2) %>%
+        dplyr::select(ref, after)
+    joins <- discardJoinsFromRefRef(joins, ambiguousJoins)
+    if (! is.null(name)) {
+        message(paste0("\t\tKept ", nrow(joins), "/", nJoins, "."))
+    }
+    return(joins)
+}
+
+removeAmbiguousJoins <- function(object) {
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Removing ambiguous joins")
-    object@data <- map(object@data, .removeDuplicateJoins)
+    f <- function(d) {
+        d@joins@data <- .removeAmbiguousJoins(d@joins@data, d@name)
+        return(d)
+    }
+    object@data <- purrr::map(object@data, f)
     return(invisible(object))
+}
+
+removeSuboptimalJoins <- function(joins) {
+    nJoins <- nrow(joins)
+    if (nJoins == 0) {
+        return(joins)
+    }
+    suboptimalJoins <- joins %>%
+        transformRefAfterToRefRef() %>%
+        dplyr::group_by(ref, after) %>%
+        dplyr::slice_min(order_by = pvalue, n = -1, with_ties = FALSE)
+    joins <- discardJoinsFromRefRef(joins, suboptimalJoins)
+    return(joins)
 }
 
 ..checkCornersOld <- function(parameters, object, sizes, pb) {
@@ -437,10 +465,14 @@ removeDuplicateJoins <- function(object) {
 .checkCorners <- function(object, sizes, pvalueThreshold) {
     message(paste0("\tDataset '", object@name, "'."))
     corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
-        as_tibble() %>%
+        tibble::as_tibble() %>%
         dplyr::filter(count >= 0)
-    message(paste0("\t\tSelected ", nrow(object@joins@data), " joins."))
-    pb     <- progress_bar$new(total = nrow(object@joins@data))
+    nJoins <- nrow(object@joins@data)
+    message(paste0("\t\tSelected ", nJoins, " joins."))
+    if (nJoins == 0) {
+        return(object)
+    }
+    pb     <- progress_bar$new(total = nJoins)
     values <- corners %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%
@@ -453,19 +485,22 @@ removeDuplicateJoins <- function(object) {
 }
 
 checkCorners <- function(object, pvalueThreshold) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     message("Checking corner shape.")
-    object@data <- map(object@data, .checkCorners, object@sizes, pvalueThreshold)
+    object@data <- purrr::map(object@data, .checkCorners, object@sizes, pvalueThreshold)
     return(invisible(object))
 }
 
 mergeJoins <- function(object, pvalueThreshold) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
-    object@joins <- dplyr::bind_rows(map(map(object@data, "joins"), "data")) %>%
+message(str(object@data[[1]]@joins@data))
+message(str(object@data[[2]]@joins@data))
+message(str(object@data[[3]]@joins@data))
+    object@joins <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "joins"), "data")) %>%
         dplyr::distinct() %>%
         dplyr::arrange(pvalue) %>%
         dplyr::mutate(p_adj = p.adjust(pvalue, method = "BH")) %>%
@@ -473,7 +508,9 @@ mergeJoins <- function(object, pvalueThreshold) {
         dplyr::group_by(ref1, ref2, after1, after2) %>%
         dplyr::arrange(pvalue) %>%
         dplyr::slice_head(n = 1) %>%
-        dplyr::ungroup()
+        dplyr::ungroup() %>%
+        .removeAmbiguousJoins() %>%
+        removeSuboptimalJoins()
     message(paste0("\t", nrow(object@joins), " joins found in total."))
     return(invisible(object))                                                                                                                                                                                      
 }
@@ -488,15 +525,15 @@ mergeJoins <- function(object, pvalueThreshold) {
 .addJoinPlots <- function(parameters, object, pb) {
     ref1             <- parameters$ref1
     ref2             <- parameters$ref2
-    joinPlots        <- map(object@data, ..addJoinPlots, ref1 = ref1, ref2 = ref2, size1 = object@sizes[[ref1]], size2 = object@sizes[[ref2]], left = parameters$left, up = parameters$up)
-    names(joinPlots) <- map(object@data, "name")
+    joinPlots        <- purrr::map(object@data, ..addJoinPlots, ref1 = ref1, ref2 = ref2, size1 = object@sizes[[ref1]], size2 = object@sizes[[ref2]], left = parameters$left, up = parameters$up)
+    names(joinPlots) <- purrr::map(object@data, "name")
     pb$tick()
     return(joinPlots)
 }
 
 addJoinPlots <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-	stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+	stop("Parameter should be a msscafClass.")
     }
     message(paste0("\tComputing plots."))
     pb                      <- progress_bar$new(total = nrow(object@joins))
@@ -514,12 +551,12 @@ addJoinPlots <- function(object) {
 }
 
 findJoins <- function(object, pvalue = 0.05) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Parameter should be a tenxcheckerClass.")
+    if (! is(object, "msscafClass")) {
+        stop("Parameter should be a msscafClass.")
     }
     object <- estimateCorners(object, pvalue)
     object <- checkJoins(object, pvalue)
-    object <- removeDuplicateJoins(object)
+    object <- removeAmbiguousJoins(object)
     object <- checkCorners(object, pvalue)
     object <- mergeJoins(object, pvalue)
     #object <- addJoinPlots(object)

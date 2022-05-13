@@ -5,8 +5,8 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_tenxchecker_parseBamFileCpp', PACKAGE = 'tenxchecker', fileName, binSize)
 }
 
-computeMeanTrianglesCpp <- function(data, distance, metaSize, sizes, outliers) {
-    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance, metaSize, sizes, outliers)
+computeMeanTrianglesCpp <- function(data, distance, metaSize, sizesIn, outliers) {
+    .Call('_tenxchecker_computeMeanTrianglesCpp', PACKAGE = 'tenxchecker', data, distance, metaSize, sizesIn, outliers)
 }
 
 removeNearEqualBreaksCpp <- function(breaks, distance) {
@@ -17,24 +17,40 @@ computeCornerSize <- function(size1, size2, maxDistance) {
     .Call('_tenxchecker_computeCornerSize', PACKAGE = 'tenxchecker', size1, size2, maxDistance)
 }
 
-filterCornersCpp <- function(data, sizes, cornerSize, metaSize) {
-    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizes, cornerSize, metaSize)
+filterCornersCpp <- function(data, sizesIn, cornerSize, metaSize) {
+    .Call('_tenxchecker_filterCornersCpp', PACKAGE = 'tenxchecker', data, sizesIn, cornerSize, metaSize)
+}
+
+sumCornerCpp <- function(interactions, sizes, cornerSize, metaSize) {
+    .Call('_tenxchecker_sumCornerCpp', PACKAGE = 'tenxchecker', interactions, sizes, cornerSize, metaSize)
 }
 
 extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize, metaSize) {
     .Call('_tenxchecker_extractCornersCpp', PACKAGE = 'tenxchecker', interactions, selectedRefs, sizes, cornerSize, metaSize)
 }
 
-classifyCornerPointsCpp <- function(interactions, size1, size2, maxDistance) {
-    .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, maxDistance)
+classifyCornerPointsCpp <- function(interactions, size1, size2, metaSize, maxDistance) {
+    .Call('_tenxchecker_classifyCornerPointsCpp', PACKAGE = 'tenxchecker', interactions, size1, size2, metaSize, maxDistance)
+}
+
+extractCornersFullCpp <- function(interactions, selectedCorners, sizesIn, cornerSize, metaSize) {
+    .Call('_tenxchecker_extractCornersFullCpp', PACKAGE = 'tenxchecker', interactions, selectedCorners, sizesIn, cornerSize, metaSize)
+}
+
+computeCornerDifferenceOffsetCpp <- function(offset, corner, background, maxDistance) {
+    .Call('_tenxchecker_computeCornerDifferenceOffsetCpp', PACKAGE = 'tenxchecker', offset, corner, background, maxDistance)
+}
+
+computeCornerDifferenceBothOffsetCpp <- function(offset, corner, background, maxDistance) {
+    .Call('_tenxchecker_computeCornerDifferenceBothOffsetCpp', PACKAGE = 'tenxchecker', offset, corner, background, maxDistance)
 }
 
 estimateDistanceCountCpp <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
     .Call('_tenxchecker_estimateDistanceCountCpp', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nOutputElements)
 }
 
-sampleTriangles <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
-    .Call('_tenxchecker_sampleTriangles', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nOutputElements)
+sampleTriangles <- function(data, outliers, sizesIn, distance, metaSize, nSamples) {
+    .Call('_tenxchecker_sampleTriangles', PACKAGE = 'tenxchecker', data, outliers, sizesIn, distance, metaSize, nSamples)
 }
 
 estimateMetaSizeCpp <- function(rowAvg, maxDistance, nMeta, minCount) {
@@ -101,6 +117,10 @@ removeOutliersRefCpp <- function(data, outliersTibble, size, minLim = -1L, maxLi
     .Call('_tenxchecker_removeOutliersRefCpp', PACKAGE = 'tenxchecker', data, outliersTibble, size, minLim, maxLim)
 }
 
+removeOutliersCpp <- function(data, outliersTibble, sizes) {
+    .Call('_tenxchecker_removeOutliersCpp', PACKAGE = 'tenxchecker', data, outliersTibble, sizes)
+}
+
 parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {
     .Call('_tenxchecker_parsePafCpp', PACKAGE = 'tenxchecker', fname, resolution, minAlnLen, minCount, minNCells)
 }
@@ -117,8 +137,8 @@ scaffoldContigs <- function(contigs, orders, sizes, binSize) {
     .Call('_tenxchecker_scaffoldContigs', PACKAGE = 'tenxchecker', contigs, orders, sizes, binSize)
 }
 
-scaffoldCounts <- function(matrices, groups, scaffoldRefs, sizes) {
-    .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, groups, scaffoldRefs, sizes)
+scaffoldCounts <- function(matrices, outlierBins, groups, scaffoldRefs, sizes, metaSize) {
+    .Call('_tenxchecker_scaffoldCounts', PACKAGE = 'tenxchecker', matrices, outlierBins, groups, scaffoldRefs, sizes, metaSize)
 }
 
 splitCpp <- function(object) {

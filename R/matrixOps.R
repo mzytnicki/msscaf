@@ -62,7 +62,7 @@ makeFullMatrixGenome <- function(data, sizes) {
 
 makeSparseMatrix <- function(data) {
     data <- summary(data)
-    tibble(bin1  = data$i - 1, bin2  = data$j - 1, count = data$x) %>% filter(bin1 >= bin2)
+    tibble::tibble(bin1  = data$i - 1, bin2  = data$j - 1, count = data$x) %>% dplyr::filter(bin1 >= bin2)
 }
 
 
@@ -73,12 +73,12 @@ makeSparseMatrixGenome <- function(data, sizes) {
     cumulatedSizes <- c(1, cumulatedSizes)
     sumSizes       <- sum(sizes)
     refSizes       <- enframe(cumulatedSizes, name = "ref", value = "bin") %>%
-        right_join(tibble(bin = seq.int(sumSizes)), by = "bin") %>%
+        dplyr::right_join(tibble::tibble(bin = seq.int(sumSizes)), by = "bin") %>%
         dplyr::mutate(ref = factor(refs[ref], levels = refs)) %>%
         dplyr::arrange(bin) %>%
         tidyr::fill(ref)
     data           <- summary(data)
-    tibble(bin1  = data$i, bin2  = data$j, count = data$x) %>%
+    tibble::tibble(bin1  = data$i, bin2  = data$j, count = data$x) %>%
         dplyr::left_join(refSizes, by = c("bin1" = "bin")) %>%
         dplyr::rename(ref1 = ref) %>%
         dplyr::left_join(refSizes, by = c("bin2" = "bin")) %>%
@@ -94,20 +94,20 @@ makeSparseMatrixGenome <- function(data, sizes) {
 makeFullTibble <- function(data) {
     data %>%
         makeSymmetric() %>%
-        complete(bin1, bin2, fill = list(count = 0))
+        tidyr::complete(bin1, bin2, fill = list(count = 0))
 }
 
 makeFullTibbleNotSquare <- function(data, size1, size2) {
     list(bin1 = seq.int(size1), bin2 = seq.int(size2)) %>%
-        cross_df() %>%
-        left_join(data, by = c("bin1", "bin2")) %>%
-        mutate(count = replace_na(count, 0))
+        purrr::cross_df() %>%
+        tibble::left_join(data, by = c("bin1", "bin2")) %>%
+        dplyr::mutate(count = replace_na(count, 0))
 }
 
 makeTibbleFromList <- function(data, n) {
-    tibble(bin1 = rep(seq(n), each = n),
+    tibble::tibble(bin1 = rep(seq(n), each = n),
            bin2 = rep(seq(n), times = n),
            count = data) %>%
-        filter(count != 0) %>%
-        filter(bin1 <= bin2)
+        dplyr::filter(count != 0) %>%
+        dplyr::filter(bin1 <= bin2)
 }

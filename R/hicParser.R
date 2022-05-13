@@ -1,9 +1,8 @@
 parseHicFile <- function(fileName, binSize) {
-    # as_tibble(parseHicCpp(fileName, binSize))
     l <- parseHicCpp(fileName, binSize)
-    data <- as_tibble(l$data) %>%
-        arrange(ref1, bin1, ref2, bin2) %>%
-        drop_na()
-    objectData <- tenxcheckerData(inputMatrix = data)
+    data <- tibble::as_tibble(l$data) %>%
+        dplyr::arrange(ref1, bin1, ref2, bin2) %>%
+        tidyr::drop_na()
+    objectData <- msscafData(inputMatrix = data)
     return(objectData)
 }

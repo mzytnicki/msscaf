@@ -2,13 +2,13 @@ computeScaleFactor<- function(object, sizes) {
     if (is.null(object)) {
         length <- sizes[[2]] - sizes[[1]]
     }
-    else if (is(object, "tenxcheckerExp")) {
+    else if (is(object, "msscafExp")) {
         length <- sum(sizes)
     }
-    else if (is(object, "tenxchecker2RefExp")) {
+    else if (is(object, "msscaf2RefExp")) {
         length <- min(object@size1, object@size2)
     }
-    else if (is(object, "tenxcheckerRefExp")) {
+    else if (is(object, "msscafRefExp")) {
         length <- object@size
     }
     else {
@@ -63,8 +63,8 @@ plotMoleculeSizeDistribution <- function(object) {
 }
 
 .plotDiagonalStrengthFit <- function(object) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
     tmp <- object@breaks@data %>%
         dplyr::filter(nCells >= object@parameters@breakNCells) %>%
@@ -81,18 +81,18 @@ plotMoleculeSizeDistribution <- function(object) {
 
 # This plot shows how triangles (near the diagonal) are fitted.
 plotDiagonalStrengthFit <- function(object) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Object should be a 'tenxcheckerClass'.")
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
     }
     plots <- purrr::map(object@data, .plotDiagonalStrengthFit)
-    return(do.call("plot_grid", c(plots, ncol = length(plots))))
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
-plotBreakStats <- function(object, dataName, refName, bins = NULL) {
-    if (! is(object, "tenxcheckerClass")) {
-        stop("Object should be a 'tenxcheckerClass'.")
+.plotBreakStats <- function(object, refName, bins = NULL, minBin = NULL, maxBin = NULL) {
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
-    p <- getDataset(object, dataName)@breaks@data %>%
+    p <- object@breaks@data %>%
         dplyr::filter(ref == refName) %>%
         tidyr::gather(key = "type", value = "value", fcMeanCount, nCells) %>%
         ggplot(aes(x = bin, y = value)) +
@@ -105,8 +105,24 @@ plotBreakStats <- function(object, dataName, refName, bins = NULL) {
                               linetype = "longdash")
         }
     }
+    if (!is.null(minBin)) {
+        if (is.null(maxBin)) {
+            stop("'minBin' and 'maxBin' should be either both set, or both unset.")
+        }
+        p <- p + xlim(minBin, maxBin)
+    }
     p
 }
+
+# This plot give the mean triangle values, and the #cells used for each triangle
+plotBreakStats <- function(object, refName, bins = NULL, minBin = NULL, maxBin = NULL) {
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
+    }
+    plots <- purrr::map(object@data, .plotBreakStats, refName = refName, bins = bins, minBin = minBin, maxBin = maxBin)
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
+}
+
 
 plotBackgroundCountDistribution <- function(object) {
     object@interactionMatrix %>%
@@ -159,9 +175,9 @@ plotCountDistribution <- function(object, log) {
 }
 
 plotMD <- function(object, log) {
-    samples    <- map_chr(object@data, "name")
-    sampleSize <- sum(map_dbl(map(object@data, "parameters"), "sampleSize"))
-    metaSizes  <- map_int(map(object@data, "parameters"), "metaSize")
+    samples    <- purrr::map_chr(object@data, "name")
+    sampleSize <- sum(purrr::map_dbl(purrr::map(object@data, "parameters"), "sampleSize"))
+    metaSizes  <- purrr::map_int(purrr::map(object@data, "parameters"), "metaSize")
     p <- purrr::map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
         dplyr::filter(ref1 == ref2) %>%
         dplyr::mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
@@ -184,31 +200,31 @@ plotMD <- function(object, log) {
 
 plotDiagonalStrength <- function(object) {
     tmp <- object@interactionMatrix %>%
-        filter(ref1 == ref2) %>%
+        dplyr::filter(ref1 == ref2) %>%
         makeSymmetric() %>%
-        mutate(distance = abs(bin1 - bin2)) %>%
+        dplyr::mutate(distance = abs(bin1 - bin2)) %>%
         dplyr::select(ref1, bin1, distance, count) %>%
-        arrange(ref1, bin1, distance)
+        dplyr::arrange(ref1, bin1, distance)
     tmp1 <- tmp %>%
-        group_by(ref1, bin1) %>%
-        mutate(diagonalSum = cumsum(count)) %>%
-        ungroup() %>%
+        dplyr::group_by(ref1, bin1) %>%
+        dplyr::mutate(diagonalSum = cumsum(count)) %>%
+        dplyr::ungroup() %>%
         dplyr::select(ref1, bin1, distance, diagonalSum)
     p <- tmp %>%
-        group_by(ref1, bin1) %>%
-        summarise(countSum = sum(count)) %>%
-        ungroup() %>%
-        right_join(tmp1, by = c("ref1", "bin1")) %>%
-        mutate(diagPc = diagonalSum / countSum) %>%
-        filter(distance <= 2 * object@parameters@maxLinkRange) %>%
+        dplyr::group_by(ref1, bin1) %>%
+        dplyr::summarise(countSum = sum(count)) %>%
+        dplyr::ungroup() %>%
+        dplyr::right_join(tmp1, by = c("ref1", "bin1")) %>%
+        dplyr::mutate(diagPc = diagonalSum / countSum) %>%
+        dplyr::filter(distance <= 2 * object@parameters@maxLinkRange) %>%
         dplyr::select(ref1, bin1, distance, diagPc) %>%
         dplyr::rename(ref = ref1) %>%
         dplyr::rename(bin = bin1) %>%
-        group_by(ref)
-    n <- p %>% group_keys()
+        dplyr::group_by(ref)
+    n <- p %>% dplyr::group_keys()
     p <- p %>%
-        group_split(keep = FALSE) %>%
-        map(~ ggplot(., aes(x = bin, y = distance, fill = diagPc)) + 
+        dplyr::group_split(keep = FALSE) %>%
+        purrr::map(~ ggplot(., aes(x = bin, y = distance, fill = diagPc)) + 
                 geom_tile())
     names(p) <- n$ref
     return(p)
@@ -230,7 +246,30 @@ plotDiagonalStrength <- function(object) {
 
 plotBreakPvalueFit <- function(object, pvalue) {
     plots <- purrr::map(object@data, .plotBreakPvalueFit)
-    return(do.call("plot_grid", c(plots, ncol = length(plots))))
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
+}
+
+.plotCornerFit <- function(object) {
+    nDistances <- nrow(object@parameters@cornerScores)
+    colors <- rainbow(nDistances)
+    distances <- seq.int(object@parameters@maxLinkRange)
+    p <- data.frame(x = seq.int(object@parameters@maxLinkRange),
+    		c = as.factor(as.character(distances))) %>%
+    	 ggplot(aes(x))
+    for (i in distances) {
+        p <- p + stat_function(aes_(color = factor(as.character(i))), fun = dgamma, args = list(shape = object@parameters@cornerScores[[i, "shape"]], rate = object@parameters@cornerScores[[i, "rate"]]),)
+    }
+    p <- p + scale_colour_manual("Distance", values = colors, breaks = as.character(seq.int(nDistances)))
+    return(p)
+}
+
+# Plot the corner count/distance distributions
+plotCornerFit <- function(object) {
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
+    }
+    plots <- purrr::map(object@data, .plotCornerFit)
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
 plotInsertions1 <- function(table, ref) {
@@ -242,7 +281,7 @@ plotInsertions1 <- function(table, ref) {
 }
 
 plotInsertions2 <- function(object, bin, distance) {
-    df <- tibble(xmin = bin - distance,
+    df <- tibble::tibble(xmin = bin - distance,
                  xmax = bin + distance,
                  ymin = bin - distance,
                  ymax = bin + distance)
@@ -257,35 +296,29 @@ plotInsertions2 <- function(object, bin, distance) {
 
 
 .plotRowCountFit <- function(object, sizes) {
-    if (object@parameters@metaSize > 1) {                                                                                                                                                                          
-        colSums <- object@interactionMatrix %>%                                                                                                                                                                    
-            computeSymmetricColSumMeta(sizes, object@parameters@metaSize) %>%                                                                                                                                      
-            as_tibble() %>%                                                                                                                                                                                        
-            # do not use the last bin of the ref                                                                                                                                                                   
-            dplyr::mutate(size = sizes[ref]) %>%                                                                                                                                                                   
-            dplyr::filter(size - bin >= object@parameters@metaSize)                                                                                                                                                
-    }                                                                                                                                                                                                              
+    if (object@parameters@metaSize > 1) {
+        colSums <- object@interactionMatrix %>%
+            computeSymmetricColSumMeta(sizes, object@parameters@metaSize) %>%
+            tibble::as_tibble() %>%
+            # do not use the last bin of the ref
+            dplyr::mutate(size = sizes[ref]) %>%
+            dplyr::filter(size - bin >= object@parameters@metaSize)
+    }
     else {
         colSums <- object@interactionMatrix %>%
             computeSymmetricColSum(sizes) %>%
-            as_tibble()
+            tibble::as_tibble()
     }
     tmp <- colSums %>%
         dplyr::filter(sum > 0) %>%
         dplyr::pull(sum)
-    quartiles        <- quantile(tmp, prob = c(.25, .75))
-    iqr       <- quartiles[[2]] - quartiles[[1]]                                                                                                                                                                   
-    firstOutlier <- quartiles[[1]] - 1.5 * iqr                                                                                                                                                                     
-    lastOutlier  <- quartiles[[2]] + 1.5 * iqr                                                                                                                                                                     
-    tmp <- tmp %>%                                                                                                                                                                                                 
-        keep(~ .x >= firstOutlier) %>%                                                                                                                                                                             
-        keep(~ .x <= lastOutlier)                                                                                                                                                                                  
-    fitNB            <- fitdistr(tmp, "negative binomial")
-    size             <- fitNB$estimate[[1]]
-    mu               <- fitNB$estimate[[2]]
+    quartiles    <- quantile(tmp, prob = c(.25, .75))
+    iqr          <- quartiles[[2]] - quartiles[[1]]
+    firstOutlier <- quartiles[[1]] - 1.5 * iqr
+    lastOutlier  <- quartiles[[2]] + 1.5 * iqr
     ggplot(colSums, aes(x = sum)) + 
         geom_density(aes(y = stat(density))) +
-        stat_function(fun = function(x){dnbinom(round(x), size = size, mu = mu)}, col = "red") + 
+        stat_function(fun = function(x){dnbinom(round(x), size = object@parameters@rowCountSize, mu = object@parameters@rowCountMu)}, col = "red") + 
         xlim(0, max(lastOutlier, object@parameters@maxRowCount)) +
         xlab(object@name) +
         geom_vline(xintercept = object@parameters@minRowCount, linetype = "dashed") +
@@ -297,7 +330,7 @@ plotInsertions2 <- function(object, bin, distance) {
 # This plot shows how column sums are fitted
 plotRowCountFit <- function(object) {
     plots <- purrr::map(object@data, .plotRowCountFit, object@sizes)
-    return(do.call("plot_grid", c(plots, ncol = length(plots))))
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
 .computeRowDensity <- function(chr, data = data) {
@@ -325,6 +358,93 @@ plotRowCountFit <- function(object) {
 plotRowCountDensity <- function(object) {
     lapply(object@chromosomes, .plotRowCountDensity,
            data = object@interactionMatrix)
+}
+
+.plot.10XJoin <- function(object, r1, r2, after1, after2, size1, size2, logColor, zoom, outliers = outliers, metaSize = metaSize) {
+    data <- object@interactionMatrix
+    newRefs <- c(r1, r2)
+    sizes   <- c(size1, size2)
+    if (! after1) {
+        newRefs <- c(r2, r1)
+        sizes   <- c(size2, size2)
+    }
+    data <- data %>%
+        dplyr::mutate(ref1 = forcats::fct_relevel(ref1, newRefs)) %>%
+        dplyr::mutate(ref2 = forcats::fct_relevel(ref2, newRefs))
+    if (metaSize) {
+        data <- transformMeta(data, object@parameters@metaSize)
+    }
+    data <- data %>%
+        makeSymmetric()
+    # Removing outliers requires the matrix to be symmetric
+    # It also inserts NAs on the full chromosomes
+    if (! outliers) {
+        data %<>% removeOutliersCpp(object@outlierBins, sizes) %>% tibble::as_tibble()
+    }
+    if (after1) {
+        data <- data %>%
+            dplyr::filter((ref1 != r1) | (bin1 >= size1 - zoom)) %>%
+            dplyr::filter((ref2 != r1) | (bin2 >= size1 - zoom))
+    }
+    else {
+        data <- data %>%
+            dplyr::filter((ref1 != r1) | (bin1 <= zoom)) %>%
+            dplyr::filter((ref2 != r1) | (bin2 <= zoom))
+    }
+    if (after2) {
+        data <- data %>%
+            dplyr::filter((ref1 != r2) | (bin1 >= size2 - zoom)) %>%
+            dplyr::filter((ref2 != r2) | (bin2 >= size2 - zoom))
+    }
+    else {
+        data <- data %>%
+            dplyr::filter((ref1 != r2) | (bin1 <= zoom)) %>%
+            dplyr::filter((ref2 != r2) | (bin2 <= zoom))
+    }
+    if (logColor) {
+        data %<>% dplyr::filter(count > 0)
+    }
+    if (after1 == after2) {
+        data <- data %>%
+            dplyr::mutate(bin1 = dplyr::if_else(ref1 == r2, -bin1, bin1)) %>%
+            dplyr::mutate(bin2 = dplyr::if_else(ref2 == r2, -bin2, bin2))
+    }
+    p <- data %>% 
+            ggplot(aes(x = bin1, y = bin2)) + 
+            geom_raster(aes(fill = count)) + 
+            facet_grid(cols = vars(ref1), rows = vars(ref2), scale = "free", space = "free") +
+            scale_x_continuous(expand = c(0, 0)) +
+            scale_y_reverse(expand = c(0, 0)) +
+            theme_bw() +
+            theme(panel.spacing = unit(0, "lines")) +
+            ggtitle(object@name)
+    if (logColor) {
+        p <- p + scale_fill_gradient(low = "grey90", high = "red", trans = "log")
+    } else {
+        p <- p + scale_fill_gradient2()
+    }
+    return(p)
+}
+
+# This will plot the region near a possible join
+plot.10XJoin <- function(object, ref1, ref2, after1, after2, logColor = TRUE, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
+    if (! is(object, "msscafClass")) {
+        stop("Object should be a 'msscafClass'.")
+    }
+    if (is.null(nBinZoom)) {
+        nBinZoom <- max(purrr::map_dbl(purrr::map(object@data, "parameters"), "nBinZoom"))
+    }
+    object <- keepScaffolds(object, c(ref1, ref2))
+    plots <- purrr::map(object@data, .plot.10XJoin, ref1, ref2, after1, after2, object@sizes[[ref1]], object@sizes[[ref2]], logColor, nBinZoom, outliers, metaSize)
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
+}
+
+# This will plot the region near a possible break
+plot.10XBreak <- function(object, ref, bin, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
+    if (is.null(nBinZoom)) {
+        nBinZoom <- max(purrr::map_dbl(purrr::map(object@data, "parameters"), "nBinZoom"))
+    }
+    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = outliers, highlightedBins = bin, meta = metaSize)
 }
 
 # Agregate bins to meta bins
@@ -365,6 +485,8 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
     }
     if (is.null(binMin)) {
         scaleFactor <- computeScaleFactor(object)
+        binMin <- 0
+        binMax <- object@size
     }
     else {
         if (binMin < 0) {
@@ -379,7 +501,7 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
                     dplyr::filter(bin1 >= binMin, bin1 <= binMax) %>%
                     dplyr::filter(bin2 >= binMin, bin2 <= binMax) %>%
                     rescale(scaleFactor)
-    minCount <- data %>% pull(count) %>% min()
+    minCount <- data %>% dplyr::pull(count) %>% min()
     if (meta) {
         data <- transformMeta(data, object@parameters@metaSize)
     }
@@ -412,7 +534,7 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
         message(paste0("Cannot display ", length(bins), " lines in the plots: too much RAM needed."))
         bins <- NULL
     }
-    if (! is_null(bins)) {
+    if (! rlang::is_null(bins)) {
         p <- p +
             geom_hline(yintercept = bins, linetype = "dotted") +
             geom_vline(xintercept = bins, linetype = "dotted")
@@ -460,7 +582,7 @@ plot.10X2Ref <- function(object,
             xlab(object@chromosome1) +
             ylab(object@chromosome2)
     if (circles) {
-	circles <- tibble(
+	circles <- tibble::tibble(
 	    x      = c(1, 1, object@size1, object@size1),
 	    y      = c(1, object@size2, 1, object@size2),
 	    radius = rep.int(object@parameters@maxLinkRange, 4)) %>%
@@ -469,16 +591,16 @@ plot.10X2Ref <- function(object,
 	    nPoints <- 1000
 	    lim1 <- object@size1 / 2
 	    lim2 <- object@size2 / 2
-	    circle <- bind_rows(tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+	    circle <- bind_rows(tibble::tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
 				       y = parameters$y + seq(0, parameters$radius)),
-				tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
+				tibble::tibble(x = parameters$x - parameters$radius + seq(0, parameters$radius),
 				       y = parameters$y - seq(0, parameters$radius)),
-				tibble(x = parameters$x + seq(0, parameters$radius),
+				tibble::tibble(x = parameters$x + seq(0, parameters$radius),
 				       y = parameters$y + parameters$radius - seq(0, parameters$radius)),
-				tibble(x = parameters$x + seq(0, parameters$radius),
+				tibble::tibble(x = parameters$x + seq(0, parameters$radius),
 				       y = parameters$y - parameters$radius + seq(0, parameters$radius))) %>%
-		mutate(x = if_else((parameters$x < lim1) == (x < lim1), x, lim1)) %>%
-		mutate(y = if_else((parameters$y < lim2) == (y < lim2), y, lim2)) %>%
+		mutate(x = dplyr::if_else((parameters$x < lim1) == (x < lim1), x, lim1)) %>%
+		mutate(y = dplyr::if_else((parameters$y < lim2) == (y < lim2), y, lim2)) %>%
 		filter(x >= x1) %>%
 		filter(y >= y1) %>%
 		filter(x <= x2) %>%
@@ -506,8 +628,8 @@ plot.10X2Ref <- function(object,
 }
 
 plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
-    if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerExp'.")
+    if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafExp'.")
     }
     if (is.null(bin1) != is.null(bin2)) {
         stop("None, or both bins should be set.")
@@ -562,14 +684,14 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
 }
 
 plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
-    if (is(object, "tenxcheckerClass")) {
+    if (is(object, "msscafClass")) {
         sizes  <- object@sizes
         if (is.null(datasetName)) {
              plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius)
-             return(do.call("plot_grid", c(plots, ncol = length(plots))))
+             return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
         }
         else {
-            datasetNames <- map(object@data, "name")
+            datasetNames <- purrr::map(object@data, "name")
             if (datasetName %in% datasetNames) {
                 dataset <- object@data[datasetName == datasetNames][[1]]
                 return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
@@ -579,14 +701,8 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, 
             }
         }
     }
-    else if (! is(object, "tenxcheckerExp")) {
-        stop("Object should be a 'tenxcheckerClass' or 'tenxcheckerExp'.")
+    else if (! is(object, "msscafExp")) {
+        stop("Object should be a 'msscafClass' or 'msscafExp'.")
     }
     return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
-}
-
-# This will plot the region near a possible break
-plot.10XBreak <- function(object, ref, bin) {
-    nBinZoom <- max(map_dbl(map(object@data, "parameters"), "nBinZoom"))
-    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = FALSE, highlightedBins = bin, meta = TRUE)
 }
