@@ -7,6 +7,8 @@ To date, msscaf supports:
  - 10X (mapped with LongRanger);
  - Hi-C (in `.hic` format).
 
+## Pipe-line
+
 Download package:
 ```
 devtools::install_github("mzytnicki/msscaf")
@@ -60,4 +62,44 @@ Write scaffolds to file:
 ```
 outputFileName <- "/path/to/output/scaffolds.fa"
 Biostrings::writeXStringSet(Biostrings::DNAStringSet(scaffolder@sequences), outputFileName)
+```
+
+
+## Accessing data
+
+The breaks can be accessed with:
+```
+scaffolder@breaks
+```
+The joins can be accessed with:
+```
+scaffolder@joins
+```
+
+
+## Visualization
+
+The whole matrices can be displayed with:
+```
+plot.msscaf(scaffolder)
+```
+
+One contig/scaffold (here, `ctg1`) can be displayed ith:
+```
+plot.msscaf(scaffolder, ref1 = ctg1)
+```
+
+The interaction between two contig/scaffolds (here, `ctg1` and `ctg2`) can be displayed ith:
+```
+plot.msscaf(scaffolder, ref1 = ctg1, ref2 = ctg2)
+```
+
+One break (located at position `ctg1:100`) can be displayed ith:
+```
+plot.msscafBreak(scaffolder, ref = ctg1, bin = 100)
+```
+
+One join (joining the right ends of `ctg1` and `ctg2`) can be displayed ith:
+```
+plot.msscafJoin(scaffolder, ref1 = ctg1, ref2 = ctg2, after1 = TRUE, after2 = TRUE)
 ```
