@@ -11,7 +11,7 @@
         return(invisible(object))
     }
     sampleSize <- min(object@parameters@sampleSize, nrow(d))
-    object@parameters@minCount <- d
+    object@parameters@minCount <- d %>%
         dplyr::sample_n(sampleSize) %>%
         table() %>%
         tibble::as_tibble() %>%
@@ -22,7 +22,7 @@
         dplyr::filter(relative >= 0.5) %>%
         dplyr::slice(1:1) %>%
         dplyr::pull(count)
-    message(paste0("Dataset '", object@name, "': Estimated background count: ", threshold, "."))
+    message(paste0("Dataset '", object@name, "': Estimated background count: ", object@parameters@minCount, "."))
     return(invisible(object))
 }
 
