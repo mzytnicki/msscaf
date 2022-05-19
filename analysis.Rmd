@@ -171,12 +171,6 @@ object <- scaffold(object)
 
 
 ```{r}
-library("MASS")
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-library("cowplot")
 devtools::load_all(".")
 allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 splitObject <- generateSplit(allObject)
@@ -186,12 +180,6 @@ splitObject <- findJoins(splitObject, 0.05)
 
 
 ```{r}
-library("MASS")
-library("devtools")
-library("magrittr")
-library("tidyverse")
-library("Biostrings")
-library("cowplot")
 devtools::load_all(".")
 allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 mergedObject <- generateJoin(allObject)
