@@ -178,11 +178,23 @@ splitObject <- estimateDistributions(splitObject)
 splitObject <- findJoins(splitObject, 0.05)
 ```
 
-
 ```{r}
 devtools::load_all(".")
 allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
 mergedObject <- generateJoin(allObject)
 mergedObject <- estimateDistributions(mergedObject)
 mergedObject <- findBreaks(mergedObject, 0.05)
+```
+
+```{r}
+devtools::load_all(".")
+scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+object <- scaffolder
+pvalue <- 0.05
+sizes <- object@sizes
+object <- object@data[[3]]
+objectJ <- .checkJoins(object, sizes, 0.05)
+objectJ@joins@data <- .removeAmbiguousJoins(objectJ@joins@data, "plop")
+objectJ@joins@data %>% dplyr::filter(ref1 %in% c("ctg326", "ctg345") | ref2 %in% c("ctg326", "ctg345"))
+objectJ@data <- .checkCorners(objectJ, sizes, 0.05) 
 ```

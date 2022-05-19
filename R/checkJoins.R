@@ -473,6 +473,7 @@ removeSuboptimalJoins <- function(joins) {
         return(object)
     }
     pb     <- progress_bar$new(total = nJoins)
+message(str(corners))
     values <- corners %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%

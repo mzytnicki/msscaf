@@ -285,7 +285,7 @@ plotInsertions2 <- function(object, bin, distance) {
                  xmax = bin + distance,
                  ymin = bin - distance,
                  ymax = bin + distance)
-    plot.10XRef(object, logColor = TRUE) +
+    plot.msscafRef(object, logColor = TRUE) +
         #annotate("rect",
         geom_rect(data = df,
                   aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
@@ -360,7 +360,7 @@ plotRowCountDensity <- function(object) {
            data = object@interactionMatrix)
 }
 
-.plot.10XJoin <- function(object, r1, r2, after1, after2, size1, size2, logColor, zoom, outliers = outliers, metaSize = metaSize) {
+.plot.msscafJoin <- function(object, r1, r2, after1, after2, size1, size2, logColor, zoom, outliers = outliers, metaSize = metaSize) {
     data <- object@interactionMatrix
     newRefs <- c(r1, r2)
     sizes   <- c(size1, size2)
@@ -402,7 +402,7 @@ plotRowCountDensity <- function(object) {
             dplyr::filter((ref2 != r2) | (bin2 <= zoom))
     }
     if (logColor) {
-        data %<>% dplyr::filter(count > 0)
+        data %<>% dplyr::filter(is.na(count) | (count > 0))
     }
     if (after1 == after2) {
         data <- data %>%
@@ -427,7 +427,7 @@ plotRowCountDensity <- function(object) {
 }
 
 # This will plot the region near a possible join
-plot.10XJoin <- function(object, ref1, ref2, after1, after2, logColor = TRUE, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
+plot.msscafJoin <- function(object, ref1, ref2, after1, after2, logColor = TRUE, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
     if (! is(object, "msscafClass")) {
         stop("Object should be a 'msscafClass'.")
     }
@@ -435,16 +435,16 @@ plot.10XJoin <- function(object, ref1, ref2, after1, after2, logColor = TRUE, ou
         nBinZoom <- max(purrr::map_dbl(purrr::map(object@data, "parameters"), "nBinZoom"))
     }
     object <- keepScaffolds(object, c(ref1, ref2))
-    plots <- purrr::map(object@data, .plot.10XJoin, ref1, ref2, after1, after2, object@sizes[[ref1]], object@sizes[[ref2]], logColor, nBinZoom, outliers, metaSize)
+    plots <- purrr::map(object@data, .plot.msscafJoin, ref1, ref2, after1, after2, object@sizes[[ref1]], object@sizes[[ref2]], logColor, nBinZoom, outliers, metaSize)
     return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
 # This will plot the region near a possible break
-plot.10XBreak <- function(object, ref, bin, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
+plot.msscafBreak <- function(object, ref, bin, outliers = FALSE, metaSize = FALSE, nBinZoom = NULL) {
     if (is.null(nBinZoom)) {
         nBinZoom <- max(purrr::map_dbl(purrr::map(object@data, "parameters"), "nBinZoom"))
     }
-    plot.10X(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = outliers, highlightedBins = bin, meta = metaSize)
+    plot.msscaf(object = object, ref1 = ref, bin1 = bin - nBinZoom, bin2 = bin + nBinZoom, outliers = outliers, highlightedBins = bin, meta = metaSize)
 }
 
 # Agregate bins to meta bins
@@ -474,7 +474,7 @@ transformMeta <- function(data, metaSize) {
         dplyr::rename(bin1 = metaBin1, bin2 = metaBin2)
 }
 
-plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, bins = NULL, outliers = TRUE, meta = FALSE) {
+plot.msscafRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, bins = NULL, outliers = TRUE, meta = FALSE) {
     if ((! is.null(binMin)) & (! is.null(binMax))) {
         if (binMax < binMin) {
             stop(paste0("Second bin (", binMax, ") should be less than first bin (", binMin, ")."))
@@ -509,7 +509,7 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
         stop("Trying to plot a map with negative count in log scale.")
     }
     if (logColor) {
-        data %<>% dplyr::filter(count > 0)
+        data %<>% dplyr::filter(is.na(count) | (count > 0))
     }
     data %<>% makeSymmetric()
     if (! outliers) {
@@ -542,7 +542,7 @@ plot.10XRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, b
     return(p)
 }
 
-plot.10X2Ref <- function(object,
+plot.msscaf2Ref <- function(object,
 			 logColor = TRUE,
 			 circles  = FALSE,
 			 b1       = NULL,
@@ -627,7 +627,7 @@ plot.10X2Ref <- function(object,
     return(p)
 }
 
-plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
+plot.msscafDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
     if (! is(object, "msscafExp")) {
         stop("Object should be a 'msscafExp'.")
     }
@@ -666,7 +666,7 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
     }
     if (ref1 == ref2) {
         object <- extractRef(object, ref1, sizes[[ref1]])
-        return(plot.10XRef(object, logColor = logColor, binMin = bin1, binMax = bin2, outliers = outliers, bins = highlightedBins, meta = meta))
+        return(plot.msscafRef(object, logColor = logColor, binMin = bin1, binMax = bin2, outliers = outliers, bins = highlightedBins, meta = meta))
     }
     if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
         message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
@@ -680,21 +680,21 @@ plot.10XDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = 
        bin2 <- tmp
     }
     object <- extract2Ref(object, ref1, ref2, sizes[[ref1]], sizes[[ref2]])
-    return(plot.10X2Ref(object, logColor = logColor, outliers = outliers, b1 = bin1, b2 = bin2, radius = radius))
+    return(plot.msscaf2Ref(object, logColor = logColor, outliers = outliers, b1 = bin1, b2 = bin2, radius = radius))
 }
 
-plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
+plot.msscaf <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
     if (is(object, "msscafClass")) {
         sizes  <- object@sizes
         if (is.null(datasetName)) {
-             plots <- purrr::map(object@data, plot.10XDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius)
+             plots <- purrr::map(object@data, plot.msscafDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius)
              return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
         }
         else {
             datasetNames <- purrr::map(object@data, "name")
             if (datasetName %in% datasetNames) {
                 dataset <- object@data[datasetName == datasetNames][[1]]
-                return(plot.10XDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
+                return(plot.msscafDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
             }
             else {
                 stop(paste0("Dataset name '", datasetName, "' is not known."))
@@ -704,5 +704,5 @@ plot.10X <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, 
     else if (! is(object, "msscafExp")) {
         stop("Object should be a 'msscafClass' or 'msscafExp'.")
     }
-    return(plot.10XDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
+    return(plot.msscafDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
 }
