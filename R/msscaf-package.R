@@ -43,8 +43,8 @@
 #'
 #' @import MASS
 #' @import methods
-#' @import gtools
-#' @import magrittr
+#' @importFrom gtools mixedsort
+#' @importFrom magrittr %>%
 #' @import tidyverse
 #' @import ggplot2
 #' @import ggforce
@@ -53,7 +53,7 @@
 #' @import progress
 #' @import Matrix
 #' @import Biostrings
-#' @import cowplot
+#' @importFrom cowplot plot_grid
 #' @importFrom BiocManager version
 #' @importFrom Rcpp evalCpp sourceCpp
 #' @useDynLib msscaf
