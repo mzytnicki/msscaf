@@ -497,9 +497,6 @@ mergeJoins <- function(object, pvalueThreshold) {
     if (! is(object, "msscafClass")) {
         stop("Parameter should be a msscafClass.")
     }
-message(str(object@data[[1]]@joins@data))
-message(str(object@data[[2]]@joins@data))
-message(str(object@data[[3]]@joins@data))
     object@joins <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "joins"), "data")) %>%
         dplyr::distinct() %>%
         dplyr::arrange(pvalue) %>%

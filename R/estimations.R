@@ -11,16 +11,17 @@
         return(invisible(object))
     }
     sampleSize <- min(object@parameters@sampleSize, nrow(d))
-    threshold <- d %>%
+    object@parameters@minCount <- d
         dplyr::sample_n(sampleSize) %>%
         table() %>%
-        transform(cum_freq = cumsum(Freq)) %>%
-        dplyr::mutate(relative = cum_freq / sampleSize) %>%
+        tibble::as_tibble() %>%
+        dplyr::rename("count" = ".") %>%
+        dplyr::mutate(count = as.integer(count)) %>%
+        dplyr::mutate(cumCount = cumsum(n)) %>%
+        dplyr::mutate(relative = cumCount / sampleSize) %>%
         dplyr::filter(relative >= 0.5) %>%
         dplyr::slice(1:1) %>%
         dplyr::pull(count)
-    threshold <- as.integer(levels(threshold))[threshold]
-    object@parameters@minCount <- threshold
     message(paste0("Dataset '", object@name, "': Estimated background count: ", threshold, "."))
     return(invisible(object))
 }

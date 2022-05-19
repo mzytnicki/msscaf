@@ -5,6 +5,14 @@ parseBamFileCpp <- function(fileName, binSize) {
     .Call('_msscaf_parseBamFileCpp', PACKAGE = 'msscaf', fileName, binSize)
 }
 
+computeMeanTrianglesCpp <- function(data, distance, metaSize, sizesIn, outliers) {
+    .Call('_msscaf_computeMeanTrianglesCpp', PACKAGE = 'msscaf', data, distance, metaSize, sizesIn, outliers)
+}
+
+removeNearEqualBreaksCpp <- function(breaks, distance) {
+    .Call('_msscaf_removeNearEqualBreaksCpp', PACKAGE = 'msscaf', breaks, distance)
+}
+
 computeCornerSize <- function(size1, size2, maxDistance) {
     .Call('_msscaf_computeCornerSize', PACKAGE = 'msscaf', size1, size2, maxDistance)
 }
@@ -27,6 +35,46 @@ classifyCornerPointsCpp <- function(interactions, size1, size2, metaSize, maxDis
 
 extractCornersFullCpp <- function(interactions, selectedCorners, sizesIn, cornerSize, metaSize) {
     .Call('_msscaf_extractCornersFullCpp', PACKAGE = 'msscaf', interactions, selectedCorners, sizesIn, cornerSize, metaSize)
+}
+
+computeCornerDifferenceOffsetCpp <- function(offset, corner, background, maxDistance) {
+    .Call('_msscaf_computeCornerDifferenceOffsetCpp', PACKAGE = 'msscaf', offset, corner, background, maxDistance)
+}
+
+computeCornerDifferenceBothOffsetCpp <- function(offset, corner, background, maxDistance) {
+    .Call('_msscaf_computeCornerDifferenceBothOffsetCpp', PACKAGE = 'msscaf', offset, corner, background, maxDistance)
+}
+
+estimateDistanceCountCpp <- function(data, outliers, sizesIn, distance, metaSize, nOutputElements) {
+    .Call('_msscaf_estimateDistanceCountCpp', PACKAGE = 'msscaf', data, outliers, sizesIn, distance, metaSize, nOutputElements)
+}
+
+sampleTriangles <- function(data, outliers, sizesIn, distance, metaSize, nSamples) {
+    .Call('_msscaf_sampleTriangles', PACKAGE = 'msscaf', data, outliers, sizesIn, distance, metaSize, nSamples)
+}
+
+estimateMetaSizeCpp <- function(rowAvg, maxDistance, nMeta, minCount) {
+    .Call('_msscaf_estimateMetaSizeCpp', PACKAGE = 'msscaf', rowAvg, maxDistance, nMeta, minCount)
+}
+
+estimateMoleculeSizeCpp <- function(rowAvg, maxDistance, minCount, metaSize) {
+    .Call('_msscaf_estimateMoleculeSizeCpp', PACKAGE = 'msscaf', rowAvg, maxDistance, minCount, metaSize)
+}
+
+estimateMetaBinsMoleculeSizeCpp <- function(data, sizes, minCount, nMeta, moleculeSize) {
+    .Call('_msscaf_estimateMetaBinsMoleculeSizeCpp', PACKAGE = 'msscaf', data, sizes, minCount, nMeta, moleculeSize)
+}
+
+keepScaffoldsCpp <- function(data, keptRefs) {
+    .Call('_msscaf_keepScaffoldsCpp', PACKAGE = 'msscaf', data, keptRefs)
+}
+
+keepScaffoldsPairsCpp <- function(data, keptRefs) {
+    .Call('_msscaf_keepScaffoldsPairsCpp', PACKAGE = 'msscaf', data, keptRefs)
+}
+
+extractLines <- function(matrix, lines, maxDistance) {
+    .Call('_msscaf_extractLines', PACKAGE = 'msscaf', matrix, lines, maxDistance)
 }
 
 splitChromosomeCpp <- function(data, prevRef, newRef, shiftedRef, splitPoint, firstPart) {
@@ -59,6 +107,18 @@ normalizeHighCountRowsCpp <- function(data, sizes) {
 
 parseHicCpp <- function(fname, resolution) {
     .Call('_msscaf_parseHicCpp', PACKAGE = 'msscaf', fname, resolution)
+}
+
+makeSymmetricRefCpp <- function(data) {
+    .Call('_msscaf_makeSymmetricRefCpp', PACKAGE = 'msscaf', data)
+}
+
+removeOutliersRefCpp <- function(data, outliersTibble, size, minLim = -1L, maxLim = -1L) {
+    .Call('_msscaf_removeOutliersRefCpp', PACKAGE = 'msscaf', data, outliersTibble, size, minLim, maxLim)
+}
+
+removeOutliersCpp <- function(data, outliersTibble, sizes) {
+    .Call('_msscaf_removeOutliersCpp', PACKAGE = 'msscaf', data, outliersTibble, sizes)
 }
 
 parsePafCpp <- function(fname, resolution, minAlnLen, minCount, minNCells) {

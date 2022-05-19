@@ -32,7 +32,7 @@ addJoins <- function(interactionMatrices, refs, refSize, maxNReads, diagSize, re
 
 addSplit <- function(interactionMatrices, ref, position) {
     interactionMatrices %>%
-        dplyr::mutate(count = if_else(ref1 == ref & ref2 == ref & bin1 > position & bin2 < position, 0L, count))
+        dplyr::mutate(count = dplyr::if_else(ref1 == ref & ref2 == ref & bin1 > position & bin2 < position, 0L, count))
 }
 
 addSplits <- function(interactionMatrices, refs, refIds, positions) {
