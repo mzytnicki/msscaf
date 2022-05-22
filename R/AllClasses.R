@@ -139,15 +139,15 @@ msscafData <- function(inputMatrix  = NULL,
 }
 
 setClass("msscafBreaks", slots = c(data            = "ANY",
-                                        filteredData    = "ANY",
-                                        changePlots     = "ANY",
-                                        changeDistPlots = "ANY",
-                                        mapPlots        = "ANY")
+                                   filteredData    = "ANY",
+                                   changePlots     = "ANY",
+                                   changeDistPlots = "ANY",
+                                   mapPlots        = "ANY")
 )
 
 setClass("msscafJoins", slots = c(data      = "ANY",
-                                       testPlots = "ANY",
-                                       mapPlots  = "ANY")
+                                  testPlots = "ANY",
+                                  mapPlots  = "ANY")
 )
 
 
