@@ -71,7 +71,7 @@ removeLowCount <- function(object) {
 removeFarFromDiagonal <- function(object) {
     #message("    Removing values far from diagonal.")
     object@interactionMatrix %<>%
-        filter(abs(bin1 - bin2) <= object@parameters@maxLinkRange)
+        filter(abs(bin1 - bin2) <= object@parameters@minLinkRange)
     return(object)
 }
 

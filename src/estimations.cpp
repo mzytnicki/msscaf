@@ -12,14 +12,20 @@ using namespace Rcpp;
 // Supposes that the observed and background counts are sorted by distance, with no missing value
 // Reads nElements from each distribution (with possible offsets), and compute the distance
 double cornerDifferenceCpp (DataFrame observedDistribution, DataFrame backgroundDistribution, int nElements, int observedOffset = 0, int backgroundOffset = 0) {
-    IntegerVector observedCount   = observedDistribution["count"];
-    IntegerVector backgroundCount = backgroundDistribution["count"];
+    NumericVector observedCount   = observedDistribution["count"];
+    NumericVector backgroundCount = backgroundDistribution["count"];
+    int nObserved = 0;
     double s = 0;
     for (int i = 0; i < nElements; ++i) {
-        double a = observedCount[i + observedOffset] - backgroundCount[i + backgroundOffset];
-        s += a * a;
+        // Skip NAs
+        if (! NumericVector::is_na(observedCount[i])) {
+            double a = observedCount[i + observedOffset] - backgroundCount[i + backgroundOffset];
+            s += a * a;
+            ++nObserved;
+        }
     }
-    return (sqrt(s) / nElements);
+    if (nObserved == 0) return -1;
+    return (sqrt(s) / nObserved);
 }
 
 // Apply an offset to the background distribution, and compare them.
@@ -374,14 +380,7 @@ int estimateMetaSizeCpp (std::vector < double > &rowAvg, int maxDistance, int nM
 
 // Check the length of the signal
 // [[Rcpp::export]]
-int estimateMoleculeSizeCpp (std::vector < double > &rowAvg, int maxDistance, int minCount, int metaSize) {
-    std::vector < double > metaSums(rowAvg.size());
-    // Count average count per distance
-    for (int d = 1; d <= maxDistance; ++d) {
-        int metaD = 1 + (d - 1) / metaSize;
-        metaSums[metaD] += rowAvg[d];
-//if (d < 1000) Rcerr << d << " -> " << metaD << " -> " << metaSums[metaD] << " += " << rowAvg[d] << "\n";
-    }
+int estimateMoleculeSizeCpp (std::vector < double > &metaSums, int maxDistance, int minCount, int metaSize) {
     for (int metaD = 1; metaD < maxDistance / metaSize; ++metaD) {
 //Rcerr << metaD << " -> " << (metaSums[metaD] * metaSize) << " / " << minCount << "\n";
         if (metaSums[metaD] * metaSize < minCount) {
@@ -389,6 +388,17 @@ int estimateMoleculeSizeCpp (std::vector < double > &rowAvg, int maxDistance, in
         }
     }
     return 0;
+}
+
+// Check the max length of the signal
+// [[Rcpp::export]]
+int estimateMaxMoleculeSizeCpp (std::vector < double > &metaSums, int minDistance, int maxDistance, int minCount, int metaSize) {
+    for (int metaD = minDistance; metaD < maxDistance / metaSize - 1; ++metaD) {
+        if (metaSums[metaD + 1] >= 0.99 * metaSums[metaD]) {
+            return metaD;
+        }
+    }
+    return minDistance;
 }
 
 // Compute meta bins size and molecule sizes
@@ -418,10 +428,18 @@ List estimateMetaBinsMoleculeSizeCpp (DataFrame &data, IntegerVector &sizes, int
     }
     Rcout << "\tGrouping bins to meta-bins.\n";
     int metaSize = estimateMetaSizeCpp(rowAvg, maxDistance, nMeta, minCount);
-    int maxLinkRange = nMeta;
-    if ((! moleculeSize) && (metaSize == 1)) {
-        Rcout << "\tEstimating molecule size.\n";
-        maxLinkRange = estimateMoleculeSizeCpp(rowAvg, maxDistance, minCount, metaSize);
+    int minLinkRange = nMeta;
+    int maxLinkRange = minLinkRange;
+    Rcout << "\tEstimating molecule size.\n";
+    std::vector < double > metaSums(rowAvg.size());
+    // Compute average count per distance
+    for (int d = 1; d <= maxDistance; ++d) {
+        int metaD = 1 + (d - 1) / metaSize;
+        metaSums[metaD] += rowAvg[d];
     }
-    return List::create(_["metaSize"] = metaSize, _["maxLinkRange"] = maxLinkRange);
+    if ((! moleculeSize) && (metaSize == 1)) {
+        minLinkRange = estimateMoleculeSizeCpp(metaSums, maxDistance, minCount, metaSize);
+    }
+    maxLinkRange = estimateMaxMoleculeSizeCpp(metaSums, minLinkRange, maxDistance, minCount, metaSize);
+    return List::create(_["metaSize"] = metaSize, _["minLinkRange"] = minLinkRange, _["maxLinkRange"] = maxLinkRange);
 }

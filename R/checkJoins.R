@@ -33,7 +33,6 @@ computeTest <- function(background, data) {
 # #  - chromosome2: the second reference
 # #  - count:       the counts
 # #  - type:        the corner names, or "interior"
-# checkJoin <- function(object, counts, progressBar) {
 #     if (! is(object, "msscaf2RefExp")) {
 # 	stop("Parameter should be a 'msscaf2RefExp'.")
 #     }
@@ -73,7 +72,7 @@ extractCorner <- function(object, after1, after2) {
         interactionMatrix <- interactionMatrix %>%
             dplyr::mutate(bin2 = object@size2 - bin2)
     }
-    fillCorner(interactionMatrix, object@parameters@maxLinkRange, TRUE)
+    fillCorner(interactionMatrix, object@parameters@minLinkRange, TRUE)
 }
 
 
@@ -113,7 +112,7 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 # # Extract a corner, given the corner point
 # getCorner <- function(object, pointX, pointY) {
 #     object@interactionMatrix %>%
-# 	dplyr::filter((abs(bin1 - pointX) + abs(bin2 - pointY)) < object@parameters@maxLinkRange,
+# 	dplyr::filter((abs(bin1 - pointX) + abs(bin2 - pointY)) < object@parameters@minLinkRange,
 # 		      abs(bin1 - pointX) < object@size1 / 2,
 # 		      abs(bin2 - pointY) < object@size2 / 2) %>%
 # 	dplyr::pull(count)
@@ -122,10 +121,10 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 # # Extract everything but the corners
 # getInterior <- function(object) {
 #     object@interactionMatrix %>%
-# 	dplyr::filter((abs(bin1 - 0)            + abs(bin2 - 0))            >= object@parameters@maxLinkRange,
-# 		      (abs(bin1 - 0)            + abs(bin2 - object@size2)) >= object@parameters@maxLinkRange,
-# 		      (abs(bin1 - object@size1) + abs(bin2 - 0))            >= object@parameters@maxLinkRange,
-# 		      (abs(bin1 - object@size1) + abs(bin2 - object@size2)) >= object@parameters@maxLinkRange) %>%
+# 	dplyr::filter((abs(bin1 - 0)            + abs(bin2 - 0))            >= object@parameters@minLinkRange,
+# 		      (abs(bin1 - 0)            + abs(bin2 - object@size2)) >= object@parameters@minLinkRange,
+# 		      (abs(bin1 - object@size1) + abs(bin2 - 0))            >= object@parameters@minLinkRange,
+# 		      (abs(bin1 - object@size1) + abs(bin2 - object@size2)) >= object@parameters@minLinkRange) %>%
 # 	dplyr::pull(count)
 # }
 
@@ -183,26 +182,32 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 # }
 
 # Extract the counts from the current join, and perform test.
-testJoin <- function(parameters, counts, sizes, maxDistance, pb) {
-    counts <- counts %>%
-        dplyr::mutate(ref1 = as.numeric(ref1)) %>%
-        dplyr::mutate(ref2 = as.numeric(ref2)) %>%
-        dplyr::filter(ref1 == parameters$ref1) %>%
-        dplyr::filter(ref2 == parameters$ref2)
-    size1         <- as.numeric(sizes[[parameters$ref1]])
-    size2         <- as.numeric(sizes[[parameters$ref2]])
-    samples       <- computeAllSamples(counts, size1, size2, maxDistance, sampleSize = 10000)
-    testedCorner  <- samples[[parameters$corner]]
-    samples[[parameters$corner]]  <- NULL
+testJoin <- function(counts, sizes, maxDistance, pb) {
+message(str(counts))
+    r1 <- counts %>%
+        dplyr::pull(ref1) %>%
+        head(1)
+    r2 <- counts %>%
+        dplyr::pull(ref2) %>%
+        head(1)
+    c  <- counts %>%
+        dplyr::pull(corner) %>%
+        head(1)
+    size1        <- as.numeric(sizes[[r1]])
+    size2        <- as.numeric(sizes[[r2]])
+    samples      <- computeAllSamples(counts, size1, size2, maxDistance, sampleSize = 10000)
+    testedCorner <- samples[[c]]
+    samples[[c]] <- NULL
     pb$tick()
-    max(purrr::map_dbl(samples, computeTest, testedCorner))
+message(str(purrr::map_dbl(samples, computeTest, testedCorner)))
+    tibble::tibble(ref1 = r1, ref2 = r2, corner = c, pvalue = max(purrr::map_dbl(samples, computeTest, testedCorner)))
 }
 
 # Add plots to experiment
 getJoinInfo <- function(object, parameters) {
-    testPlot <- classifyCornerPointsCpp(object@interactionMatrix, object@size1, object@size2, object@parameters@maxLinkRange) %>%
+    testPlot <- classifyCornerPointsCpp(object@interactionMatrix, object@size1, object@size2, object@parameters@minLinkRange) %>%
         tibble::as_tibble() %>%
-        computeAllSamples(object@size1, object@size2, object@parameters@maxLinkRange) %>%
+        computeAllSamples(object@size1, object@size2, object@parameters@minLinkRange) %>%
         tibble::enframe(name = "type", value = "count") %>%
         tidyr::unnest(count) %>%
         ggplot(aes(x = type, y = count)) + 
@@ -219,41 +224,50 @@ getJoinInfo <- function(object, parameters) {
         stop("Parameter should be a msscafExp.")
     }
     message(paste0("\tDataset '", object@name, "'."))
-    cornerSums <- sumCornerCpp(object@interactionMatrix, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
+    minNBins <- 10
+    selectedRefs <- sumCornerCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize) %>%
         tibble::as_tibble() %>%
-        # Distribution is inflated in 0, remove it
-        dplyr::filter(count > 0) %>%
-        # Remove strange even/odd pattern
-        dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))
-    if (nrow(cornerSums) == 0) {
-        message("\t\tNo join found.")
-        joinsObject <- new("msscafJoins")
-        joinsObject@data <- tibble::tibble(ref1 = integer(), ref2 = integer(), after1 = logical(), after2 = logical(), pvalue = numeric(), pvalueCorner = numeric())
-        object@joins <- joinsObject
-        return(object)
-    }
-    # Select outlier corner sums
-    # Not meaningful if you have too few
-    if (nrow(cornerSums) >= 30) {
-        fitNB <- fitdistrplus::fitdist(cornerSums$count, "nbinom")
-        threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])
-        selectedRefs <- cornerSums %>%
-            dplyr::filter(count > threshold)
-    }
-    else {
-        selectedRefs <- cornerSums
-    }
+        dplyr::filter(n > minNBins * (minNBins + 1) / 4) %>%
+        dplyr::mutate(avg = count / n) %>%
+        dplyr::filter(avg >= 1) %>%
+        dplyr::select(ref1, ref2, corner)
+#   cornerSums <- sumCornerCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize) %>%
+#       tibble::as_tibble() %>%
+#       # Distribution is inflated in 0, remove it
+#       dplyr::filter(count > 0) %>%
+#       # Remove strange even/odd pattern
+#       dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))
+#   if (nrow(cornerSums) == 0) {
+#       message("\t\tNo join found.")
+#       joinsObject <- new("msscafJoins")
+#       joinsObject@data <- tibble::tibble(ref1 = integer(), ref2 = integer(), after1 = logical(), after2 = logical(), pvalue = numeric(), pvalueCorner = numeric())
+#       object@joins <- joinsObject
+#       return(object)
+#   }
+#   # Select outlier corner sums
+#   # Not meaningful if you have too few
+#   if (nrow(cornerSums) >= 30) {
+#       fitNB <- fitdistrplus::fitdist(cornerSums$count, "nbinom")
+#       threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])
+#       selectedRefs <- cornerSums %>%
+#           dplyr::filter(count > threshold)
+#   }
+#   else {
+#       selectedRefs <- cornerSums
+#   }
     message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     pb <- progress_bar$new(total = nrow(selectedRefs))
-    selectedCounts <- extractCornersCpp(object@interactionMatrix, selectedRefs, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% tibble::as_tibble()
-    minPValues     <- purrr::map_dbl(purrr::transpose(selectedRefs), testJoin, counts = selectedCounts, sizes = sizes, maxDistance = object@parameters@maxLinkRange, pb = pb)
-    selectedRefs   <- selectedRefs %>%
-        dplyr::mutate(pvalue = minPValues) %>%
+    selectedRefs <- extractCornersCpp(object@interactionMatrix, selectedRefs, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize) %>%
+        tibble::as_tibble() %>%
+        dplyr::inner_join(selectedRefs, by = c("ref1", "ref2")) %>%
+        dplyr::group_by(ref1, ref2, corner) %>%
+        dplyr::group_split() %>%
+        purrr::map_dfr(testJoin, sizes = sizes, maxDistance = object@parameters@minLinkRange, pb = pb) %>%
         dplyr::mutate(size1 = sizes[ref1]) %>%
         dplyr::mutate(size2 = sizes[ref2]) %>%
         dplyr::mutate(minSize = pmin(size1, size2)) %>%
         # Do not apply p-value filter if refs are too short: corners overlap
-        dplyr::filter((pvalue <= pvalueThreshold) | (minSize <= 3 * object@parameters@maxLinkRange)) %>%
+        dplyr::filter((pvalue <= pvalueThreshold) | (minSize <= 4 * object@parameters@minLinkRange)) %>%
         dplyr::group_by(ref1, ref2) %>% # Possible 2 joins for the same pairs of refs?
         dplyr::slice_min(pvalue, n = 1, with_ties = FALSE) %>%
         dplyr::ungroup() %>%
@@ -405,11 +419,30 @@ removeSuboptimalJoins <- function(joins) {
     if (nJoins == 0) {
         return(joins)
     }
-    suboptimalJoins <- joins %>%
-        transformRefAfterToRefRef() %>%
-        dplyr::group_by(ref, after) %>%
-        dplyr::slice_min(order_by = pvalue, n = -1, with_ties = FALSE)
-    joins <- discardJoinsFromRefRef(joins, suboptimalJoins)
+    maxDistance <- joins %>%
+        dplyr::pull(distance) %>%
+        max()
+    reverseJoins <- joins %>%
+        dplyr::rename(refTmp   = ref1)     %>%
+        dplyr::rename(ref1     = ref2)     %>%
+        dplyr::rename(ref2     = refTmp)   %>%
+        dplyr::rename(afterTmp = after1)   %>%
+        dplyr::rename(after1   = after2)   %>%
+        dplyr::rename(after2   = afterTmp)
+    joins <- joins %>%
+        dplyr::bind_rows(reverseJoins) %>%
+        dplyr::group_by(ref1, after1) %>%
+        # Try to favor close interactions, and good p-values
+        dplyr::mutate(score = -log(pvalue) * (maxDistance - distance)) %>%
+        dplyr::slice_max(order_by = score, n = 1, with_ties = FALSE) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(-score) %>%
+        dplyr::filter(as.integer(ref1) > as.integer(ref2))
+#   suboptimalJoins <- joins %>%
+#       transformRefAfterToRefRef() %>%
+#       dplyr::group_by(ref, after) %>%
+#       dplyr::slice_min(order_by = pvalue, n = -1, with_ties = FALSE)
+#   joins <- discardJoinsFromRefRef(joins, suboptimalJoins)
     return(joins)
 }
 
@@ -417,8 +450,10 @@ removeSuboptimalJoins <- function(joins) {
     objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
     corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
     background <- object@parameters@distanceCount
-    values    <- computeCornerDifferenceOffsets(corner, background, object@parameters@maxLinkRange, FALSE, pb) %>%
+    values    <- computeCornerDifferenceOffsets(corner, background, object@parameters@minLinkRange, FALSE, pb) %>%
         dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
+        # Score of -1 means that nothing matched (because of outlier bins)
+        dplyr::filter(score_corner >= 0) %>%
         dplyr::filter(score_corner <= score_background)
     if (nrow(values) == 0) return(-1)
     values %>%
@@ -444,15 +479,19 @@ removeSuboptimalJoins <- function(joins) {
 }
 
 ..checkCorners <- function(corner, object, sizes, pb) {
-    values     <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb) %>%
+    maxDistance    <- object@parameters@minLinkRange - 8
+    values     <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@minLinkRange, FALSE, pb) %>%
         dplyr::filter(distance > 0) %>%
+        dplyr::filter(distance <= maxDistance) %>%
         dplyr::left_join(object@parameters@cornerScores, by = "distance") %>%
-        dplyr::slice_min(score, n = 1, with_ties = FALSE) %>%
+#       dplyr::slice_min(score, n = 1, with_ties = FALSE) %>%
+#       dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%
         dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%
+        dplyr::slice_min(pvalueCorner, n = 1, with_ties = FALSE) %>%
         dplyr::select(distance, pvalueCorner) %>%
         dplyr::mutate(distance = as.integer(distance))
 #   background <- object@parameters@distanceCount
-#   values     <- computeCornerDifferenceOffsets(corner, background, object@parameters@maxLinkRange, FALSE, pb) %>%
+#   values     <- computeCornerDifferenceOffsets(corner, background, object@parameters@minLinkRange, FALSE, pb) %>%
 #       dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
 #       dplyr::filter(score_corner <= score_background)
 #   if (nrow(values) == 0) return(-1)
@@ -463,17 +502,16 @@ removeSuboptimalJoins <- function(joins) {
 }
 
 .checkCorners <- function(object, sizes, pvalueThreshold) {
-    message(paste0("\tDataset '", object@name, "'."))
-    corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
+    corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize) %>%
         tibble::as_tibble() %>%
+        # Unused cells are set to -1
         dplyr::filter(count >= 0)
     nJoins <- nrow(object@joins@data)
-    message(paste0("\t\tSelected ", nJoins, " joins."))
+    message(paste0("\tSelected ", nJoins, " joins."))
     if (nJoins == 0) {
         return(object)
     }
     pb     <- progress_bar$new(total = nJoins)
-message(str(corners))
     values <- corners %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%
@@ -501,6 +539,7 @@ mergeJoins <- function(object, pvalueThreshold) {
     object@joins <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "joins"), "data")) %>%
         dplyr::distinct() %>%
         dplyr::arrange(pvalue) %>%
+        dplyr::mutate(pvalue = pmin(pvalue, pvalueCorner)) %>%
         dplyr::mutate(p_adj = p.adjust(pvalue, method = "BH")) %>%
         dplyr::filter(p_adj <= pvalueThreshold) %>%
         dplyr::group_by(ref1, ref2, after1, after2) %>%

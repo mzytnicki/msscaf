@@ -91,7 +91,7 @@ makeSimData <- function(refs, refSize, maxNReads, diagSize, gaussianNoise, split
     interactionMatrices <- addNoise(interactionMatrices, gaussianNoise)
     interactionMatrices <- cleanMatrices(interactionMatrices, refs)
     msscafData(inputMatrix  = interactionMatrices,
-                    maxLinkRange = NULL)
+                    minLinkRange = NULL)
 }
 
 makeSimObject <- function(nData = 1, nRefs = 1, refSize = 100, maxNReads = 20, diagSize = 10, gaussianNoise = 0.2, splitRefs = c(), splitPositions = c(), joinRef1 = c(), joinRef2 = c(), joinDistances = c()) {

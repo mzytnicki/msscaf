@@ -57,8 +57,8 @@ plotMoleculeSizeDistribution <- function(object) {
             geom_point(color = "grey50") +
             geom_line(aes(x = distance, y = loess)) + 
             geom_hline(yintercept = object@parameters@minCount, linetype = "dashed") +
-            geom_vline(xintercept = object@parameters@maxLinkRange, linetype = "dashed") +
-            xlim(1, max(30, 2 * object@parameters@maxLinkRange)) +
+            geom_vline(xintercept = object@parameters@minLinkRange, linetype = "dashed") +
+            xlim(1, max(30, 2 * object@parameters@minLinkRange)) +
             scale_y_log10()
 }
 
@@ -174,28 +174,53 @@ plotCountDistribution <- function(object, log) {
     return(p)
 }
 
-plotMD <- function(object, log) {
-    samples    <- purrr::map_chr(object@data, "name")
-    sampleSize <- sum(purrr::map_dbl(purrr::map(object@data, "parameters"), "sampleSize"))
-    metaSizes  <- purrr::map_int(purrr::map(object@data, "parameters"), "metaSize")
-    p <- purrr::map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
+.plotDistanceCount <- function(object, log) {
+    d <- object@interactionMatrix %>%
         dplyr::filter(ref1 == ref2) %>%
-        dplyr::mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
-        dplyr::mutate(metaSize = metaSizes[as.numeric(sample)]) %>%
+        dplyr::sample_n(min(object@parameters@sampleSize, nrow(.))) %>%
         dplyr::mutate(distance = abs(bin1 - bin2)) %>%
-        dplyr::mutate(distance = distance / metaSizes) %>%
-        dplyr::group_by(sample, ref1, bin1, distance) %>%
-        dplyr::summarize(count = sum(count), .groups = "drop") %>%
-        dplyr::sample_n(min(sampleSize, nrow(.))) %>%
+        dplyr::mutate(distance = as.numeric(round(distance / object@parameters@metaSize))) %>%
+        dplyr::group_by(ref1, bin1, distance) %>%
+        dplyr::summarize(count = sum(count), .groups = "drop")
+    maxC <- unname(quantile(d$count, 0.99))
+    p <- d %>%
+        dplyr::filter(count <= maxC) %>%
         ggplot(aes(x = distance, y = count)) + 
-            xlim(0, 100) + ylim(0, 50) +
+            xlim(1, 4 * object@parameters@minLinkRange) +
             geom_bin2d(binwidth = c(1, 1)) +
             geom_smooth(method = "loess", formula = y ~ x) +
-	    facet_grid(cols = vars(sample), scale = "free", space = "free")
+            ggtitle(object@name)
     if (log) {
         p <- p + scale_y_log10()
     }
     return(p)
+        
+#   samples    <- purrr::map_chr(object@data, "name")
+#   sampleSize <- sum(purrr::map_dbl(purrr::map(object@data, "parameters"), "sampleSize"))
+#   metaSizes  <- purrr::map_int(purrr::map(object@data, "parameters"), "metaSize")
+#   p <- purrr::map_dfr(object@data, "interactionMatrix", .id = "sample") %>%
+#       dplyr::filter(ref1 == ref2) %>%
+#       dplyr::mutate(sample = factor(samples[as.numeric(sample)], levels = samples)) %>%
+#       dplyr::mutate(metaSize = metaSizes[as.numeric(sample)]) %>%
+#       dplyr::mutate(distance = abs(bin1 - bin2)) %>%
+#       dplyr::mutate(distance = distance / metaSize) %>%
+#       dplyr::group_by(sample, ref1, bin1, distance) %>%
+#       dplyr::summarize(count = sum(count), .groups = "drop") %>%
+#       dplyr::sample_n(min(sampleSize, nrow(.))) %>%
+#       ggplot(aes(x = distance, y = count)) + 
+#           xlim(0, 100) + ylim(0, 50) +
+#           geom_bin2d(binwidth = c(1, 1)) +
+#           geom_smooth(method = "loess", formula = y ~ x) +
+#           facet_grid(cols = vars(sample), scale = "free", space = "free")
+#   if (log) {
+#       p <- p + scale_y_log10()
+#   }
+    return(p)
+}
+
+plotDistanceCount <- function(object, log) {
+    plots <- purrr::map(object@data, .plotDistanceCount, log)
+    return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
 plotDiagonalStrength <- function(object) {
@@ -216,7 +241,7 @@ plotDiagonalStrength <- function(object) {
         dplyr::ungroup() %>%
         dplyr::right_join(tmp1, by = c("ref1", "bin1")) %>%
         dplyr::mutate(diagPc = diagonalSum / countSum) %>%
-        dplyr::filter(distance <= 2 * object@parameters@maxLinkRange) %>%
+        dplyr::filter(distance <= 2 * object@parameters@minLinkRange) %>%
         dplyr::select(ref1, bin1, distance, diagPc) %>%
         dplyr::rename(ref = ref1) %>%
         dplyr::rename(bin = bin1) %>%
@@ -252,8 +277,8 @@ plotBreakPvalueFit <- function(object, pvalue) {
 .plotCornerFit <- function(object) {
     nDistances <- nrow(object@parameters@cornerScores)
     colors <- rainbow(nDistances)
-    distances <- seq.int(object@parameters@maxLinkRange)
-    p <- data.frame(x = seq.int(object@parameters@maxLinkRange),
+    distances <- seq.int(nDistances)
+    p <- data.frame(x = seq.int(nDistances),
     		c = as.factor(as.character(distances))) %>%
     	 ggplot(aes(x))
     for (i in distances) {
@@ -362,15 +387,18 @@ plotRowCountDensity <- function(object) {
 
 .plot.msscafJoin <- function(object, r1, r2, after1, after2, size1, size2, logColor, zoom, outliers = outliers, metaSize = metaSize) {
     data <- object@interactionMatrix
+    outlierBins <- object@outlierBins
     newRefs <- c(r1, r2)
     sizes   <- c(size1, size2)
     if (! after1) {
         newRefs <- c(r2, r1)
-        sizes   <- c(size2, size2)
+        sizes   <- c(size2, size1)
     }
     data <- data %>%
         dplyr::mutate(ref1 = forcats::fct_relevel(ref1, newRefs)) %>%
         dplyr::mutate(ref2 = forcats::fct_relevel(ref2, newRefs))
+    outlierBins <- outlierBins %>%
+        dplyr::mutate(ref = forcats::fct_relevel(ref, newRefs))
     if (metaSize) {
         data <- transformMeta(data, object@parameters@metaSize)
     }
@@ -379,7 +407,7 @@ plotRowCountDensity <- function(object) {
     # Removing outliers requires the matrix to be symmetric
     # It also inserts NAs on the full chromosomes
     if (! outliers) {
-        data %<>% removeOutliersCpp(object@outlierBins, sizes) %>% tibble::as_tibble()
+        data %<>% removeOutliersCpp(outlierBins, sizes) %>% tibble::as_tibble()
     }
     if (after1) {
         data <- data %>%
@@ -409,6 +437,7 @@ plotRowCountDensity <- function(object) {
             dplyr::mutate(bin1 = dplyr::if_else(ref1 == r2, -bin1, bin1)) %>%
             dplyr::mutate(bin2 = dplyr::if_else(ref2 == r2, -bin2, bin2))
     }
+    if (nrow(data) == 0) return(NULL)
     p <- data %>% 
             ggplot(aes(x = bin1, y = bin2)) + 
             geom_raster(aes(fill = count)) + 
@@ -431,11 +460,15 @@ plot.msscafJoin <- function(object, ref1, ref2, after1, after2, logColor = TRUE,
     if (! is(object, "msscafClass")) {
         stop("Object should be a 'msscafClass'.")
     }
+    if (ref1 == ref2) {
+        stop("Reference names should be different.")
+    }
     if (is.null(nBinZoom)) {
         nBinZoom <- max(purrr::map_dbl(purrr::map(object@data, "parameters"), "nBinZoom"))
     }
     object <- keepScaffolds(object, c(ref1, ref2))
-    plots <- purrr::map(object@data, .plot.msscafJoin, ref1, ref2, after1, after2, object@sizes[[ref1]], object@sizes[[ref2]], logColor, nBinZoom, outliers, metaSize)
+    plots <- purrr::map(object@data, .plot.msscafJoin, ref1, ref2, after1, after2, object@sizes[[ref1]], object@sizes[[ref2]], logColor, nBinZoom, outliers, metaSize) %>%
+        purrr::discard(purrr::is_null)
     return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
 }
 
@@ -585,7 +618,7 @@ plot.msscaf2Ref <- function(object,
 	circles <- tibble::tibble(
 	    x      = c(1, 1, object@size1, object@size1),
 	    y      = c(1, object@size2, 1, object@size2),
-	    radius = rep.int(object@parameters@maxLinkRange, 4)) %>%
+	    radius = rep.int(object@parameters@minLinkRange, 4)) %>%
 	    transpose()
 	addCircle <- function (plot, parameters) {
 	    nPoints <- 1000

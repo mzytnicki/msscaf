@@ -21,20 +21,20 @@ filterCornersCpp <- function(data, sizesIn, cornerSize, metaSize) {
     .Call('_msscaf_filterCornersCpp', PACKAGE = 'msscaf', data, sizesIn, cornerSize, metaSize)
 }
 
-sumCornerCpp <- function(interactions, sizes, cornerSize, metaSize) {
-    .Call('_msscaf_sumCornerCpp', PACKAGE = 'msscaf', interactions, sizes, cornerSize, metaSize)
+sumCornerCpp <- function(interactions, outliers, sizesIn, cornerSize, metaSize) {
+    .Call('_msscaf_sumCornerCpp', PACKAGE = 'msscaf', interactions, outliers, sizesIn, cornerSize, metaSize)
 }
 
-extractCornersCpp <- function(interactions, selectedRefs, sizes, cornerSize, metaSize) {
-    .Call('_msscaf_extractCornersCpp', PACKAGE = 'msscaf', interactions, selectedRefs, sizes, cornerSize, metaSize)
+extractCornersCpp <- function(interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize) {
+    .Call('_msscaf_extractCornersCpp', PACKAGE = 'msscaf', interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize)
 }
 
 classifyCornerPointsCpp <- function(interactions, size1, size2, metaSize, maxDistance) {
     .Call('_msscaf_classifyCornerPointsCpp', PACKAGE = 'msscaf', interactions, size1, size2, metaSize, maxDistance)
 }
 
-extractCornersFullCpp <- function(interactions, selectedCorners, sizesIn, cornerSize, metaSize) {
-    .Call('_msscaf_extractCornersFullCpp', PACKAGE = 'msscaf', interactions, selectedCorners, sizesIn, cornerSize, metaSize)
+extractCornersFullCpp <- function(interactions, selectedCorners, outliers, sizesIn, cornerSize, metaSize) {
+    .Call('_msscaf_extractCornersFullCpp', PACKAGE = 'msscaf', interactions, selectedCorners, outliers, sizesIn, cornerSize, metaSize)
 }
 
 computeCornerDifferenceOffsetCpp <- function(offset, corner, background, maxDistance) {
@@ -57,8 +57,12 @@ estimateMetaSizeCpp <- function(rowAvg, maxDistance, nMeta, minCount) {
     .Call('_msscaf_estimateMetaSizeCpp', PACKAGE = 'msscaf', rowAvg, maxDistance, nMeta, minCount)
 }
 
-estimateMoleculeSizeCpp <- function(rowAvg, maxDistance, minCount, metaSize) {
-    .Call('_msscaf_estimateMoleculeSizeCpp', PACKAGE = 'msscaf', rowAvg, maxDistance, minCount, metaSize)
+estimateMoleculeSizeCpp <- function(metaSums, maxDistance, minCount, metaSize) {
+    .Call('_msscaf_estimateMoleculeSizeCpp', PACKAGE = 'msscaf', metaSums, maxDistance, minCount, metaSize)
+}
+
+estimateMaxMoleculeSizeCpp <- function(metaSums, minDistance, maxDistance, minCount, metaSize) {
+    .Call('_msscaf_estimateMaxMoleculeSizeCpp', PACKAGE = 'msscaf', metaSums, minDistance, maxDistance, minCount, metaSize)
 }
 
 estimateMetaBinsMoleculeSizeCpp <- function(data, sizes, minCount, nMeta, moleculeSize) {

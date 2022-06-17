@@ -189,12 +189,134 @@ mergedObject <- findBreaks(mergedObject, 0.05)
 ```{r}
 devtools::load_all(".")
 scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-object <- scaffolder
-pvalue <- 0.05
-sizes <- object@sizes
-object <- object@data[[3]]
+scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
+plot.msscafJoin(scaffolder, ref1 = "ctg672", ref2 = "ctg200", after1 = T, after2 = T, outliers = T, metaSize = T)
+plot.msscafJoin(scaffolder, ref1 = "ctg853", ref2 = "ctg304", after1 = F, after2 = T, outliers = F)
+plot.msscafJoin(scaffolder, ref1 = "ctg345", ref2 = "ctg326", after1 = F, after2 = F, outliers = F)
+plot.msscafJoin(scaffolder, ref1 = "ctg369", ref2 = "ctg347", after1 = F, after2 = F, outliers = F, metaSize=T)
+plot.msscafJoin(scaffolder, ref1 = "ctg502", ref2 = "ctg310", after1 = F, after2 = F, outliers = F, metaSize=T) # Nothing here
+plot.msscafJoin(scaffolder, ref1 = "ctg975", ref2 = "ctg941", after1 = T, after2 = F, outliers = F, metaSize=T) # 100% outlier
+plot.msscafJoin(scaffolder, ref1 = "ctg672", ref2 = "ctg200", after1 = T, after2 = T, outliers = F, metaSize=T)
+sizes <- scaffolder@sizes
+scaffolder <- checkJoins(scaffolder, 0.05)
+scaffolder <- removeAmbiguousJoins(scaffolder)
+scaffolder <- checkCorners(scaffolder, 0.05)
+scaffolder <- mergeJoins(scaffolder, 0.05)
+
+sizes <- scaffolder@sizes
+object <- scaffolder@data[[3]]
 objectJ <- .checkJoins(object, sizes, 0.05)
 objectJ@joins@data <- .removeAmbiguousJoins(objectJ@joins@data, "plop")
-objectJ@joins@data %>% dplyr::filter(ref1 %in% c("ctg326", "ctg345") | ref2 %in% c("ctg326", "ctg345"))
-objectJ@data <- .checkCorners(objectJ, sizes, 0.05) 
+tmp <- extractCornersFullCpp(objectJ@interactionMatrix, objectJ@joins@data %>% dplyr::filter(ref1 == "ctg672", ref2 == "ctg200"), objectJ@outlierBins, sizes, objectJ@parameters@maxLinkRange, objectJ@parameters@metaSize)
+tmp1 <- tmp %>% tibble::as_tibble() %>% dplyr::filter(! is.na(count)) %>% smoothenDistribution()
+pb     <- progress_bar$new(total = 1)
+computeCornerDifferenceOffsets(tmp, objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb)
+tmp2    <- tmp %>%
+        tibble::as_tibble() %>%
+        tidyr::drop_na() %>%                                                                                                                                                                                       
+        smoothenDistribution() %>%
+        dplyr::right_join(tibble::tibble(distance = seq.int(from = 0, to = objectJ@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+        dplyr::arrange(distance)
+    offsets   <- seq.int(from = 0, to = distance - 1, by = 1)                                                                                                                                                      
+computeCornerDifferenceOffsets(tmp2, objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb)
+
+tmp1 <- ..checkCorners(tmp, objectJ, sizes, pb)
+
+objectJ@interactionMatrix %>% dplyr::filter(ref1 == "ctg345", ref2 == "ctg326", bin1 <= 32, bin2 <= 32) %>% dplyr::mutate(distance = bin1 + bin2) %>% dplyr::filter(distance <= 32) %>% as.data.frame()
+corners <- extractCornersFullCpp(objectJ@interactionMatrix, objectJ@joins@data, sizes, objectJ@parameters@maxLinkRange, objectJ@parameters@metaSize) %>%
+        tibble::as_tibble() %>%
+        dplyr::filter(count >= 0)
+    nJoins <- nrow(objectJ@joins@data)
+    pb     <- progress_bar$new(total = nJoins)
+    values <- corners %>%
+        dplyr::group_by(index) %>%
+        dplyr::group_split() %>%
+        purrr::map_dfr(..checkCorners, objectJ, sizes, pb)
+    objectJ2@joins@data <- objectJ@joins@data %>%
+        dplyr::bind_cols(values) %>%
+        dplyr::filter(pvalueCorner < 1 - 0.05)                                                                                                                                                          
+values <- corners %>%                                                                                                                                                                                          
+        dplyr::group_by(index) %>%                                                                                                                                                                                 
+        dplyr::group_split()
+tmp <- ..checkCorners(values[[285]], objectJ, sizes, pb)
+tmp <- computeCornerDifferenceOffsets(values[[285]], objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb) %>%
+        dplyr::filter(distance > 0) %>%
+        dplyr::left_join(objectJ@parameters@cornerScores, by = "distance") %>%
+        dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%                                                                                                                                
+        dplyr::slice_min(pvalueCorner, n = 1, with_ties = FALSE) %>%
+        dplyr::select(distance, pvalueCorner) %>%                                                                                                                                                                  
+        dplyr::mutate(distance = as.integer(distance))                                                                                                                                                             
+
+
+objectJ2 <- .checkCorners(objectJ, sizes, 0.05) 
+
+objectJ2@joins@data %>% dplyr::filter(ref1 %in% c("ctg326", "ctg345") | ref2 %in% c("ctg326", "ctg345"))
 ```
+
+devtools::load_all(".")
+scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+plot.msscafJoin(scaffolder, ref1 = "ctg1253", ref2 = "ctg885", after1 = F, after2 = T) 
+sizes <- scaffolder@sizes
+object1 <- scaffolder@data[[1]]
+object1  <- estimateDistanceCount(object1, sizes)
+object1  <- estimateCornerVariance(object1, sizes, 0.05)
+object1@parameters@cornerLimit <- estimateCornerLimits(object1, 20)
+cornerSums <- sumCornerCpp(object1@interactionMatrix, object1@outlierBins, sizes, object1@parameters@maxLinkRange, object1@parameters@metaSize) %>%
+        tibble::as_tibble() %>%
+        dplyr::filter(count > 0) %>%
+        dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))                                                                                                                                                    
+fitNB <- fitdistrplus::fitdist(cornerSums$count, "nbinom")                                                                                                                                                 
+threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])                                                                                                                   
+selectedRefs <- cornerSums %>% dplyr::filter(count > threshold)
+
+object1 <- .checkJoins(object1, sizes, 0.05)
+object1@joins@data <- .removeAmbiguousJoins(object1@joins@data, "plop")
+#saveRDS(object1, file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
+object1 <- readRDS(file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
+plot.msscafJoin(scaffolder, ref1 = "ctg1253", ref2 = "ctg885", after1 = F, after2 = T, outliers = F)
+    corners <- extractCornersFullCpp(object1@interactionMatrix, object1@joins@data, object1@outlierBins, sizes, object1@parameters@maxLinkRange, object1@parameters@metaSize) %>%
+        tibble::as_tibble() %>%
+        dplyr::filter(count >= 0)                                                                                                                                                                                  
+nJoins <- nrow(object@joins@data)                                                                                                                                                                              
+pb     <- progress_bar$new(total = nJoins)                                                                                                                                                                     
+values <- corners %>%
+        dplyr::group_by(index) %>%
+        dplyr::group_split() %>%
+        purrr::map_dfr(..checkCorners, object, sizes, pb)                                                                                                                                                          
+    object@joins@data <- object@joins@data %>%                                                                                                                                                                     
+        dplyr::bind_cols(values) %>%                                                                                                                                                                               
+        dplyr::filter(pvalueCorner < 1 - pvalueThreshold)                                                                                                                                                          
+    message(paste0("\t\tKept ", nrow(object@joins@data), "."))                                                                                                                                                     
+
+tmp <- .checkCorners(object1, sizes, 0.05)
+
+
+devtools::load_all(".")
+resolution  <- 1000
+scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
+scaffolder <- estimateCorners(scaffolder, 0.05)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
+sizes <- scaffolder@sizes
+cornerSums <- sumCornerCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% tibble::as_tibble()
+cornerSums %>% dplyr::filter(n > 0, n < 100) %>% ggplot(aes(x = n)) + geom_histogram(binwidth=1)
+cornerSums %>% dplyr::filter(count > 0, count < 100) %>% ggplot(aes(x = count)) + geom_histogram(binwidth=1)
+cornerSums %>% dplyr::filter(n > 0) %>% dplyr::mutate(avg = count / n) %>% dplyr::filter(avg > 0) %>% ggplot(aes(x = avg)) + geom_histogram(binwidth=1)
+scaffolder <- checkJoins(scaffolder, 0.05)
+scaffolder <- removeAmbiguousJoins(scaffolder)
+object <- scaffolder@data[[3]]
+corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%                                       
+        tibble::as_tibble() %>%                                                                                                                                                                                    
+        # Unused cells are set to -1                                                                                                                                                                               
+        dplyr::filter(count >= 0)                                                                                                                                                                                  
+nJoins <- nrow(object@joins@data)                                                                                                                                                                              
+pb     <- progress_bar$new(total = nJoins)                                                                                                                                                                     
+values <- corners %>%                                                                                                                                                                                          
+        dplyr::group_by(index) %>%                                                                                                                                                                                 
+        dplyr::group_split()
+corner <- values[[182]]
+tmp <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb)
+
+scaffolder <- checkCorners(scaffolder, 0.05)
+scaffolder <- mergeJoins(object, 0.05)                                                                                                                                                                           
+

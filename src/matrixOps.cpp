@@ -81,6 +81,7 @@ DataFrame removeOutliersRefCpp (DataFrame &data, DataFrame &outliersTibble, int 
 }
 
 // Set all the outlier bins to NA
+// Data already are metabins
 // Possibly overwrite current data, and create new cells
 // Data: a (symmetric) tibble: ref1, re2, bin1, bin2, count
 // Outliers: a tibble: ref, bin
@@ -101,15 +102,15 @@ DataFrame removeOutliersCpp (DataFrame &data, DataFrame &outliersTibble, Integer
     std::vector < int > bins1;
     std::vector < int > bins2;
     std::vector < int > counts;
-    unsigned long int n = bins1R.size();
+    unsigned long int nInput = bins1R.size();
     int nOutliers = outlierRefs.size();
     if (nOutliers == 0) return data;
     int genomeSize = sum(sizes);
-    refs1.reserve(2 * nOutliers * genomeSize + n);
-    refs2.reserve(2 * nOutliers * genomeSize + n);
-    bins1.reserve(2 * nOutliers * genomeSize + n);
-    bins2.reserve(2 * nOutliers * genomeSize + n);
-    counts.reserve(2 * nOutliers * genomeSize + n);
+    refs1.reserve(2 * nOutliers * genomeSize + nInput);
+    refs2.reserve(2 * nOutliers * genomeSize + nInput);
+    bins1.reserve(2 * nOutliers * genomeSize + nInput);
+    bins2.reserve(2 * nOutliers * genomeSize + nInput);
+    counts.reserve(2 * nOutliers * genomeSize + nInput);
     std::vector < std::vector < bool > > outliersBool (sizes.size() + 1); // factors start with 1
     for (unsigned int i = 0; i < sizes.size(); ++i) {
         assert(outliersBool.size() >= i);
@@ -162,7 +163,7 @@ DataFrame removeOutliersCpp (DataFrame &data, DataFrame &outliersTibble, Integer
         }
 */
     }
-    for (unsigned long i = 0; i < n; ++i) {
+    for (unsigned long i = 0; i < nInput; ++i) {
         int ref1  = refs1R[i];
         int ref2  = refs2R[i];
         int bin1  = bins1R[i];

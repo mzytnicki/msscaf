@@ -1,7 +1,7 @@
 .checkBreaks <- function(object, chromosomes, sizes) {
     message(paste0("\tDataset '", object@name , "'.\n\t\tComputing stats."))
     breaksObject                 <- new("msscafBreaks")
-    breaksObject@data            <- computeMeanTrianglesCpp(object@interactionMatrix, object@parameters@maxLinkRange, object@parameters@metaSize, sizes, object@outlierBins) %>%
+    breaksObject@data            <- computeMeanTrianglesCpp(object@interactionMatrix, object@parameters@minLinkRange, object@parameters@metaSize, sizes, object@outlierBins) %>%
                                         tibble::as_tibble()
     # Possibly rescale by ref
     factors <- breaksObject@data %>%
@@ -32,10 +32,10 @@ checkBreaks <- function(object) {
 
 .computeNCells <- function(object) {
     if (object@parameters@metaSize > 1) {
-        object@parameters@breakNCells <- object@parameters@maxLinkRange * (object@parameters@maxLinkRange - 1) / 4
+        object@parameters@breakNCells <- object@parameters@minLinkRange * (object@parameters@minLinkRange - 1) / 4
     }
     else {
-        object@parameters@breakNCells <- (object@parameters@maxLinkRange - 1) * (object@parameters@maxLinkRange - 2) / 4
+        object@parameters@breakNCells <- (object@parameters@minLinkRange - 1) * (object@parameters@minLinkRange - 2) / 4
     }
     return(object)
 }
@@ -131,7 +131,7 @@ filterBreak <- function(parameters, pvalueThreshold, pb) {
     objectRef        <- parameters$object
     breaksRef        <- parameters$breaks
     originalBreakRef <- breaksRef
-    breaks           <- removeNearEqualBreaks(reference, breaksRef, objectRef@parameters@maxLinkRange, objectRef@size, pvalueThreshold)
+    breaks           <- removeNearEqualBreaks(reference, breaksRef, objectRef@parameters@minLinkRange, objectRef@size, pvalueThreshold)
     pb$tick()
     return(list(data       = breaks,
                 changePlot = plotTriangles(originalBreakRef),
@@ -148,7 +148,7 @@ filterBreak <- function(parameters, pvalueThreshold, pb) {
 #   object@breaks@filteredData <- removeNearEqualBreaksCpp(object@breaks@data %>%
 #                                         dplyr::filter(padj <= pvalueThreshold) %>%
 #                                         dplyr::arrange(padj),
-#                                     object@parameters@maxLinkRange * object@parameters@metaSize) %>%
+#                                     object@parameters@minLinkRange * object@parameters@metaSize) %>%
 #       tibble::as_tibble()
     object@breaks@changePlots  <- c()
     object@breaks@mapPlots     <- c()
@@ -234,7 +234,7 @@ compareBreaks <- function(object) {
 .mergeBreaks <- function(object, pvalueThreshold) {
     object@breaks@filteredData <- object@breaks@filteredData %>%
         dplyr::arrange(padj) %>%
-        removeNearEqualBreaksCpp(object@parameters@maxLinkRange * object@parameters@metaSize) %>%
+        removeNearEqualBreaksCpp(object@parameters@minLinkRange * object@parameters@metaSize) %>%
         tibble::as_tibble()
 }
 
@@ -242,7 +242,7 @@ mergeBreaks <- function(object, pvalueThreshold) {
     if (! is(object, "msscafClass")) {
         stop("Parameter should be a msscafClass.")
     }
-    linkRanges      <- unlist(purrr::map(purrr::map(object@data, "parameters"), "maxLinkRange"))
+    linkRanges      <- unlist(purrr::map(purrr::map(object@data, "parameters"), "minLinkRange"))
     metaSizes       <- unlist(purrr::map(purrr::map(object@data, "parameters"), "metaSize"))
     maxRange        <- max(linkRanges * metaSizes)
     # object@breaks   <- purrr::map_dfr(object@data, .mergeBreaks) %>%

@@ -39,7 +39,7 @@ computeInsertionDepth <- function(depth, object = object) {
 }
 
 computeInsertion <- function(object = object) {
-    map_df(seq(from = 0, to = object@parameters@maxLinkRange),
+    map_df(seq(from = 0, to = object@parameters@minLinkRange),
            computeInsertionDepth,
            object = object)
 }

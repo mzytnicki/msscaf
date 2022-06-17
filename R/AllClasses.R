@@ -31,6 +31,7 @@ setClass("msscafParameters", slots = c(minCount        = "ANY",
                                             cornerLimit     = "ANY",
                                             breakThreshold  = "ANY", 
                                             breakNCells     = "ANY", 
+                                            minLinkRange    = "ANY", 
                                             maxLinkRange    = "ANY", 
                                             nRandomizations = "ANY", 
                                             nBinZoom        = "ANY",
@@ -57,12 +58,12 @@ setClass("msscafParameters", slots = c(minCount        = "ANY",
 #'
 #' @slot inputMatrix  The input matrix
 #' @slot binSize      The resolution
-#' @slot maxLinkRange The maximum size of a molecule
+#' @slot minLinkRange The minimum size of a molecule
 #' @slot sizes        The reference sizes
 #'
 #' @export
 setClass("msscafData", slots = c(inputMatrix  = "ANY",
-                                      maxLinkRange = "ANY") 
+                                      minLinkRange = "ANY") 
 )
 
 
@@ -80,7 +81,7 @@ setClass("msscafData", slots = c(inputMatrix  = "ANY",
 #'
 #' @export
 msscafData <- function(inputMatrix  = NULL,
-                            maxLinkRange = NULL) {
+                            minLinkRange = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -128,7 +129,7 @@ msscafData <- function(inputMatrix  = NULL,
     object <- new("msscafData")
     
     object@inputMatrix  <- inputMatrix
-    object@maxLinkRange <- maxLinkRange
+    object@minLinkRange <- minLinkRange
 
     chromosomes <- gtools::mixedsort(levels(object@inputMatrix$ref1))
     object@inputMatrix <- object@inputMatrix %>%
@@ -300,7 +301,8 @@ addExp <- function(object, data, expName) {
 
     parameters <- new("msscafParameters")
     parameters@binSize         <- object@binSize
-    parameters@maxLinkRange    <- data@maxLinkRange
+    parameters@minLinkRange    <- data@minLinkRange
+    parameters@maxLinkRange    <- NULL
     parameters@sampleSize      <- 10000
     parameters@loessSpan       <- 0.5
     parameters@minCount        <- 3

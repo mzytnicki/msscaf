@@ -15,7 +15,6 @@
         dplyr::sample_n(sampleSize) %>%
         table() %>%
         tibble::as_tibble() %>%
-        dplyr::rename("count" = ".") %>%
         dplyr::mutate(count = as.integer(count)) %>%
         dplyr::mutate(cumCount = cumsum(n)) %>%
         dplyr::mutate(relative = cumCount / sampleSize) %>%
@@ -38,11 +37,11 @@ estimateBackgroundCounts <- function(object) {
     if (! is(object, "msscafExp")) {
         stop("Parameter should be a msscafExp.")
     }
-    if (! is.null(object@parameters@maxLinkRange)) {
+    if (! is.null(object@parameters@minLinkRange)) {
         return(invisible(object))
     }
     message(paste0(object@name, ":"))
-    object@parameters@maxLinkRange <- estimateMoleculeSizeCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@metaSize, object@parameters@minCount)
+    object@parameters@minLinkRange <- estimateMoleculeSizeCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@metaSize, object@parameters@minCount)
 #   # Rearrange into bin1/distance matrix
 #   diagMatrices <- object@interactionMatrix %>%
 #       dplyr::filter(ref2 == ref1) %>%
@@ -98,7 +97,7 @@ estimateBackgroundCounts <- function(object) {
 #   # The molecule should be at the beginning of the first true hole.
 #   #    If it does not exist, it is the most distant point.
 #   #    Empty diagonals are discarded.
-#   object@parameters@maxLinkRange <- notEmptyDiag %>%
+#   object@parameters@minLinkRange <- notEmptyDiag %>%
 #       dplyr::left_join(lastPoints, by = c("ref1", "bin1")) %>%
 #       dplyr::left_join(firstHoles, by = c("ref1", "bin1")) %>%
 #       dplyr::mutate(size = dplyr::if_else(is.na(groupEnd), last, groupEnd)) %>%
@@ -142,7 +141,7 @@ estimateBackgroundCounts <- function(object) {
 #           dplyr::distinct() %>%
 #           dplyr::arrange(distance)
         
-#       object@parameters@maxLinkRange <- object@interactionMatrix %>%
+#       object@parameters@minLinkRange <- object@interactionMatrix %>%
 #           filter(ref1 == ref2) %>%
 #           mutate(distance = abs(bin1 - bin2)) %>%
 #           dplyr::select(distance, count) %>%
@@ -160,7 +159,7 @@ estimateBackgroundCounts <- function(object) {
 #           filter(loess > object@parameters@minCount) %>%
 #           tail(n = 1) %>%
 #           pull(distance)
-    message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, " (meta-bin size: ", object@parameters@metaSize, ")."))
+    message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@minLinkRange, " (meta-bin size: ", object@parameters@metaSize, ")."))
     return(invisible(object))
 }
 
@@ -178,7 +177,7 @@ estimateMoleculeSize <- function(object) {
     }
     nMeta <- 10
     minCount <- 5
-    moleculeSize <- (! is.null(object@parameters@maxLinkRange))
+    moleculeSize <- (! is.null(object@parameters@minLinkRange))
     l <- estimateMetaBinsMoleculeSizeCpp(object@interactionMatrix, sizes, minCount, nMeta, moleculeSize)
     if (l$metaSize == 0) {
         stop(paste0("Error!  Data '", object@name, "' is almost empty.  Cannot analyze it."))
@@ -188,9 +187,10 @@ estimateMoleculeSize <- function(object) {
         message(paste0("Dataset '", object@name, "': Estimated metabin size: ", object@parameters@metaSize, "."))
     }
     if (! moleculeSize) {
-        object@parameters@maxLinkRange <- l$maxLinkRange
-        message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@maxLinkRange, "."))
+        object@parameters@minLinkRange <- l$minLinkRange
     }
+    object@parameters@maxLinkRange <- l$maxLinkRange
+    message(paste0("Dataset '", object@name, "': Estimated molecule size: ", object@parameters@minLinkRange, "-", object@parameters@maxLinkRange, "."))
     return(invisible(object))
 }
 
@@ -201,7 +201,6 @@ estimateMetaBinsMoleculeSize <- function(object) {
     object@data <- purrr::map(object@data, .estimateMetaBinsMoleculeSize, sizes = object@sizes)
     return(invisible(object))
 }
-
 
 .estimateRowCount <- function(object, sizes) {
     if (! is(object, "msscafExp")) {
@@ -236,7 +235,7 @@ estimateMetaBinsMoleculeSize <- function(object) {
             fitNB                          <- fitdistrplus::fitdist(tmp, "nbinom")
             object@parameters@rowCountSize <- fitNB$estimate[[1]]
             object@parameters@rowCountMu   <- fitNB$estimate[[2]]
-            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.001]
+            t <- tmp[pnbinom(tmp, size = fitNB$estimate[[1]], mu = fitNB$estimate[[2]]) < 0.01]
             if (length(t) > 0) {
                 object@parameters@minRowCount <- max(t)
             }
@@ -327,42 +326,42 @@ estimateDistanceCount <- function(object, sizes) {
 #       distanceCount <- object@interactionMatrix %>%
 #           dplyr::filter(ref1 == ref2) %>%
 #           dplyr::mutate(distance = bin1 - bin2) %>%
-#           dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+#           dplyr::filter(distance <= object@parameters@minLinkRange) %>%
 #           dplyr::select(ref1, bin1, distance, count) %>%
 #           tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
 #           dplyr::rename(ref = ref1, bin = bin1)
 #   }
 #   # Cannot do the loess on the whole genome (too big): sample a few positions
 #   else {
-#       sampleSize <- max(100, object@parameters@sampleSize / (object@parameters@maxLinkRange + 1))
+#       sampleSize <- max(100, object@parameters@sampleSize / (object@parameters@minLinkRange + 1))
 #       lines <- sizes %>%
 #           tibble::enframe(name = "ref", value = "size") %>%
-#           dplyr::mutate(size = size - object@parameters@maxLinkRange) %>%
+#           dplyr::mutate(size = size - object@parameters@minLinkRange) %>%
 #           dplyr::filter(size > 0) %>%
 #           dplyr::sample_n(sampleSize, replace = TRUE, weigth = size) %>%
 #           dplyr::mutate(pos = runif(nrow(.))) %>%
 #           dplyr::mutate(bin = as.integer(pos * size)) %>%
 #           dplyr::select(ref, bin) %>%
 #           dplyr::mutate(ref = factor(ref, levels = names(sizes)))
-#       distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@maxLinkRange) %>%
+#       distanceCount <- extractLines(object@interactionMatrix, lines, object@parameters@minLinkRange) %>%
 #           tibble::as_tibble()
 #   }
 #   distanceCount <- object@interactionMatrix %>%
 #       dplyr::filter(ref1 == ref2) %>%
 #       dplyr::mutate(distance = bin1 - bin2) %>%
-#       dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+#       dplyr::filter(distance <= object@parameters@minLinkRange) %>%
 #       dplyr::select(ref1, bin1, distance, count) %>%
 #       tidyr::complete(nesting(ref1, bin1), distance, fill = list(count = 0)) %>%
 #       dplyr::select(distance, count) %>%
-#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
-#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@minLinkRange)) %>%
+#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@minLinkRange, by = 1)), by = "distance") %>%
 #       tidyr::replace_na(list(count = 0))
 
-#   distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange) %>%
-#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@maxLinkRange)) %>%
-#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)), by = "distance") %>%
+#   distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@minLinkRange) %>%
+#       dplyr::sample_n(min(nrow(.), object@parameters@sampleSize * object@parameters@minLinkRange)) %>%
+#       dplyr::right_join(tibble(distance = seq.int(from = 0, to = object@parameters@minLinkRange, by = 1)), by = "distance") %>%
 #       tidyr::replace_na(list(count = 0))
-    distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, object@parameters@sampleSize) %>%
+    distanceCount <- estimateDistanceCountCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize, object@parameters@sampleSize) %>%
         tibble::as_tibble()
     object@parameters@distanceCount <- smoothenDistribution(distanceCount)
     return(object)
@@ -418,7 +417,12 @@ computeCornerDifferenceOffset <- function(offset, corner, background, maxDistanc
 # Smoothen distribution, compare to background distribution with various offsets
 computeCornerDifferenceOffsets <- function(corner, background, distance, bothOffsets, pb) {
     pb$tick()
-    corner    <- smoothenDistribution(corner)
+    corner    <- corner %>%
+        tidyr::drop_na() %>%
+        smoothenDistribution() %>%
+        # Replace missing values with NA
+        dplyr::right_join(tibble::tibble(distance = seq.int(from = 0, to = distance, by = 1)), by = "distance") %>%
+        dplyr::arrange(distance)
     offsets   <- seq.int(from = 0, to = distance - 1, by = 1)
     if (bothOffsets) {
         distances <- purrr::map_dbl(offsets, computeCornerDifferenceBothOffsetCpp, corner, background, distance)
@@ -437,20 +441,20 @@ extractCornerFromPoint <- function(parameters, object, pb) {
         dplyr::filter(ref2 == parameters$ref) %>%
         dplyr::mutate(bin1 = bin1 - parameters$bin) %>%
         dplyr::mutate(bin2 = bin2 - parameters$bin) %>%
-        dplyr::filter(bin1 >= 0, bin1 <= object@parameters@maxLinkRange) %>%
-        dplyr::filter(bin2 >= 0, bin2 <= object@parameters@maxLinkRange) %>%
+        dplyr::filter(bin1 >= 0, bin1 <= object@parameters@minLinkRange) %>%
+        dplyr::filter(bin2 >= 0, bin2 <= object@parameters@minLinkRange) %>%
         dplyr::filter(bin1 >= bin2)
-    fillCorner(corner, object@parameters@maxLinkRange, FALSE) %>%
+    fillCorner(corner, object@parameters@minLinkRange, FALSE) %>%
         dplyr::select(distance, count)
 #   corner <- object@interactionMatrix %>%
 #       dplyr::filter(ref1 == parameters$ref1) %>%
 #       dplyr::filter(ref2 == parameters$ref2) %>%
 #       dplyr::mutate(bin1 = bin1 - parameters$bin1) %>%
 #       dplyr::mutate(bin2 = bin2 - parameters$bin2) %>%
-#       dplyr::filter(bin1 >= 0, bin1 <= object@parameters@maxLinkRange) %>%
-#       dplyr::filter(bin2 >= 0, bin2 <= object@parameters@maxLinkRange) %>%
+#       dplyr::filter(bin1 >= 0, bin1 <= object@parameters@minLinkRange) %>%
+#       dplyr::filter(bin2 >= 0, bin2 <= object@parameters@minLinkRange) %>%
 #       dplyr::filter(bin1 >= bin2)
-#   fillCorner(corner, object@parameters@maxLinkRange, FALSE)
+#   fillCorner(corner, object@parameters@minLinkRange, FALSE)
 }
 
 # Get random points on the diagonal
@@ -458,7 +462,7 @@ findRandomCornerPoints <- function(object, sizes, nSamples) {
     sizes %>%
         tibble::enframe(name = "ref", value = "size") %>%
         dplyr::slice_sample(n = nSamples, weight_by = size, replace = TRUE) %>%
-        dplyr::mutate(size = size - object@parameters@maxLinkRange) %>%
+        dplyr::mutate(size = size - object@parameters@minLinkRange) %>%
         dplyr::mutate(bin = as.integer(round(runif(nrow(.)) * size)))
 #   # Extract all observed pairs of refs
 #   object@interactionMatrix %>%
@@ -472,8 +476,8 @@ findRandomCornerPoints <- function(object, sizes, nSamples) {
 #   # Sample, weighted by size
 #       dplyr::slice_sample(n = nSamples, weight_by = size, replace = TRUE) %>%
 #   # Get random point
-#       dplyr::mutate(size1 = size1 - object@parameters@maxLinkRange) %>%
-#       dplyr::mutate(size2 = size2 - object@parameters@maxLinkRange) %>%
+#       dplyr::mutate(size1 = size1 - object@parameters@minLinkRange) %>%
+#       dplyr::mutate(size2 = size2 - object@parameters@minLinkRange) %>%
 #       dplyr::mutate(bin1 = as.integer(round(runif(nrow(.)) * size1))) %>%
 #       dplyr::mutate(bin2 = as.integer(round(runif(nrow(.)) * size2))) %>%
 #       dplyr::select(ref1, bin1, ref2, bin2)
@@ -486,25 +490,34 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
         stop("Parameter should be a msscafExp.")
     }
     message("\t\tEstimating distance/count variance.")
-    fitTriangleDifference <- function(distribution) {
+    fitTriangleDifference <- function(distribution, pb) {
         output <- tibble::tibble(shape = NA_real_, rate = NA_real_)
+        pb$tick()
         try({
+            # Replace 0s with low values
+            minValue <- distribution %>%
+                dplyr::filter(score > 0) %>%
+                dplyr::slice_min(score, n = 1, with_ties = FALSE) %>%
+                dplyr::pull(score)
+            distribution <- distribution %>%
+                dplyr::mutate(score = dplyr::if_else(score == 0, minValue / 10, score))
             f <- MASS::fitdistr(distribution$score, "gamma")
             output <- tibble::tibble(shape = f$estimate[["shape"]], rate = f$estimate[["rate"]])}, silent = TRUE)
         return(output)
     }
     nSamples <- 10 / pvalueThreshold
-    pb <- progress_bar$new(total = nSamples)
+    pb1 <- progress_bar$new(total = nSamples)
+    pb2 <- progress_bar$new(total = object@parameters@minLinkRange)
     # Sample a few triangles
-    object@parameters@cornerScores <- sampleTriangles(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize, nSamples) %>%
+    object@parameters@cornerScores <- sampleTriangles(object@interactionMatrix, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize, nSamples) %>%
         tibble::as_tibble() %>%
         dplyr::group_by(index) %>%
         dplyr::group_split() %>%
         # Compute 
-        purrr::map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
+        purrr::map_dfr(computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@minLinkRange, TRUE, pb1) %>%
         dplyr::group_by(distance) %>%
         dplyr::group_split() %>%
-        purrr::map_dfr(fitTriangleDifference, .id = "distance") %>%
+        purrr::map_dfr(fitTriangleDifference, pb2, .id = "distance") %>%
         dplyr::mutate(distance = as.integer(distance)) %>%
         tidyr::drop_na()
 #       # This parameter should be tuned!
@@ -526,8 +539,8 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
 #message("corner[1]")
 #message(str(corners[[1]]))
 #message("max link range")
-#message(str(object@parameters@maxLinkRange))
-#   object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@maxLinkRange, TRUE, pb) %>%
+#message(str(object@parameters@minLinkRange))
+#   object@parameters@cornerScores <- purrr::map_dfr(corners, computeCornerDifferenceOffsets, object@parameters@distanceCount, object@parameters@minLinkRange, TRUE, pb) %>%
 #       group_by(distance) %>%
 #       # This parameter should be tuned!
 #       slice_min(score, prop = 0.5, with_ties = FALSE) %>%
@@ -539,18 +552,18 @@ estimateCornerVariance <- function(object, sizes, pvalueThreshold) {
 
 # Find offset where corner detection is not significant
 estimateCornerLimits <- function(object, minNBins) {
-    return(object@parameters@maxLinkRange)
-#   bins <- seq.int(from = 0, to = object@parameters@maxLinkRange, by = 1)
+    return(object@parameters@minLinkRange)
+#   bins <- seq.int(from = 0, to = object@parameters@minLinkRange, by = 1)
 #   emptyCorner <- tibble(bin1 = bins, bin2 = bins) %>%
 #       tidyr::expand(bin1, bin2) %>%
 #       dplyr::filter(bin1 >= bin2) %>%
 #       dplyr::mutate(distance = bin1 - bin2) %>%
-#       dplyr::filter(distance <= object@parameters@maxLinkRange) %>%
+#       dplyr::filter(distance <= object@parameters@minLinkRange) %>%
 #       dplyr::filter(bin1 <= minNBins) %>%
 #       dplyr::filter(bin2 <= minNBins) %>%
 #       dplyr::mutate(count = 0) %>%
 #       dplyr::select(distance, count)
-#   values <- purrr::map(bins, computeCornerDistanceOffset, object@parameters@distanceCount, emptyCorner, object@parameters@maxLinkRange) %>% unlist()
+#   values <- purrr::map(bins, computeCornerDistanceOffset, object@parameters@distanceCount, emptyCorner, object@parameters@minLinkRange) %>% unlist()
 #   object@parameters@cornerScores %>%
 #       dplyr::mutate(observed = values) %>%
 #       dplyr::mutate(difference = observed - score) %>%

@@ -78,31 +78,33 @@ BEGIN_RCPP
 END_RCPP
 }
 // sumCornerCpp
-DataFrame sumCornerCpp(DataFrame interactions, IntegerVector sizes, int cornerSize, int metaSize);
-RcppExport SEXP _msscaf_sumCornerCpp(SEXP interactionsSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
+DataFrame sumCornerCpp(DataFrame interactions, DataFrame outliers, IntegerVector sizesIn, int cornerSize, int metaSize);
+RcppExport SEXP _msscaf_sumCornerCpp(SEXP interactionsSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type outliers(outliersSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type sizesIn(sizesInSEXP);
     Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
     Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(sumCornerCpp(interactions, sizes, cornerSize, metaSize));
+    rcpp_result_gen = Rcpp::wrap(sumCornerCpp(interactions, outliers, sizesIn, cornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
 // extractCornersCpp
-DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, IntegerVector sizes, int cornerSize, int metaSize);
-RcppExport SEXP _msscaf_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP sizesSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
+DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, DataFrame outliers, IntegerVector sizesIn, int cornerSize, int metaSize);
+RcppExport SEXP _msscaf_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type selectedRefs(selectedRefsSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type sizes(sizesSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type outliers(outliersSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type sizesIn(sizesInSEXP);
     Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
     Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, sizes, cornerSize, metaSize));
+    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -122,17 +124,18 @@ BEGIN_RCPP
 END_RCPP
 }
 // extractCornersFullCpp
-DataFrame extractCornersFullCpp(DataFrame interactions, DataFrame selectedCorners, IntegerVector sizesIn, int cornerSize, int metaSize);
-RcppExport SEXP _msscaf_extractCornersFullCpp(SEXP interactionsSEXP, SEXP selectedCornersSEXP, SEXP sizesInSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
+DataFrame extractCornersFullCpp(DataFrame interactions, DataFrame selectedCorners, DataFrame outliers, IntegerVector sizesIn, int cornerSize, int metaSize);
+RcppExport SEXP _msscaf_extractCornersFullCpp(SEXP interactionsSEXP, SEXP selectedCornersSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type selectedCorners(selectedCornersSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type outliers(outliersSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sizesIn(sizesInSEXP);
     Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
     Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(extractCornersFullCpp(interactions, selectedCorners, sizesIn, cornerSize, metaSize));
+    rcpp_result_gen = Rcpp::wrap(extractCornersFullCpp(interactions, selectedCorners, outliers, sizesIn, cornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -211,16 +214,31 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimateMoleculeSizeCpp
-int estimateMoleculeSizeCpp(std::vector < double >& rowAvg, int maxDistance, int minCount, int metaSize);
-RcppExport SEXP _msscaf_estimateMoleculeSizeCpp(SEXP rowAvgSEXP, SEXP maxDistanceSEXP, SEXP minCountSEXP, SEXP metaSizeSEXP) {
+int estimateMoleculeSizeCpp(std::vector < double >& metaSums, int maxDistance, int minCount, int metaSize);
+RcppExport SEXP _msscaf_estimateMoleculeSizeCpp(SEXP metaSumsSEXP, SEXP maxDistanceSEXP, SEXP minCountSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< std::vector < double >& >::type rowAvg(rowAvgSEXP);
+    Rcpp::traits::input_parameter< std::vector < double >& >::type metaSums(metaSumsSEXP);
     Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
     Rcpp::traits::input_parameter< int >::type minCount(minCountSEXP);
     Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimateMoleculeSizeCpp(rowAvg, maxDistance, minCount, metaSize));
+    rcpp_result_gen = Rcpp::wrap(estimateMoleculeSizeCpp(metaSums, maxDistance, minCount, metaSize));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimateMaxMoleculeSizeCpp
+int estimateMaxMoleculeSizeCpp(std::vector < double >& metaSums, int minDistance, int maxDistance, int minCount, int metaSize);
+RcppExport SEXP _msscaf_estimateMaxMoleculeSizeCpp(SEXP metaSumsSEXP, SEXP minDistanceSEXP, SEXP maxDistanceSEXP, SEXP minCountSEXP, SEXP metaSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::vector < double >& >::type metaSums(metaSumsSEXP);
+    Rcpp::traits::input_parameter< int >::type minDistance(minDistanceSEXP);
+    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
+    Rcpp::traits::input_parameter< int >::type minCount(minCountSEXP);
+    Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimateMaxMoleculeSizeCpp(metaSums, minDistance, maxDistance, minCount, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -502,16 +520,17 @@ static const R_CallMethodDef CallEntries[] = {
     {"_msscaf_removeNearEqualBreaksCpp", (DL_FUNC) &_msscaf_removeNearEqualBreaksCpp, 2},
     {"_msscaf_computeCornerSize", (DL_FUNC) &_msscaf_computeCornerSize, 3},
     {"_msscaf_filterCornersCpp", (DL_FUNC) &_msscaf_filterCornersCpp, 4},
-    {"_msscaf_sumCornerCpp", (DL_FUNC) &_msscaf_sumCornerCpp, 4},
-    {"_msscaf_extractCornersCpp", (DL_FUNC) &_msscaf_extractCornersCpp, 5},
+    {"_msscaf_sumCornerCpp", (DL_FUNC) &_msscaf_sumCornerCpp, 5},
+    {"_msscaf_extractCornersCpp", (DL_FUNC) &_msscaf_extractCornersCpp, 6},
     {"_msscaf_classifyCornerPointsCpp", (DL_FUNC) &_msscaf_classifyCornerPointsCpp, 5},
-    {"_msscaf_extractCornersFullCpp", (DL_FUNC) &_msscaf_extractCornersFullCpp, 5},
+    {"_msscaf_extractCornersFullCpp", (DL_FUNC) &_msscaf_extractCornersFullCpp, 6},
     {"_msscaf_computeCornerDifferenceOffsetCpp", (DL_FUNC) &_msscaf_computeCornerDifferenceOffsetCpp, 4},
     {"_msscaf_computeCornerDifferenceBothOffsetCpp", (DL_FUNC) &_msscaf_computeCornerDifferenceBothOffsetCpp, 4},
     {"_msscaf_estimateDistanceCountCpp", (DL_FUNC) &_msscaf_estimateDistanceCountCpp, 6},
     {"_msscaf_sampleTriangles", (DL_FUNC) &_msscaf_sampleTriangles, 6},
     {"_msscaf_estimateMetaSizeCpp", (DL_FUNC) &_msscaf_estimateMetaSizeCpp, 4},
     {"_msscaf_estimateMoleculeSizeCpp", (DL_FUNC) &_msscaf_estimateMoleculeSizeCpp, 4},
+    {"_msscaf_estimateMaxMoleculeSizeCpp", (DL_FUNC) &_msscaf_estimateMaxMoleculeSizeCpp, 5},
     {"_msscaf_estimateMetaBinsMoleculeSizeCpp", (DL_FUNC) &_msscaf_estimateMetaBinsMoleculeSizeCpp, 5},
     {"_msscaf_keepScaffoldsCpp", (DL_FUNC) &_msscaf_keepScaffoldsCpp, 2},
     {"_msscaf_keepScaffoldsPairsCpp", (DL_FUNC) &_msscaf_keepScaffoldsPairsCpp, 2},
