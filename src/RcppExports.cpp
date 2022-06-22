@@ -51,15 +51,28 @@ BEGIN_RCPP
 END_RCPP
 }
 // computeCornerSize
-int computeCornerSize(int size1, int size2, int maxDistance);
-RcppExport SEXP _msscaf_computeCornerSize(SEXP size1SEXP, SEXP size2SEXP, SEXP maxDistanceSEXP) {
+int computeCornerSize(int size1, int size2, int distance);
+RcppExport SEXP _msscaf_computeCornerSize(SEXP size1SEXP, SEXP size2SEXP, SEXP distanceSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type size1(size1SEXP);
     Rcpp::traits::input_parameter< int >::type size2(size2SEXP);
-    Rcpp::traits::input_parameter< int >::type maxDistance(maxDistanceSEXP);
-    rcpp_result_gen = Rcpp::wrap(computeCornerSize(size1, size2, maxDistance));
+    Rcpp::traits::input_parameter< int >::type distance(distanceSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeCornerSize(size1, size2, distance));
+    return rcpp_result_gen;
+END_RCPP
+}
+// computeOtherSize
+int computeOtherSize(int size1, int size2, int distance);
+RcppExport SEXP _msscaf_computeOtherSize(SEXP size1SEXP, SEXP size2SEXP, SEXP distanceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type size1(size1SEXP);
+    Rcpp::traits::input_parameter< int >::type size2(size2SEXP);
+    Rcpp::traits::input_parameter< int >::type distance(distanceSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeOtherSize(size1, size2, distance));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -93,18 +106,19 @@ BEGIN_RCPP
 END_RCPP
 }
 // extractCornersCpp
-DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedRefs, DataFrame outliers, IntegerVector sizesIn, int cornerSize, int metaSize);
-RcppExport SEXP _msscaf_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedRefsSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP cornerSizeSEXP, SEXP metaSizeSEXP) {
+DataFrame extractCornersCpp(DataFrame interactions, DataFrame selectedCorners, DataFrame outliers, IntegerVector sizesIn, int minCornerSize, int maxCornerSize, int metaSize);
+RcppExport SEXP _msscaf_extractCornersCpp(SEXP interactionsSEXP, SEXP selectedCornersSEXP, SEXP outliersSEXP, SEXP sizesInSEXP, SEXP minCornerSizeSEXP, SEXP maxCornerSizeSEXP, SEXP metaSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< DataFrame >::type interactions(interactionsSEXP);
-    Rcpp::traits::input_parameter< DataFrame >::type selectedRefs(selectedRefsSEXP);
+    Rcpp::traits::input_parameter< DataFrame >::type selectedCorners(selectedCornersSEXP);
     Rcpp::traits::input_parameter< DataFrame >::type outliers(outliersSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type sizesIn(sizesInSEXP);
-    Rcpp::traits::input_parameter< int >::type cornerSize(cornerSizeSEXP);
+    Rcpp::traits::input_parameter< int >::type minCornerSize(minCornerSizeSEXP);
+    Rcpp::traits::input_parameter< int >::type maxCornerSize(maxCornerSizeSEXP);
     Rcpp::traits::input_parameter< int >::type metaSize(metaSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize));
+    rcpp_result_gen = Rcpp::wrap(extractCornersCpp(interactions, selectedCorners, outliers, sizesIn, minCornerSize, maxCornerSize, metaSize));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -519,9 +533,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_msscaf_computeMeanTrianglesCpp", (DL_FUNC) &_msscaf_computeMeanTrianglesCpp, 5},
     {"_msscaf_removeNearEqualBreaksCpp", (DL_FUNC) &_msscaf_removeNearEqualBreaksCpp, 2},
     {"_msscaf_computeCornerSize", (DL_FUNC) &_msscaf_computeCornerSize, 3},
+    {"_msscaf_computeOtherSize", (DL_FUNC) &_msscaf_computeOtherSize, 3},
     {"_msscaf_filterCornersCpp", (DL_FUNC) &_msscaf_filterCornersCpp, 4},
     {"_msscaf_sumCornerCpp", (DL_FUNC) &_msscaf_sumCornerCpp, 5},
-    {"_msscaf_extractCornersCpp", (DL_FUNC) &_msscaf_extractCornersCpp, 6},
+    {"_msscaf_extractCornersCpp", (DL_FUNC) &_msscaf_extractCornersCpp, 7},
     {"_msscaf_classifyCornerPointsCpp", (DL_FUNC) &_msscaf_classifyCornerPointsCpp, 5},
     {"_msscaf_extractCornersFullCpp", (DL_FUNC) &_msscaf_extractCornersFullCpp, 6},
     {"_msscaf_computeCornerDifferenceOffsetCpp", (DL_FUNC) &_msscaf_computeCornerDifferenceOffsetCpp, 4},

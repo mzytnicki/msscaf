@@ -13,8 +13,12 @@ removeNearEqualBreaksCpp <- function(breaks, distance) {
     .Call('_msscaf_removeNearEqualBreaksCpp', PACKAGE = 'msscaf', breaks, distance)
 }
 
-computeCornerSize <- function(size1, size2, maxDistance) {
-    .Call('_msscaf_computeCornerSize', PACKAGE = 'msscaf', size1, size2, maxDistance)
+computeCornerSize <- function(size1, size2, distance) {
+    .Call('_msscaf_computeCornerSize', PACKAGE = 'msscaf', size1, size2, distance)
+}
+
+computeOtherSize <- function(size1, size2, distance) {
+    .Call('_msscaf_computeOtherSize', PACKAGE = 'msscaf', size1, size2, distance)
 }
 
 filterCornersCpp <- function(data, sizesIn, cornerSize, metaSize) {
@@ -25,8 +29,8 @@ sumCornerCpp <- function(interactions, outliers, sizesIn, cornerSize, metaSize) 
     .Call('_msscaf_sumCornerCpp', PACKAGE = 'msscaf', interactions, outliers, sizesIn, cornerSize, metaSize)
 }
 
-extractCornersCpp <- function(interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize) {
-    .Call('_msscaf_extractCornersCpp', PACKAGE = 'msscaf', interactions, selectedRefs, outliers, sizesIn, cornerSize, metaSize)
+extractCornersCpp <- function(interactions, selectedCorners, outliers, sizesIn, minCornerSize, maxCornerSize, metaSize) {
+    .Call('_msscaf_extractCornersCpp', PACKAGE = 'msscaf', interactions, selectedCorners, outliers, sizesIn, minCornerSize, maxCornerSize, metaSize)
 }
 
 classifyCornerPointsCpp <- function(interactions, size1, size2, metaSize, maxDistance) {

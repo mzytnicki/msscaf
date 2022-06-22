@@ -9,7 +9,7 @@
 #    background <- counts %>%
 #	dplyr::filter(type != name) %>%
 #	dplyr::pull(count)
-computeTest <- function(background, data) {
+computePValue <- function(background, data) {
     if (length(data) == 0) {
         return(1.0)
     }
@@ -93,20 +93,18 @@ computeSample <- function(observed, nExpected, sampleSize = 10000) {
     return(c(sample(observed, nObserved * ratio), rep(0, nMissing * ratio)))
 }
 
-# Read a (type, count) tibble.
-# Set missing values as 0, for all the types.
-# Return a list of distributions.
-computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10000) {
-    cornerTypes   <- counts %>% dplyr::pull(type) %>% levels()
-    cornerSize    <- computeCornerSize(size1, size2, maxDistance)
-    interiorSize  <- size1 * size2 - 4 * cornerSize
-    splitCounts   <- counts %>%
-        dplyr::select(type, count)
-    splitCounts <- split(splitCounts$count, splitCounts$type)
-    expectedSizes <- c(rep.int(cornerSize, 4), interiorSize)
-    samples <- purrr::map2(splitCounts, expectedSizes, computeSample)
-    names(samples) <- cornerTypes
-    return(samples)
+# Read a count tibble. Negative counts are non-corner.
+# Set missing values as 0, for the corner, and the rest.
+# Return a p-value.
+computeTest <- function(counts, size1, size2, minDistance, maxDistance, sampleSize = 10000) {
+    counts       <- counts %>% dplyr::pull(count)
+    cornerCounts <- counts %>% purrr::keep(~ .x > 0)
+    otherCounts  <- counts %>% purrr::keep(~ .x < 0)
+    cornerSize   <- computeCornerSize(size1, size2, minDistance)
+    otherSize    <- computeOtherSize(size1, size2, maxDistance)
+    cornerCounts <- computeSample(cornerCounts, cornerSize)
+    otherCounts  <- computeSample(- otherCounts, otherSize)
+    return(computePValue(otherCounts, cornerCounts))
 }
 
 # # Extract a corner, given the corner point
@@ -182,25 +180,16 @@ computeAllSamples <- function(counts, size1, size2, maxDistance, sampleSize = 10
 # }
 
 # Extract the counts from the current join, and perform test.
-testJoin <- function(counts, sizes, maxDistance, pb) {
-message(str(counts))
-    r1 <- counts %>%
-        dplyr::pull(ref1) %>%
-        head(1)
-    r2 <- counts %>%
-        dplyr::pull(ref2) %>%
-        head(1)
-    c  <- counts %>%
-        dplyr::pull(corner) %>%
-        head(1)
-    size1        <- as.numeric(sizes[[r1]])
-    size2        <- as.numeric(sizes[[r2]])
-    samples      <- computeAllSamples(counts, size1, size2, maxDistance, sampleSize = 10000)
-    testedCorner <- samples[[c]]
-    samples[[c]] <- NULL
+testJoin <- function(counts, sizes, minDistance, maxDistance, pb) {
+    firstRow <- counts[1, ]
+    r1       <- firstRow$ref1
+    r2       <- firstRow$ref2
+    c        <- firstRow$corner
+    size1    <- as.numeric(sizes[[r1]])
+    size2    <- as.numeric(sizes[[r2]])
+    p        <- computeTest(counts, size1, size2, minDistance, maxDistance, sampleSize = 10000)
     pb$tick()
-message(str(purrr::map_dbl(samples, computeTest, testedCorner)))
-    tibble::tibble(ref1 = r1, ref2 = r2, corner = c, pvalue = max(purrr::map_dbl(samples, computeTest, testedCorner)))
+    tibble::tibble(ref1 = r1, ref2 = r2, corner = c, pvalue = p)
 }
 
 # Add plots to experiment
@@ -257,17 +246,17 @@ getJoinInfo <- function(object, parameters) {
 #   }
     message(paste0("\t\t", nrow(selectedRefs), " selected joins."))
     pb <- progress_bar$new(total = nrow(selectedRefs))
-    selectedRefs <- extractCornersCpp(object@interactionMatrix, selectedRefs, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@metaSize) %>%
+    selectedRefs <- extractCornersCpp(object@interactionMatrix, selectedRefs, object@outlierBins, sizes, object@parameters@minLinkRange, object@parameters@maxLinkRange, object@parameters@metaSize) %>%
         tibble::as_tibble() %>%
-        dplyr::inner_join(selectedRefs, by = c("ref1", "ref2")) %>%
         dplyr::group_by(ref1, ref2, corner) %>%
         dplyr::group_split() %>%
-        purrr::map_dfr(testJoin, sizes = sizes, maxDistance = object@parameters@minLinkRange, pb = pb) %>%
-        dplyr::mutate(size1 = sizes[ref1]) %>%
-        dplyr::mutate(size2 = sizes[ref2]) %>%
-        dplyr::mutate(minSize = pmin(size1, size2)) %>%
-        # Do not apply p-value filter if refs are too short: corners overlap
-        dplyr::filter((pvalue <= pvalueThreshold) | (minSize <= 4 * object@parameters@minLinkRange)) %>%
+        purrr::map_dfr(testJoin, sizes = sizes, minDistance = object@parameters@minLinkRange, maxDistance = object@parameters@maxLinkRange, pb = pb) %>%
+#       dplyr::mutate(size1 = sizes[ref1]) %>%
+#       dplyr::mutate(size2 = sizes[ref2]) %>%
+#       dplyr::mutate(minSize = pmin(size1, size2)) %>%
+#       # Do not apply p-value filter if refs are too short: corners overlap
+#       dplyr::filter((pvalue <= pvalueThreshold) | (minSize <= 4 * object@parameters@minLinkRange)) %>%
+        dplyr::filter(pvalue <= pvalueThreshold) %>%
         dplyr::group_by(ref1, ref2) %>% # Possible 2 joins for the same pairs of refs?
         dplyr::slice_min(pvalue, n = 1, with_ties = FALSE) %>%
         dplyr::ungroup() %>%
@@ -489,7 +478,7 @@ removeSuboptimalJoins <- function(joins) {
         dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%
         dplyr::slice_min(pvalueCorner, n = 1, with_ties = FALSE) %>%
         dplyr::select(distance, pvalueCorner) %>%
-        dplyr::mutate(distance = as.integer(distance))
+        dplyr::mutate(distance = as.integer(distance) * object@parameters@metaSize)
 #   background <- object@parameters@distanceCount
 #   values     <- computeCornerDifferenceOffsets(corner, background, object@parameters@minLinkRange, FALSE, pb) %>%
 #       dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%

@@ -27,10 +27,10 @@ bool isInCorner(int bin1, int bin2, int center1, int center2, int metaSize, int 
 
 // Compute corner size
 // [[Rcpp::export]]
-int computeCornerSize(int size1, int size2, int maxDistance) {
-    int cornerSize = maxDistance * (maxDistance + 1) / 2;
-    size1 = maxDistance - (size1 / 2);
-    size2 = maxDistance - (size2 / 2);
+int computeCornerSize(int size1, int size2, int distance) {
+    int cornerSize = distance * (distance + 1) / 2;
+    size1 = distance - (size1 / 2);
+    size2 = distance - (size2 / 2);
     if (size1 > 0) {
         cornerSize = cornerSize - (size1 * (size1 + 1) / 2);
     }
@@ -38,6 +38,13 @@ int computeCornerSize(int size1, int size2, int maxDistance) {
         cornerSize = cornerSize - (size2 * (size2 + 1) / 2);
     }
     return cornerSize;
+}
+
+
+// Compute non-corner size
+// [[Rcpp::export]]
+int computeOtherSize(int size1, int size2, int distance) {
+    return size1 * size2 - computeCornerSize(size1, size2, distance);
 }
 
 
@@ -167,6 +174,7 @@ DataFrame sumCornerCpp (DataFrame interactions, DataFrame outliers, IntegerVecto
     IntegerVector bins2  = interactions["bin2"];
     IntegerVector counts = interactions["count"];
     CharacterVector refs = refs1.attr("levels");
+    assert(refs.size() == sizes.size());
     long long int nInteractions = refs1.size();
     int nRefs = sizes.size();
     int nOutput = nRefs * (nRefs - 1) / 2 * nCornerType;
@@ -210,6 +218,9 @@ DataFrame sumCornerCpp (DataFrame interactions, DataFrame outliers, IntegerVecto
                 assert(offset2 + bin2 < static_cast<int>(outlierBinsBool.size()));
                 if ((! outlierBinsBool[offset1 + bin1]) && (! outlierBinsBool[offset2 + bin2])) {
                     int index = (ref1 * (ref1 - 1) / 2 + ref2) * nCornerType + ct;
+                    assert(outputRefs1[index]       == ref1 + 1);
+                    assert(outputRefs2[index]       == ref2 + 1);
+                    assert(outputCornerTypes[index] == ct   + 1);
                     outputSums[index] += count;
                     ++outputCounts[index];
                 }
@@ -229,10 +240,10 @@ DataFrame sumCornerCpp (DataFrame interactions, DataFrame outliers, IntegerVecto
     return DataFrame::create(_["ref1"] = outputRefs1R, _["ref2"] = outputRefs2R, _["corner"] = outputCornerTypesR, _["count"] = wrap(outputSums), _["n"] = wrap(outputCounts));
 }
 
-// Read interaction matrix and a set of pairs of references
-//   output the corners.
-// [[Rcpp::export]]                                                                                                                                                                                                
-DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, DataFrame outliers, IntegerVector sizesIn, int cornerSize, int metaSize) {
+// Read interaction matrix and a set of pairs of corners
+//   extract the corner, and the "rest" (with negative counts)
+// [[Rcpp::export]]
+DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedCorners, DataFrame outliers, IntegerVector sizesIn, int minCornerSize, int maxCornerSize, int metaSize) {
     IntegerVector sizes  = clone(sizesIn);
     for (int i = 0; i < sizes.size(); ++i) {
         sizes[i] = sizes[i] / metaSize;
@@ -245,12 +256,13 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Dat
     CharacterVector refs = refs1.attr("levels");
     long long int nInteractions = refs1.size();
     int nRefs = sizes.size();
-    IntegerVector selectedRefs1 = selectedRefs["ref1"];
-    IntegerVector selectedRefs2 = selectedRefs["ref2"];
-    int nSelectedRefs = selectedRefs1.size();
-    std::vector < std::vector < bool > > selectedRefsBool (nRefs + 1);
+    IntegerVector selectedRefs1 = selectedCorners["ref1"];
+    IntegerVector selectedRefs2 = selectedCorners["ref2"];
+    IntegerVector selectedEnds  = selectedCorners["corner"];
+    int nSelectedCorners = selectedRefs1.size();
+    std::vector < std::vector < std::vector < CornerType > > > selectedCornersVector (nRefs + 1);
     for (int refId = 0; refId <= nRefs; ++refId) {
-        selectedRefsBool[refId] = std::vector < bool > (refId + 1, false);
+        selectedCornersVector[refId] = std::vector < std::vector < CornerType > > (refId + 1);
     }
     IntegerVector outlierRefs = outliers["ref"];
     IntegerVector outlierBins = outliers["bin"];
@@ -263,8 +275,8 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Dat
     std::vector < int > outputDistances;
     std::vector < int > outputCornerTypes;
     std::vector < int > outputCounts;
-    for (int selectedRefId = 0; selectedRefId < nSelectedRefs; ++selectedRefId) {
-        selectedRefsBool[selectedRefs1[selectedRefId]][selectedRefs2[selectedRefId]] = true;
+    for (int selectedCornerId = 0; selectedCornerId < nSelectedCorners; ++selectedCornerId) {
+        selectedCornersVector[selectedRefs1[selectedCornerId]][selectedRefs2[selectedCornerId]].push_back(static_cast < CornerType > (selectedEnds[selectedCornerId] - 1));
     }
     for (long long int interactionId = 0; interactionId < nInteractions; ++interactionId) {
         int ref1  = refs1[interactionId];
@@ -276,19 +288,27 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Dat
         int size2 = sizes[ref2-1];
         assert(bin1 <= size1);
         assert(bin2 <= size2);
-        if (selectedRefsBool[ref1][ref2]) {
-            int offset1 = offsets[ref1 - 1];
-            int offset2 = offsets[ref2 - 1];
-            assert(offset1 + bin1 < static_cast<int>(outlierBinsBool.size()));
-            assert(offset2 + bin2 < static_cast<int>(outlierBinsBool.size()));
-            if ((! outlierBinsBool[offset1 + bin1]) && (! outlierBinsBool[offset2 + bin2])) {
-                CornerType ct       = classifyCornerPoint(bin1, bin2, size1, size2, 1, cornerSize); // Bins are already metabins
-                int        distance = getCornerDistanceCpp(bin1, bin2, ct, size1, size2, 1);        // Bins are already metabins
-                outputRefs1.push_back(ref1);
-                outputRefs2.push_back(ref2);
-                outputDistances.push_back(distance);
-                outputCornerTypes.push_back(ct);
-                outputCounts.push_back(count);
+        int offset1 = offsets[ref1 - 1];
+        int offset2 = offsets[ref2 - 1];
+        assert(offset1 + bin1 < static_cast<int>(outlierBinsBool.size()));
+        assert(offset2 + bin2 < static_cast<int>(outlierBinsBool.size()));
+        if ((! outlierBinsBool[offset1 + bin1]) && (! outlierBinsBool[offset2 + bin2])) {
+            for (CornerType corner: selectedCornersVector[ref1][ref2]) {
+                int distance = getCornerDistanceCpp(bin1, bin2, corner, size1, size2, 1);        // Bins are already metabins
+                if (distance <= minCornerSize) {
+                    outputRefs1.push_back(ref1);
+                    outputRefs2.push_back(ref2);
+                    outputDistances.push_back(distance);
+                    outputCornerTypes.push_back(corner);
+                    outputCounts.push_back(count);
+                }
+                else if (distance >= maxCornerSize) {
+                    outputRefs1.push_back(ref1);
+                    outputRefs2.push_back(ref2);
+                    outputDistances.push_back(distance);
+                    outputCornerTypes.push_back(corner);
+                    outputCounts.push_back(- count);
+                }
             }
         }
     }
@@ -303,7 +323,7 @@ DataFrame extractCornersCpp (DataFrame interactions, DataFrame selectedRefs, Dat
     IntegerVector   outputRefs2R = wrap(outputRefs2);
     outputRefs2R.attr("class")   = "factor";
     outputRefs2R.attr("levels")  = refs;
-    return DataFrame::create(_["ref1"] = outputRefs1R, _["ref2"] = outputRefs2R, _["distance"] = wrap(outputDistances), _["type"] = outputCornerTypesR, _["count"] = wrap(outputCounts));
+    return DataFrame::create(_["ref1"] = outputRefs1R, _["ref2"] = outputRefs2R, _["distance"] = wrap(outputDistances), _["corner"] = outputCornerTypesR, _["count"] = wrap(outputCounts));
 }
 
 // Read interaction matrix,
