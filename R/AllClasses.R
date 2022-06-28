@@ -21,23 +21,23 @@
 #'
 #' @export
 setClass("msscafParameters", slots = c(minCount        = "ANY",
-                                            minRowCount     = "ANY",
-                                            maxRowCount     = "ANY",
-                                            binSize         = "ANY",
-                                            sampleSize      = "ANY",
-                                            loessSpan       = "ANY",
-                                            distanceCount   = "ANY",
-                                            cornerScores    = "ANY",
-                                            cornerLimit     = "ANY",
-                                            breakThreshold  = "ANY", 
-                                            breakNCells     = "ANY", 
-                                            minLinkRange    = "ANY", 
-                                            maxLinkRange    = "ANY", 
-                                            nRandomizations = "ANY", 
-                                            nBinZoom        = "ANY",
-                                            metaSize        = "ANY",
-                                            rowCountSize    = "ANY",
-                                            rowCountMu      = "ANY")
+                                       minRowCount     = "ANY",
+                                       maxRowCount     = "ANY",
+                                       binSize         = "ANY",
+                                       sampleSize      = "ANY",
+                                       loessSpan       = "ANY",
+                                       distanceCount   = "ANY",
+                                       cornerScores    = "ANY",
+                                       cornerLimit     = "ANY",
+                                       breakThreshold  = "ANY", 
+                                       breakNCells     = "ANY", 
+                                       minLinkRange    = "ANY", 
+                                       maxLinkRange    = "ANY", 
+                                       nRandomizations = "ANY", 
+                                       nBinZoom        = "ANY",
+                                       metaSize        = "ANY",
+                                       rowCountSize    = "ANY",
+                                       rowCountMu      = "ANY")
 )
 
 
@@ -63,7 +63,7 @@ setClass("msscafParameters", slots = c(minCount        = "ANY",
 #'
 #' @export
 setClass("msscafData", slots = c(inputMatrix  = "ANY",
-                                      minLinkRange = "ANY") 
+                                 minLinkRange = "ANY") 
 )
 
 
@@ -81,7 +81,7 @@ setClass("msscafData", slots = c(inputMatrix  = "ANY",
 #'
 #' @export
 msscafData <- function(inputMatrix  = NULL,
-                            minLinkRange = NULL) {
+                       minLinkRange = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -140,15 +140,15 @@ msscafData <- function(inputMatrix  = NULL,
 }
 
 setClass("msscafBreaks", slots = c(data            = "ANY",
-                                        filteredData    = "ANY",
-                                        changePlots     = "ANY",
-                                        changeDistPlots = "ANY",
-                                        mapPlots        = "ANY")
+                                   filteredData    = "ANY",
+                                   changePlots     = "ANY",
+                                   changeDistPlots = "ANY",
+                                   mapPlots        = "ANY")
 )
 
 setClass("msscafJoins", slots = c(data      = "ANY",
-                                       testPlots = "ANY",
-                                       mapPlots  = "ANY")
+                                  testPlots = "ANY",
+                                  mapPlots  = "ANY")
 )
 
 
@@ -175,12 +175,12 @@ setClass("msscafJoins", slots = c(data      = "ANY",
 #'
 #' @export
 setClass("msscafExp", slots = c(interactionMatrix = "ANY",
-                                     name              = "ANY",
-                                     parameters        = "ANY",
-                                     breaks            = "ANY",
-                                     outlierBins       = "ANY",
-                                     lowCountRows      = "ANY",
-                                     joins             = "ANY")
+                                name              = "ANY",
+                                parameters        = "ANY",
+                                breaks            = "ANY",
+                                outlierBins       = "ANY",
+                                lowCountRows      = "ANY",
+                                joins             = "ANY")
 )
 
 
@@ -207,17 +207,17 @@ setClass("msscafExp", slots = c(interactionMatrix = "ANY",
 #'
 #' @export
 setClass("msscafClass", slots = c(data               = "ANY",
-                                       sequences          = "ANY",
-                                       binSize            = "ANY",
-                                       minNBins           = "ANY",
-                                       chromosomes        = "ANY",
-                                       sizes              = "ANY",
-                                       breaks             = "ANY",
-                                       breakPlots         = "ANY",
-                                       joins              = "ANY",
-                                       joinPlots          = "ANY",
-                                       newChromosomes     = "ANY",
-                                       mergedChromosomes  = "ANY")
+                                  sequences          = "ANY",
+                                  binSize            = "ANY",
+                                  minNBins           = "ANY",
+                                  chromosomes        = "ANY",
+                                  sizes              = "ANY",
+                                  breaks             = "ANY",
+                                  breakPlots         = "ANY",
+                                  joins              = "ANY",
+                                  joinPlots          = "ANY",
+                                  newChromosomes     = "ANY",
+                                  mergedChromosomes  = "ANY")
 )
 
 
@@ -258,7 +258,7 @@ msscaf <- function(sequenceFileName, binSize, minNBins = 20) {
     object@newChromosomes    <- c()
     object@mergedChromosomes <- c()
 
-    object@sequences         <- readDNAStringSet(sequenceFileName) %>% as.character()
+    object@sequences         <- Biostrings::readDNAStringSet(sequenceFileName) %>% as.character()
     names(object@sequences)  <- unlist(purrr::map(stringr::str_split(names(object@sequences), " "), 1))
     object@chromosomes       <- gtools::mixedsort(names(object@sequences))
     object@sizes             <- ceiling(nchar(object@sequences) / object@binSize) - 1
@@ -367,11 +367,11 @@ addExp <- function(object, data, expName) {
 #'
 #' @export
 setClass("msscafRefExp", slots = c(interactionMatrix  = "ANY",
-                                        chromosome         = "ANY",
-                                        size               = "ANY",
-                                        name               = "ANY",
-                                        outlierBins        = "ANY",
-                                        parameters         = "ANY")
+                                   chromosome         = "ANY",
+                                   size               = "ANY",
+                                   name               = "ANY",
+                                   outlierBins        = "ANY",
+                                   parameters         = "ANY")
 )
 
 
@@ -389,11 +389,11 @@ setClass("msscafRefExp", slots = c(interactionMatrix  = "ANY",
 #'
 #' @export
 msscafRefExp <- function(matrix      = NULL,
-                              chromosome  = NULL,
-                              size        = NULL,
-                              name        = NULL,
-                              outlierBins = NULL,
-                              parameters  = NULL) {
+                         chromosome  = NULL,
+                         size        = NULL,
+                         name        = NULL,
+                         outlierBins = NULL,
+                         parameters  = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
@@ -462,12 +462,12 @@ msscafRefExp <- function(matrix      = NULL,
 #'
 #' @export
 setClass("msscaf2RefExp", slots = c(interactionMatrix  = "ANY",
-                                         chromosome1        = "ANY",
-                                         chromosome2        = "ANY",
-                                         size1              = "ANY",
-                                         size2              = "ANY",
-                                         name               = "ANY",
-                                         parameters         = "ANY")
+                                    chromosome1        = "ANY",
+                                    chromosome2        = "ANY",
+                                    size1              = "ANY",
+                                    size2              = "ANY",
+                                    name               = "ANY",
+                                    parameters         = "ANY")
 )
 
 
@@ -485,12 +485,12 @@ setClass("msscaf2RefExp", slots = c(interactionMatrix  = "ANY",
 #'
 #' @export
 msscaf2RefExp <- function(matrix      = NULL,
-                               chromosome1 = NULL,
-                               chromosome2 = NULL,
-                               size1       = NULL,
-                               size2       = NULL,
-                               name        = NULL,
-                               parameters  = NULL) {
+                          chromosome1 = NULL,
+                          chromosome2 = NULL,
+                          size1       = NULL,
+                          size2       = NULL,
+                          name        = NULL,
+                          parameters  = NULL) {
     
     ##- checking general input arguments -------------------------------------#
     ##------------------------------------------------------------------------#
