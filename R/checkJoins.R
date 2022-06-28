@@ -411,28 +411,38 @@ removeSuboptimalJoins <- function(joins) {
     maxDistance <- joins %>%
         dplyr::pull(distance) %>%
         max()
-    reverseJoins <- joins %>%
-        dplyr::rename(refTmp   = ref1)     %>%
-        dplyr::rename(ref1     = ref2)     %>%
-        dplyr::rename(ref2     = refTmp)   %>%
-        dplyr::rename(afterTmp = after1)   %>%
-        dplyr::rename(after1   = after2)   %>%
-        dplyr::rename(after2   = afterTmp)
+    minPvalue <- joins %>%
+        dplyr::filter(pvalue > 0) %>%
+        dplyr::pull(pvalue) %>%
+        min()
+    minPvalueCorner <- joins %>%
+        dplyr::filter(pvalueCorner > 0) %>%
+        dplyr::pull(pvalueCorner) %>%
+        min()
+    # Try to favor close interactions, and good p-values
     joins <- joins %>%
-        dplyr::bind_rows(reverseJoins) %>%
-        dplyr::group_by(ref1, after1) %>%
-        # Try to favor close interactions, and good p-values
-        dplyr::mutate(score = -log(pvalue) * (maxDistance - distance)) %>%
-        dplyr::slice_max(order_by = score, n = 1, with_ties = FALSE) %>%
-        dplyr::ungroup() %>%
-        dplyr::select(-score) %>%
-        dplyr::filter(as.integer(ref1) > as.integer(ref2))
-#   suboptimalJoins <- joins %>%
-#       transformRefAfterToRefRef() %>%
-#       dplyr::group_by(ref, after) %>%
-#       dplyr::slice_min(order_by = pvalue, n = -1, with_ties = FALSE)
-#   joins <- discardJoinsFromRefRef(joins, suboptimalJoins)
-    return(joins)
+        dplyr::mutate(score = -log(pvalue + minPvalue / 2) - log(pvalueCorner + minPvalueCorner / 2) * (maxDistance - distance)) %>%
+        dplyr::arrange(desc(score))
+    selected <- joins %>% dplyr::slice_head(n = 0)
+    # Iteratively select best join, and discard possible conflicting joins
+    nJoins <- nrow(joins)
+    message("\tRemoving sub-optimal joins.")
+    pb <- progress_bar$new(total = nJoins)
+    while (nJoins > 0) {
+        best  <- joins %>% dplyr::slice(1)
+        selected <- selected %>%
+            dplyr::bind_rows(best)
+        bestList <- best %>% purrr::transpose() %>% purrr::pluck(1)
+        joins <- joins %>%
+            dplyr::slice(-1) %>%
+            dplyr::filter((ref1 != bestList$ref1) | (after1 != bestList$after1)) %>%
+            dplyr::filter((ref2 != bestList$ref1) | (after2 != bestList$after1)) %>%
+            dplyr::filter((ref1 != bestList$ref2) | (after1 != bestList$after2)) %>%
+            dplyr::filter((ref2 != bestList$ref2) | (after2 != bestList$after2))
+        pb$tick(nJoins - nrow(joins))
+        nJoins <- nrow(joins)
+    }
+    return(selected)
 }
 
 ..checkCornersOld <- function(parameters, object, sizes, pb) {

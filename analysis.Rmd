@@ -197,6 +197,11 @@ plot.msscafJoin(scaffolder, ref1 = "ctg369", ref2 = "ctg347", after1 = F, after2
 plot.msscafJoin(scaffolder, ref1 = "ctg502", ref2 = "ctg310", after1 = F, after2 = F, outliers = F, metaSize=T) # Nothing here
 plot.msscafJoin(scaffolder, ref1 = "ctg975", ref2 = "ctg941", after1 = T, after2 = F, outliers = F, metaSize=T) # 100% outlier
 plot.msscafJoin(scaffolder, ref1 = "ctg672", ref2 = "ctg200", after1 = T, after2 = T, outliers = F, metaSize=T)
+plot.msscafJoin(scaffolder, ref1 = "ctg831", ref2 = "ctg534", after1 = T, after2 = T, outliers = F, metaSize=T)
+plot.msscafJoin(scaffolder, ref1 = "ctg831", ref2 = "ctg534", after1 = F, after2 = T, outliers = T, metaSize=T) # Borderline
+plot.msscafJoin(scaffolder, ref1 = "ctg295", ref2 = "ctg159", after1 = F, after2 = T, outliers = T, metaSize=T) 
+plot.msscafJoin(scaffolder, ref1 = "ctg36", ref2 = "ctg18", after1 = T, after2 = F, outliers = T, metaSize=T) 
+plot.msscafJoin(scaffolder, ref1 = "ctg75", ref2 = "ctg33", after1 = T, after2 = T, outliers = T, metaSize=T) 
 sizes <- scaffolder@sizes
 scaffolder <- checkJoins(scaffolder, 0.05)
 scaffolder <- removeAmbiguousJoins(scaffolder)

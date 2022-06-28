@@ -97,7 +97,9 @@ plotDiagonalStrengthFit <- function(object) {
         tidyr::gather(key = "type", value = "value", fcMeanCount, nCells) %>%
         ggplot(aes(x = bin, y = value)) +
             geom_line() +
-            facet_grid(rows = vars(type), scales = "free_y")
+            facet_grid(rows = vars(type), scales = "free_y") +
+            ggtitle(object@name) +
+            xlab(refName)
     if (!is.null(bins)) {
         for (bin in bins) {
           p <- p + geom_vline(xintercept = bin,
@@ -507,7 +509,7 @@ transformMeta <- function(data, metaSize) {
         dplyr::rename(bin1 = metaBin1, bin2 = metaBin2)
 }
 
-plot.msscafRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, bins = NULL, outliers = TRUE, meta = FALSE) {
+plot.msscafRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL, bins = NULL, outliers = TRUE, meta = FALSE, linkRanges = FALSE) {
     if ((! is.null(binMin)) & (! is.null(binMax))) {
         if (binMax < binMin) {
             stop(paste0("Second bin (", binMax, ") should be less than first bin (", binMin, ")."))
@@ -571,7 +573,14 @@ plot.msscafRef <- function(object, logColor = TRUE, binMin = NULL, binMax = NULL
         p <- p +
             geom_hline(yintercept = bins, linetype = "dotted") +
             geom_vline(xintercept = bins, linetype = "dotted")
-    }    
+    }
+    if (linkRanges) {
+        p <- p +
+            geom_abline(slope = -1, intercept = object@parameters@minLinkRange, linetype = "dashed") +
+            geom_abline(slope = -1, intercept = object@parameters@maxLinkRange, linetype = "dotted") +
+            geom_abline(slope = -1, intercept = - object@parameters@minLinkRange, linetype = "dashed") +
+            geom_abline(slope = -1, intercept = - object@parameters@maxLinkRange, linetype = "dotted")
+    }
     return(p)
 }
 
@@ -660,7 +669,7 @@ plot.msscaf2Ref <- function(object,
     return(p)
 }
 
-plot.msscafDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
+plot.msscafDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL, linkRanges = FALSE) {
     if (! is(object, "msscafExp")) {
         stop("Object should be a 'msscafExp'.")
     }
@@ -699,7 +708,7 @@ plot.msscafDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2
     }
     if (ref1 == ref2) {
         object <- extractRef(object, ref1, sizes[[ref1]])
-        return(plot.msscafRef(object, logColor = logColor, binMin = bin1, binMax = bin2, outliers = outliers, bins = highlightedBins, meta = meta))
+        return(plot.msscafRef(object, logColor = logColor, binMin = bin1, binMax = bin2, outliers = outliers, bins = highlightedBins, meta = meta, linkRanges = linkRanges))
     }
     if (! ref2 %in% levels(object@interactionMatrix$ref1)) {
         message(paste0("Reference #2 '", ref2, "', is not a known reference in dataset '", object@name, "'."))
@@ -716,18 +725,18 @@ plot.msscafDataset <- function(object, sizes, logColor = TRUE, ref1 = NULL, ref2
     return(plot.msscaf2Ref(object, logColor = logColor, outliers = outliers, b1 = bin1, b2 = bin2, radius = radius))
 }
 
-plot.msscaf <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL) {
+plot.msscaf <- function(object, sizes = NULL, logColor = TRUE, datasetName = NULL, ref1 = NULL, ref2 = NULL, bin1 = NULL, bin2 = NULL, outliers = TRUE, highlightedBins = c(), meta = FALSE, radius = NULL, linkRanges = FALSE) {
     if (is(object, "msscafClass")) {
         sizes  <- object@sizes
         if (is.null(datasetName)) {
-             plots <- purrr::map(object@data, plot.msscafDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius)
+             plots <- purrr::map(object@data, plot.msscafDataset, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius, linkRanges)
              return(do.call(cowplot::plot_grid, c(plots, ncol = length(plots))))
         }
         else {
             datasetNames <- purrr::map(object@data, "name")
             if (datasetName %in% datasetNames) {
                 dataset <- object@data[datasetName == datasetNames][[1]]
-                return(plot.msscafDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
+                return(plot.msscafDataset(dataset, object@sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius, linkRanges))
             }
             else {
                 stop(paste0("Dataset name '", datasetName, "' is not known."))
@@ -737,5 +746,5 @@ plot.msscaf <- function(object, sizes = NULL, logColor = TRUE, datasetName = NUL
     else if (! is(object, "msscafExp")) {
         stop("Object should be a 'msscafClass' or 'msscafExp'.")
     }
-    return(plot.msscafDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius))
+    return(plot.msscafDataset(object, sizes, logColor, ref1, ref2, bin1, bin2, outliers, highlightedBins, meta, radius, linkRanges))
 }
