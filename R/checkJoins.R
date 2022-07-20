@@ -423,7 +423,7 @@ removeSuboptimalJoins <- function(joins) {
     joins <- joins %>%
         dplyr::mutate(score = -log(pvalue + minPvalue / 2) - log(pvalueCorner + minPvalueCorner / 2) * (maxDistance - distance)) %>%
         dplyr::arrange(desc(score))
-    selected <- joins %>% dplyr::slice_head(n = 0)
+    selected <- joins %>% dplyr::slice(n = 0)
     # Iteratively select best join, and discard possible conflicting joins
     nJoins <- nrow(joins)
     message("\tRemoving sub-optimal joins.")
@@ -432,7 +432,11 @@ removeSuboptimalJoins <- function(joins) {
         best  <- joins %>% dplyr::slice(1)
         selected <- selected %>%
             dplyr::bind_rows(best)
-        bestList <- best %>% purrr::transpose() %>% purrr::pluck(1)
+        bestList <- best %>%
+            dplyr::mutate(ref1 = as.character(ref1)) %>%
+            dplyr::mutate(ref2 = as.character(ref2)) %>%
+            purrr::transpose() %>%
+            purrr::pluck(1)
         joins <- joins %>%
             dplyr::slice(-1) %>%
             dplyr::filter((ref1 != bestList$ref1) | (after1 != bestList$after1)) %>%
@@ -443,38 +447,6 @@ removeSuboptimalJoins <- function(joins) {
         nJoins <- nrow(joins)
     }
     return(selected)
-}
-
-..checkCornersOld <- function(parameters, object, sizes, pb) {
-    objectRef <- extract2Ref(object, parameters$ref1, parameters$ref2, sizes[[parameters$ref1]], sizes[[parameters$ref2]])
-    corner    <- extractCorner(objectRef, parameters$after1, parameters$after2)
-    background <- object@parameters@distanceCount
-    values    <- computeCornerDifferenceOffsets(corner, background, object@parameters@minLinkRange, FALSE, pb) %>%
-        dplyr::left_join(object@parameters@cornerScores, by = "distance", suffix = c("_corner", "_background")) %>%
-        # Score of -1 means that nothing matched (because of outlier bins)
-        dplyr::filter(score_corner >= 0) %>%
-        dplyr::filter(score_corner <= score_background)
-    if (nrow(values) == 0) return(-1)
-    values %>%
-        dplyr::slice_min(distance, n = 1, with_ties = FALSE) %>%
-        dplyr::pull(distance) %>%
-        return()
-}
-
-.checkCornersOld <- function(object, sizes, pvalueThreshold) {
-    message(paste0("\tDataset '", object@name, "'."))
-    nJoins <- nrow(object@joins@data)
-    pb     <- progress_bar$new(total = nrow(object@joins@data))
-    values <- object@joins@data %>%
-        dplyr::mutate(ref1 = as.character(ref1)) %>%
-        dplyr::mutate(ref2 = as.character(ref2)) %>%
-        purrr::transpose() %>%
-        purrr::map_dbl(..checkCorners, object, sizes, pb)
-    object@joins@data <- object@joins@data %>%
-        dplyr::mutate(offset = values) %>%
-        dplyr::filter(offset >= 0)
-    message(paste0("\t\tKept ", nrow(object@joins@data), "/", nJoins, "."))
-    return(object)
 }
 
 ..checkCorners <- function(corner, object, sizes, pb) {
@@ -536,15 +508,18 @@ mergeJoins <- function(object, pvalueThreshold) {
         stop("Parameter should be a msscafClass.")
     }
     object@joins <- dplyr::bind_rows(purrr::map(purrr::map(object@data, "joins"), "data")) %>%
-        dplyr::distinct() %>%
+        # Take the best values of the joins
+        dplyr::group_by(ref1, ref2, after1, after2) %>%
+        dplyr::slice_min(order_by = pvalue, n = 1, with_ties = TRUE) %>%
+        dplyr::ungroup() %>%
+        # Two refs could be merged in several ways?
+        dplyr::group_by(ref1, ref2) %>%
+        dplyr::slice_min(order_by = distance, n = 1, with_ties = TRUE) %>%
+        dplyr::ungroup() %>%
         dplyr::arrange(pvalue) %>%
         dplyr::mutate(pvalue = pmin(pvalue, pvalueCorner)) %>%
         dplyr::mutate(p_adj = p.adjust(pvalue, method = "BH")) %>%
         dplyr::filter(p_adj <= pvalueThreshold) %>%
-        dplyr::group_by(ref1, ref2, after1, after2) %>%
-        dplyr::arrange(pvalue) %>%
-        dplyr::slice_head(n = 1) %>%
-        dplyr::ungroup() %>%
         .removeAmbiguousJoins() %>%
         removeSuboptimalJoins()
     message(paste0("\t", nrow(object@joins), " joins found in total."))
