@@ -7,10 +7,20 @@ To date, msscaf supports:
  - 10X (mapped with LongRanger);
  - Hi-C (in `.hic` format).
 
+msscaf is written in R.
+No previous knowledge of R is required.
+You can adapt the following pipe-line to suit your needs.
+
+Simply get R installed, and start it with the command
+```
+ R
+```
+
 ## Pipe-line
 
 Download package:
 ```
+if (!("devtools" %in% rownames(installed.packages()))) install.packages("devtools")
 devtools::install_github("mzytnicki/msscaf")
 ```
 
