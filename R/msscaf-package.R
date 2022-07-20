@@ -52,6 +52,7 @@
 #' @import BiocParallel
 #' @import progress
 #' @import Matrix
+#' @importFrom rhdf5 h5read
 #' @import Biostrings
 #' @importFrom cowplot plot_grid
 #' @importFrom BiocManager version
