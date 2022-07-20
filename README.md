@@ -24,6 +24,7 @@ Read data:
 resolution  <- 10000
 hicFileName <- "/path/to/hic/file.hic"
 hicData     <- parseHicFile(hicFileName, resolution)
+# Alternatively, the "parseCoolFile" is available for the .cool/.mcool formats
 ontFileName <- "/path/to/long/reads.paf"
 ontData     <- parsePafFile(ontFileName, resolution)
 bamFileName <- "/path/to/long/10X.bam"
