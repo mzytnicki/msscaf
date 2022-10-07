@@ -55,17 +55,24 @@ Mail from Cédric.
 > http://genoweb.toulouse.inra.fr/~sigenae/10X_and_Juicebox.html
 
 
- - Unpolished contigs: /work2/project/seqoccin/assemblies/assemblers/nanopore/bos_taurus/wtdbg2_trio1_mother_37165_run123/mother_raw.cgt.fa
- - ONT: /work2/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz
- - Hi-C: /work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_hic_run1/Maison_plus/aligned/inter_30.hic
- - 10X: /work2/project/seqoccin/assemblies/scaffolders/10x/bos_taurus/LR_wtdbg_assembly_mother_37165_run123/Bovin-37165-align/outs/possorted_bam.bam
- - Assembly from JuiceBox: /work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_polished_hic_run1/Maison_plus/juicebox/mother_raw_wtdbg2_58x_polished.final.assembly
+Mother 1
+ - Unpolished contigs:     `/work2/project/seqoccin/assemblies/assemblers/nanopore/bos_taurus/wtdbg2_trio1_mother_37165_run123/mother_raw.cgt.fa`
+ - ONT:                    `/work2/project/seqoccin/data/reads/nanopore/bos_taurus/trio1.mother.run?.fastq.gz`
+ - Hi-C:                   `/work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_hic_run1/Maison_plus/aligned/inter_30.hic`
+ - 10X:                    `/work2/project/seqoccin/assemblies/scaffolders/10x/bos_taurus/LR_wtdbg_assembly_mother_37165_run123/Bovin-37165-align/outs/possorted_bam.bam`
+ - Assembly from JuiceBox: `/work2/project/seqoccin/assemblies/scaffolders/hic/bos_taurus/juicer_trio1_mother_37165_wtdbg2_ont_run123_polished_hic_run1/Maison_plus/juicebox/mother_raw_wtdbg2_58x_polished.final.assembly`
 
+Offspring 2
+ - Polished contigs: `/work/project/seqoccin/assemblies/polishing_1/bos_taurus/nfPolishing_trio2_offspring_37160_wtdbgassemblyrun12345_ontrun12345_10Xrun1234/PolishingResult/PILON_SR/assembly.pilon1.fa`
+ - ONT:              `/work/project/seqoccin/data/reads/nanopore/bos_taurus/trio2.offspring.*.fastq.gz`
+ - Hi-C:             `/work/project/seqoccin/data/reads/hic/bos_taurus/trio2.offspring*`
+ - 10X:              `/work/project/seqoccin/data/reads/10x/bos_taurus/Bovin-37160/*`
+
+## Mother 1
 ```{bash}
 ~/Desktop/Apps/minimap2/minimap2 -t 10 -o /Scratch/mazytnicki/Mother_1/mapping.paf /Scratch/mazytnicki/GCF_002263795.1_ARS-UCD1.2_genomic.fna.gz /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa
 ~/Apps/samtools-1.10/samtools faidx /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa
 cut -f 1-2 /Scratch/mazytnicki/Mother_1/mother_raw.cgt.fa.fai > /Scratch/mazytnicki/Mother_1/mother_raw.cgt.len
-
 
 ~/Apps/samtools-1.10/samtools view -c /Scratch/mazytnicki/Mother_1/possorted_bam.bam
 # 1590040440
@@ -85,20 +92,34 @@ zcat /Scratch/mazytnicki/Mother_1/trio1.mother.run1.fastq.gz | wc -l
 
 wc -l /Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf
 # 4862048 /Scratch/mazytnicki/Mother_1/trio1.mother.run1.paf
+~/Apps/samtools-1.10/samtools index -@ 5 /Scratch/mazytnicki/Mother_1/possorted_bam.bam
 ```
 
+## Offspring 2
 ```{bash}
-~/Apps/samtools-1.10/samtools index -@ 5 /Scratch/mazytnicki/Mother_1/possorted_bam.bam
-~/Apps/samtools-1.10/samtools view -o /Scratch/mazytnicki/Mother_1/possorted_bam_reduced.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg10 ctg1061 ctg118 ctg1185 ctg12 ctg126 ctg128 ctg13 ctg1332 ctg136 ctg1427 ctg1435 ctg1451 ctg146 ctg154 ctg17 ctg173 ctg18 ctg189 ctg198 ctg2112 ctg219 ctg22 ctg23 ctg2379 ctg257 ctg26 ctg276 ctg281 ctg29 ctg30 ctg31 ctg312 ctg32 ctg322 ctg33 ctg3563 ctg3623 ctg38 ctg4 ctg4032 ctg4123 ctg4149 ctg43 ctg4330 ctg446 ctg4519 ctg4700 ctg4854 ctg4913 ctg50 ctg5008 ctg514 ctg516 ctg531 ctg549 ctg551 ctg5765 ctg6 ctg61 ctg655 ctg669 ctg67 ctg68 ctg703 ctg737 ctg766 ctg79 ctg8 ctg80 ctg82 ctg9 ctg91 ctg95 ctg976
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg4_ctg17.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg4 ctg17
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg2981_ctg1688.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg1688 ctg2981
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/small_test.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg104 ctg225
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg11.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg11
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg100.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg100
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg90.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg90
-~/Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg188.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg188
-Apps/samtools-1.10/samtools view -@ 6 -o /Scratch/mazytnicki/Mother_1/possorted_bam_ctg37.bam /Scratch/mazytnicki/Mother_1/possorted_bam.bam ctg37
+scp mzytnicki@genologin.toulouse.inrae.fr:/work/project/seqoccin/assemblies/polishing_1/bos_taurus/nfPolishing_trio2_offspring_37160_wtdbgassemblyrun12345_ontrun12345_10Xrun1234/PolishingResult/PILON_SR/assembly.pilon1.fa /Scratch/mazytnicki/Offspring_2/
+
+# From genologin
+sbatch /home/mzytnicki/work/Projects/tenxChecker/map_offspring2.sh
+sbatch /home/mzytnicki/work/Projects/tenxChecker/lrmkref.sh
+sbatch /home/mzytnicki/work/Projects/tenxChecker/lralign.sh
+sbatch /home/mzytnicki/work/Projects/tenxChecker/lralignSmall.sh
+
+~/Apps/samtools-1.10/samtools faidx /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.fa
+cut -f 1-2 /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.fa.fai > /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.size
+~/Apps/bwa-0.7.17/bwa index /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.fa
+python3 /home/mazytnicki/Apps/juicer/misc/generate_site_positions.py HindIII /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.fa /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1_HindIII.txt
+# Add bwa, samtools, & gawk to the PATH
+PATH=~/bin:$PATH
+/Scratch/mazytnicki/Offspring_2/Juicer/scripts/juicer.sh -d /Scratch/mazytnicki/Offspring_2/Juicer/ -z /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.fa -p /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1.size -y /Scratch/mazytnicki/Offspring_2/Juicer/references/assembly.pilon1_HindIII.txt -D /Scratch/mazytnicki/Offspring_2/Juicer/ -t 6 -g bt37160 &> /Scratch/mazytnicki/Offspring_2/Juicer/juicer.out
+
+ln -s /Scratch/mazytnicki/Offspring_2/Juicer/aligned/inter.hic /Scratch/mazytnicki/Offspring_2/inter.hic
+scp mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/alignment.bam /Scratch/mazytnicki/Offspring_2/
+
+# LongRanger data does not seem sorted...
+samtools sort -m 2G -o possorted_bam2.bam -@ 6 possorted_bam.bam
 ```
+
 
 ```{r}
 devtools::load_all(".")
@@ -150,7 +171,7 @@ scp sequences.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Proj
 # From genologin
 module load system/Miniconda3
 module load bioinfo/Inspector-v1.2
-cd /home/mzytnicki/work/Projects/tenxChecker
+cd /home/mzytnicki/work/Projects/tenxChecker/
 sbatch inspector.sh
 ```
 
@@ -167,23 +188,6 @@ object <- findBreaks(object, 0.05)
 object <- splitChromosomes(object)
 object <- findJoins(object, 0.05)
 object <- scaffold(object)
-```
-
-
-```{r}
-devtools::load_all(".")
-allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-splitObject <- generateSplit(allObject)
-splitObject <- estimateDistributions(splitObject)
-splitObject <- findJoins(splitObject, 0.05)
-```
-
-```{r}
-devtools::load_all(".")
-allObject <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-mergedObject <- generateJoin(allObject)
-mergedObject <- estimateDistributions(mergedObject)
-mergedObject <- findBreaks(mergedObject, 0.05)
 ```
 
 ```{r}
@@ -207,121 +211,86 @@ scaffolder <- checkJoins(scaffolder, 0.05)
 scaffolder <- removeAmbiguousJoins(scaffolder)
 scaffolder <- checkCorners(scaffolder, 0.05)
 scaffolder <- mergeJoins(scaffolder, 0.05)
-
-sizes <- scaffolder@sizes
-object <- scaffolder@data[[3]]
-objectJ <- .checkJoins(object, sizes, 0.05)
-objectJ@joins@data <- .removeAmbiguousJoins(objectJ@joins@data, "plop")
-tmp <- extractCornersFullCpp(objectJ@interactionMatrix, objectJ@joins@data %>% dplyr::filter(ref1 == "ctg672", ref2 == "ctg200"), objectJ@outlierBins, sizes, objectJ@parameters@maxLinkRange, objectJ@parameters@metaSize)
-tmp1 <- tmp %>% tibble::as_tibble() %>% dplyr::filter(! is.na(count)) %>% smoothenDistribution()
-pb     <- progress_bar$new(total = 1)
-computeCornerDifferenceOffsets(tmp, objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb)
-tmp2    <- tmp %>%
-        tibble::as_tibble() %>%
-        tidyr::drop_na() %>%                                                                                                                                                                                       
-        smoothenDistribution() %>%
-        dplyr::right_join(tibble::tibble(distance = seq.int(from = 0, to = objectJ@parameters@maxLinkRange, by = 1)), by = "distance") %>%
-        dplyr::arrange(distance)
-    offsets   <- seq.int(from = 0, to = distance - 1, by = 1)                                                                                                                                                      
-computeCornerDifferenceOffsets(tmp2, objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb)
-
-tmp1 <- ..checkCorners(tmp, objectJ, sizes, pb)
-
-objectJ@interactionMatrix %>% dplyr::filter(ref1 == "ctg345", ref2 == "ctg326", bin1 <= 32, bin2 <= 32) %>% dplyr::mutate(distance = bin1 + bin2) %>% dplyr::filter(distance <= 32) %>% as.data.frame()
-corners <- extractCornersFullCpp(objectJ@interactionMatrix, objectJ@joins@data, sizes, objectJ@parameters@maxLinkRange, objectJ@parameters@metaSize) %>%
-        tibble::as_tibble() %>%
-        dplyr::filter(count >= 0)
-    nJoins <- nrow(objectJ@joins@data)
-    pb     <- progress_bar$new(total = nJoins)
-    values <- corners %>%
-        dplyr::group_by(index) %>%
-        dplyr::group_split() %>%
-        purrr::map_dfr(..checkCorners, objectJ, sizes, pb)
-    objectJ2@joins@data <- objectJ@joins@data %>%
-        dplyr::bind_cols(values) %>%
-        dplyr::filter(pvalueCorner < 1 - 0.05)                                                                                                                                                          
-values <- corners %>%                                                                                                                                                                                          
-        dplyr::group_by(index) %>%                                                                                                                                                                                 
-        dplyr::group_split()
-tmp <- ..checkCorners(values[[285]], objectJ, sizes, pb)
-tmp <- computeCornerDifferenceOffsets(values[[285]], objectJ@parameters@distanceCount, objectJ@parameters@maxLinkRange, FALSE, pb) %>%
-        dplyr::filter(distance > 0) %>%
-        dplyr::left_join(objectJ@parameters@cornerScores, by = "distance") %>%
-        dplyr::mutate(pvalueCorner = pgamma(score, shape = shape, rate = rate)) %>%                                                                                                                                
-        dplyr::slice_min(pvalueCorner, n = 1, with_ties = FALSE) %>%
-        dplyr::select(distance, pvalueCorner) %>%                                                                                                                                                                  
-        dplyr::mutate(distance = as.integer(distance))                                                                                                                                                             
-
-
-objectJ2 <- .checkCorners(objectJ, sizes, 0.05) 
-
-objectJ2@joins@data %>% dplyr::filter(ref1 %in% c("ctg326", "ctg345") | ref2 %in% c("ctg326", "ctg345"))
 ```
 
-devtools::load_all(".")
-scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-plot.msscafJoin(scaffolder, ref1 = "ctg1253", ref2 = "ctg885", after1 = F, after2 = T) 
-sizes <- scaffolder@sizes
-object1 <- scaffolder@data[[1]]
-object1  <- estimateDistanceCount(object1, sizes)
-object1  <- estimateCornerVariance(object1, sizes, 0.05)
-object1@parameters@cornerLimit <- estimateCornerLimits(object1, 20)
-cornerSums <- sumCornerCpp(object1@interactionMatrix, object1@outlierBins, sizes, object1@parameters@maxLinkRange, object1@parameters@metaSize) %>%
-        tibble::as_tibble() %>%
-        dplyr::filter(count > 0) %>%
-        dplyr::mutate(count = as.numeric(trunc((count - 1)/2)))                                                                                                                                                    
-fitNB <- fitdistrplus::fitdist(cornerSums$count, "nbinom")                                                                                                                                                 
-threshold <- qnbinom(0.99, size = fitNB$estimate[["size"]], mu = fitNB$estimate[["mu"]])                                                                                                                   
-selectedRefs <- cornerSums %>% dplyr::filter(count > threshold)
-
-object1 <- .checkJoins(object1, sizes, 0.05)
-object1@joins@data <- .removeAmbiguousJoins(object1@joins@data, "plop")
-#saveRDS(object1, file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
-object1 <- readRDS(file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
-plot.msscafJoin(scaffolder, ref1 = "ctg1253", ref2 = "ctg885", after1 = F, after2 = T, outliers = F)
-    corners <- extractCornersFullCpp(object1@interactionMatrix, object1@joins@data, object1@outlierBins, sizes, object1@parameters@maxLinkRange, object1@parameters@metaSize) %>%
-        tibble::as_tibble() %>%
-        dplyr::filter(count >= 0)                                                                                                                                                                                  
-nJoins <- nrow(object@joins@data)                                                                                                                                                                              
-pb     <- progress_bar$new(total = nJoins)                                                                                                                                                                     
-values <- corners %>%
-        dplyr::group_by(index) %>%
-        dplyr::group_split() %>%
-        purrr::map_dfr(..checkCorners, object, sizes, pb)                                                                                                                                                          
-    object@joins@data <- object@joins@data %>%                                                                                                                                                                     
-        dplyr::bind_cols(values) %>%                                                                                                                                                                               
-        dplyr::filter(pvalueCorner < 1 - pvalueThreshold)                                                                                                                                                          
-    message(paste0("\t\tKept ", nrow(object@joins@data), "."))                                                                                                                                                     
-
-tmp <- .checkCorners(object1, sizes, 0.05)
-
-
+Oddly, the possorted is not always pos-sorted...
+```{r}
 devtools::load_all(".")
 resolution  <- 1000
-scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/allObject.rds")
-scaffolder <- estimateCorners(scaffolder, 0.05)
-#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
-#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Mother_1/tmp.rds")
-sizes <- scaffolder@sizes
-cornerSums <- sumCornerCpp(object@interactionMatrix, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>% tibble::as_tibble()
-cornerSums %>% dplyr::filter(n > 0, n < 100) %>% ggplot(aes(x = n)) + geom_histogram(binwidth=1)
-cornerSums %>% dplyr::filter(count > 0, count < 100) %>% ggplot(aes(x = count)) + geom_histogram(binwidth=1)
-cornerSums %>% dplyr::filter(n > 0) %>% dplyr::mutate(avg = count / n) %>% dplyr::filter(avg > 0) %>% ggplot(aes(x = avg)) + geom_histogram(binwidth=1)
-scaffolder <- checkJoins(scaffolder, 0.05)
-scaffolder <- removeAmbiguousJoins(scaffolder)
-object <- scaffolder@data[[3]]
-corners <- extractCornersFullCpp(object@interactionMatrix, object@joins@data, object@outlierBins, sizes, object@parameters@maxLinkRange, object@parameters@metaSize) %>%                                       
-        tibble::as_tibble() %>%                                                                                                                                                                                    
-        # Unused cells are set to -1                                                                                                                                                                               
-        dplyr::filter(count >= 0)                                                                                                                                                                                  
-nJoins <- nrow(object@joins@data)                                                                                                                                                                              
-pb     <- progress_bar$new(total = nJoins)                                                                                                                                                                     
-values <- corners %>%                                                                                                                                                                                          
-        dplyr::group_by(index) %>%                                                                                                                                                                                 
-        dplyr::group_split()
-corner <- values[[182]]
-tmp <- computeCornerDifferenceOffsets(corner, object@parameters@distanceCount, object@parameters@maxLinkRange, FALSE, pb)
+#dirName     <- "/media/Stock/tenxchecker/Offspring_2"
+dirName     <- "/Scratch/mazytnicki/Offspring_2"
+bamFileName <- file.path(dirName, "possorted_bam2.bam") # 438,352,223 elements
+bamData     <- parseBamFile(bamFileName, resolution)
+hicFileName <- file.path(dirName, "inter.hic")
+hicData     <- parseHicFile(hicFileName, resolution)
+ontFileName <- file.path(dirName, "alignment.paf") # 19,005,147 elements
+ontData     <- parsePafFile(ontFileName, resolution, 500, 10, 10)
+contigFileName <- file.path(dirName, "assembly.pilon1.fa")
+scaffolder <- msscaf(contigFileName, resolution)
+scaffolder <- addExp(scaffolder, ontData, "ONT")
+scaffolder <- addExp(scaffolder, hicData, "HiC")
+scaffolder <- addExp(scaffolder, bamData, "10X")
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Offspring_2/allObject0.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Offspring_2/allObject0.rds")
+scaffolder <- estimateDistributions(scaffolder)
+scaffolder <- cleanData(scaffolder)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Offspring_2/allObject.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Offspring_2/allObject.rds")
+scaffolder <- findBreaks(scaffolder, 0.01)
+scaffolder <- splitChromosomes(scaffolder)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Offspring_2/allObject1.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Offspring_2/allObject1.rds")
+#Biostrings::writeXStringSet(Biostrings::DNAStringSet(scaffolder@sequences), "sequencesSplit.fa")
+scaffolder <- findJoins(scaffolder, 0.05)
+#saveRDS(scaffolder, file = "/Scratch/mazytnicki/Offspring_2/allObject2.rds")
+#scaffolder <- readRDS(file = "/Scratch/mazytnicki/Offspring_2/allObject2.rds")
+scaffolder <- scaffold(scaffolder)
+Biostrings::writeXStringSet(Biostrings::DNAStringSet(scaffolder@sequences), "sequences.fa")
+scaffolder@breaks %>% dplyr::select(ref, bin) %>% dplyr::mutate(bin = bin * resolution) %>% readr::write_tsv("breaks.tsv", col_names = FALSE)
+scaffolder@joins %>% dplyr::arrange(pvalue) %>% dplyr::select(ref1, ref2) %>% readr::write_tsv("joins.tsv", col_names = FALSE)
+```
 
-scaffolder <- checkCorners(scaffolder, 0.05)
-scaffolder <- mergeJoins(object, 0.05)                                                                                                                                                                           
+Tigmint
+```{bash}
+# from genologin
+cd /home/mzytnicki/work/Projects/tenxChecker/Offspring
+sbatch lrb.sh
+fold refdata-assembly.pilon1/fasta/genome.fa > genome.fa
+sbatch tigmint.sh
+# from tapou
+mazytnicki@tapou:~/Projects/Other/Assembly/tenxchecker$ scp mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/Offspring/genome.tigmint.arcs.fa /Scratch/mazytnicki/Offspring_2/
+```
 
+Quast
+```{bash}
+~/Desktop/Apps/quast-5.0.2/quast-lg.py -t 15 -r /Scratch/mazytnicki/Offspring_2/assembly.pilon1.fa -t 6 -o /home/mazytnicki/Desktop/Projects/Other/Assembly/Quast/Offspring sequences.fa /Scratch/mazytnicki/Offspring_2/genome.tigmint.arcs.fa
+```
+
+Inspector
+```{bash}
+scp sequencesSplit.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/Offspring/
+scp sequences.fa mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/Offspring/sequencesMs.fa
+# From genologin
+cd /home/mzytnicki/work/Projects/tenxChecker/
+sbatch inspector_raw.sh
+sbatch inspector_tigmint.sh
+sbatch inspector_tigmint0.sh
+sbatch inspector_mss.sh
+
+scp mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/Offspring/genome.tigmint.arcs.fa /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references
+mv /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/tmp
+sed '/^>/s/ .*//' /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/tmp | fold > /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa
+~/Apps/samtools-1.10/samtools faidx /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa
+cut -f 1-2 /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa.fai > /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.size
+~/Apps/bwa-0.7.17/bwa index /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa
+cd /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/restriction_sites
+python3 /home/mazytnicki/Apps/juicer/misc/generate_site_positions.py HindIII genome.tigmint.arcs.fa /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa
+
+# Add bwa, samtools, & gawk to the PATH
+PATH=~/bin:$PATH
+mkdir splits
+ln -s fastq/* splits/
+/Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/scripts/juicer.sh -d /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/ -z /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.fa -p /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/references/genome.tigmint.arcs.size -y /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/restriction_sites/genome.tigmint.arcs.fa_HindIII.txt -D /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/ -t 6 -g bt37160 &> /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/juicer.out
+samtools view -O SAM -F 1024 /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/aligned/merged_dedup.bam | awk -v mnd=1 -f /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/scripts/common/sam_to_pre.awk > /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/aligned/merged_nodups.txt
+xz -T 5 /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/aligned/merged_nodups.txt
+scp /Scratch/mazytnicki/Offspring_2/Juicer/Tigmint/aligned/merged_nodups.txt.xz mzytnicki@genologin.toulouse.inrae.fr:/home/mzytnicki/work/Projects/tenxChecker/Offspring/

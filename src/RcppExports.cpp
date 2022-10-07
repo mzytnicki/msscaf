@@ -396,7 +396,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // parseHicCpp
-List parseHicCpp(std::string& fname, int resolution);
+DataFrame parseHicCpp(std::string& fname, int resolution);
 RcppExport SEXP _msscaf_parseHicCpp(SEXP fnameSEXP, SEXP resolutionSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
